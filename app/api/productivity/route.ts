@@ -1,12 +1,16 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 export async function POST(req: Request) {
   try {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is missing");
+    }
+
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+
     const { industry, description, mode } = await req.json();
 
     if (!industry || !description || !mode) {
@@ -18,61 +22,41 @@ export async function POST(req: Request) {
 
     let prompt = "";
 
-    /* ===========================
-       GENERATE MODE
-    ============================ */
-
     if (mode === "generate") {
       prompt = `
-You are a senior productivity consultant.
+You are a professional productivity consultant.
 
-Industry: ${industry}
-Job Description: ${description}
+User Industry: ${industry}
+User Description: ${description}
 
 Return ONLY valid JSON:
 
 {
-  "summary": "80-100 word overview",
-  "improvements": ["4-5 actionable improvements"],
-  "daily_plan": ["4-5 daily execution steps"],
-  "growth_tips": ["4-5 long-term strategies"]
+  "summary": "80-100 words",
+  "improvements": ["4-5 items"],
+  "daily_plan": ["4-5 items"],
+  "growth_tips": ["4-5 items"]
 }
-
-No markdown. No explanation. JSON only.
 `;
     }
 
-    /* ===========================
-       COMPARE MODE (INTELLIGENT)
-    ============================ */
-
     if (mode === "compare") {
       prompt = `
-You are an expert workforce planning strategist.
+You are a professional workforce productivity analyst.
 
-Industry: ${industry}
-Job Description: ${description}
+User Industry: ${industry}
+User Description: ${description}
 
-Create a realistic weekly workload distribution.
-
-Requirements:
-- Total must equal exactly 40 hours.
-- 5-9 intelligent activities.
-- Industry-specific.
-- Professional.
-- Balanced workload.
+Create a realistic weekly workload distribution for a 40-hour work week.
 
 Return ONLY valid JSON:
 
 {
-  "activities": [
-    { "title": "Activity Name", "hours": "X - Y" }
-  ]
+  "weekly_distribution": [
+    { "activity": "Task Name", "min_hours": 4, "max_hours": 6 }
+  ],
+  "total_estimated_hours": 40
 }
-
-No markdown.
-No explanation.
-JSON only.
 `;
     }
 
@@ -82,7 +66,7 @@ JSON only.
         {
           role: "system",
           content:
-            "You strictly return clean JSON only. No markdown. No explanations.",
+            "You are a strict JSON-only generator. Return clean JSON only.",
         },
         {
           role: "user",
@@ -94,51 +78,17 @@ JSON only.
 
     const raw = completion.choices[0]?.message?.content || "";
 
-    /* ===========================
-       SAFE JSON EXTRACTION
-    ============================ */
-
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-
-    if (!jsonMatch) {
-      console.error("Invalid JSON:", raw);
-      return NextResponse.json(
-        { success: false, message: "AI returned invalid JSON." },
-        { status: 500 }
-      );
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]);
-
-    /* ===========================
-       SAFETY FALLBACK FOR COMPARE
-    ============================ */
-
-    if (mode === "compare") {
-      if (!parsed.activities || !Array.isArray(parsed.activities)) {
-        parsed.activities = [
-          { title: "Core Responsibilities", hours: "15 - 18" },
-          { title: "Collaboration & Meetings", hours: "4 - 6" },
-          { title: "Planning & Strategy", hours: "4 - 6" },
-          { title: "Execution & Delivery", hours: "8 - 10" },
-          { title: "Learning & Development", hours: "2 - 4" }
-        ];
-      }
-    }
+    const parsed = JSON.parse(raw);
 
     return NextResponse.json({
       success: true,
       data: parsed,
     });
-
-  } catch (error) {
+  } catch (error: any) {
     console.error("API Error:", error);
 
     return NextResponse.json(
-      {
-        success: false,
-        message: "Internal server error.",
-      },
+      { success: false, message: error.message },
       { status: 500 }
     );
   }
