@@ -176,7 +176,7 @@ export default function ResponseSection({
         {/* EMPTY STATE */}
         {!loading && !response && (
           <div className="text-base font-semibold text-black">
-            AI Response
+            AI Response:
           </div>
         )}
 
