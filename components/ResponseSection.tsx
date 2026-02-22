@@ -23,10 +23,6 @@ export default function ResponseSection({
   const [typedContent, setTypedContent] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
 
-  /* ===========================
-     GENERATE TEXT BUILDER
-  ============================ */
-
   const buildGenerateText = (data: any) => {
     if (!data) return "";
 
@@ -60,25 +56,21 @@ export default function ResponseSection({
     return text;
   };
 
-  /* ===========================
-     CLEAR RESET FIX
-  ============================ */
+  /* Reset when response cleared */
   useEffect(() => {
     if (!response) {
       setTypedContent("");
     }
   }, [response]);
 
-  /* ===========================
-     TYPING ONLY FOR GENERATE
-  ============================ */
+  /* Typing Animation */
   useEffect(() => {
     if (!response || mode !== "generate") return;
 
     const fullText = buildGenerateText(response);
 
-    // If page refreshed — show instantly
-    if (isRestored) {
+    // Only skip animation if restoring AND no typing yet
+    if (isRestored && typedContent === "") {
       setTypedContent(fullText);
       return;
     }
@@ -98,14 +90,10 @@ export default function ResponseSection({
       if (index >= fullText.length) {
         clearInterval(interval);
       }
-    }, 8); // smooth typing
+    }, 8);
 
     return () => clearInterval(interval);
-  }, [response, mode, isRestored]);
-
-  /* ===========================
-     SAFE ACTIVITY EXTRACTION
-  ============================ */
+  }, [response, mode]); // removed isRestored dependency
 
   const activities =
     response?.activities ||
@@ -132,8 +120,6 @@ export default function ResponseSection({
 
   return (
     <div className="relative order-1 lg:order-2 bg-white pt-4 pb-4 px-4 lg:p-8 rounded-2xl shadow-lg border border-gray-200 h-full flex flex-col overflow-hidden">
-
-      {/* Clear Button */}
       <button
         onClick={() => setShowClearModal(true)}
         className="absolute top-4 right-4 text-sm border border-red-500 text-red-500 px-3 py-1 rounded-lg hover:bg-red-50 transition"
@@ -142,15 +128,12 @@ export default function ResponseSection({
       </button>
 
       <div ref={containerRef} className="flex-1 overflow-y-auto">
-
-        {/* EMPTY STATE */}
         {!loading && !response && (
           <div className="text-base font-semibold text-gray-400">
             AI Response
           </div>
         )}
 
-        {/* LOADING */}
         <AnimatePresence>
           {loading && (
             <motion.div
@@ -164,9 +147,6 @@ export default function ResponseSection({
           )}
         </AnimatePresence>
 
-        {/* ===========================
-            GENERATE MODE
-        ============================ */}
         {!loading && mode === "generate" && typedContent && (
           <div>
             {typedContent.split("\n").map((line, index) => {
@@ -194,9 +174,6 @@ export default function ResponseSection({
           </div>
         )}
 
-        {/* ===========================
-            COMPARE MODE
-        ============================ */}
         {!loading &&
           mode === "compare" &&
           response &&
@@ -232,9 +209,6 @@ export default function ResponseSection({
   );
 }
 
-/* ===========================
-   THINKING DOTS
-============================ */
 function ThinkingDots() {
   return (
     <div className="flex gap-2">
