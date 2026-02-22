@@ -17,20 +17,23 @@ export default function Home() {
   const [showClearModal, setShowClearModal] = useState(false);
 
   /* Restore State */
-  useEffect(() => {
-    const saved = localStorage.getItem("aiProductivityState");
+useEffect(() => {
+  const saved = localStorage.getItem("aiProductivityState");
 
-    if (saved) {
-      const parsed = JSON.parse(saved);
+  if (saved) {
+    const parsed = JSON.parse(saved);
 
-      setResponse(parsed.response || null);
-      setMode(parsed.mode || null);
-      setIndustryData(parsed.industry || "");
-      setDescriptionData(parsed.description || "");
+    setResponse(parsed.response || null);
+    setMode(parsed.mode || null);
+    setIndustryData(parsed.industry || "");
+    setDescriptionData(parsed.description || "");
 
-      setIsRestored(true);
-    }
-  }, []);
+    setIsRestored(true);
+
+    // Reset restore flag immediately after hydration
+    setTimeout(() => setIsRestored(false), 0);
+  }
+}, []);
 
   /* Save State */
   useEffect(() => {
