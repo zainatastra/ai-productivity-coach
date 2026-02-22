@@ -119,17 +119,44 @@ export default function ResponseSection({
     : [];
 
   return (
-    <div className="relative order-1 lg:order-2 bg-white pt-4 pb-4 px-4 lg:p-8 rounded-2xl shadow-lg border border-gray-200 h-full flex flex-col overflow-hidden">
-      <button
-        onClick={() => setShowClearModal(true)}
-        className="absolute top-4 right-4 text-sm border border-red-500 text-red-500 px-3 py-1 rounded-lg hover:bg-red-50 transition"
-      >
-        Clear
-      </button>
+<div
+  className="
+    relative
+    order-1 lg:order-2
+    bg-white
+    text-gray-900
+    pt-4 pb-4 px-4 lg:p-8
+    rounded-2xl
+    shadow-lg
+    border border-gray-200
+    h-full
+    flex flex-col
+    overflow-hidden
+  "
+  style={{
+    WebkitTextSizeAdjust: "100%",
+    WebkitFontSmoothing: "antialiased",
+  }}
+>
+  <button
+    onClick={() => setShowClearModal(true)}
+    className="
+      absolute top-4 right-4
+      text-sm font-medium
+      border border-red-500
+      text-red-600
+      px-3 py-1
+      rounded-lg
+      hover:bg-red-50
+      transition
+    "
+  >
+    Clear
+  </button>
 
       <div ref={containerRef} className="flex-1 overflow-y-auto">
         {!loading && !response && (
-          <div className="text-base font-semibold text-gray-400">
+          <div className="text-base font-semibold text-gray-600">
             AI Response
           </div>
         )}
@@ -162,9 +189,9 @@ export default function ResponseSection({
                   className={
                     isHeading
                       ? index === 0
-                        ? "text-base font-bold"
+                        ? "text-base font-bold text-gray-900"
                         : "text-base font-bold mt-5"
-                      : "text-sm mt-1 leading-relaxed"
+                      : "text-sm mt-1 leading-relaxed text-gray-800"
                   }
                 >
                   {line}
@@ -179,10 +206,10 @@ export default function ResponseSection({
           response &&
           validActivities.length > 0 && (
             <div>
-              <h2 className="text-lg font-bold">
+              <h2 className="text-lg font-bold text-gray-900">
                 Weekly Work Distribution (40 Hours)
               </h2>
-              <p className="text-sm text-gray-500 mb-4">
+              <p className="text-sm text-gray-700 mb-4">
                 Estimated Weekly Hours:{" "}
                 <span className="font-semibold">40 hrs</span>
               </p>
