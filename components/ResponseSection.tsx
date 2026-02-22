@@ -23,6 +23,10 @@ export default function ResponseSection({
   const [typedContent, setTypedContent] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
 
+  /* ===========================
+     BUILD TEXT
+  ============================ */
+
   const buildGenerateText = (data: any) => {
     if (!data) return "";
 
@@ -56,20 +60,25 @@ export default function ResponseSection({
     return text;
   };
 
-  /* Reset when response cleared */
+  /* ===========================
+     RESET WHEN CLEARED
+  ============================ */
+
   useEffect(() => {
     if (!response) {
       setTypedContent("");
     }
   }, [response]);
 
-  /* Typing Animation */
+  /* ===========================
+     TYPING ANIMATION
+  ============================ */
+
   useEffect(() => {
     if (!response || mode !== "generate") return;
 
     const fullText = buildGenerateText(response);
 
-    // Only skip animation if restoring AND no typing yet
     if (isRestored && typedContent === "") {
       setTypedContent(fullText);
       return;
@@ -93,7 +102,11 @@ export default function ResponseSection({
     }, 8);
 
     return () => clearInterval(interval);
-  }, [response, mode]); // removed isRestored dependency
+  }, [response, mode]);
+
+  /* ===========================
+     SAFE ACTIVITY EXTRACTION
+  ============================ */
 
   const activities =
     response?.activities ||
@@ -118,49 +131,56 @@ export default function ResponseSection({
       }))
     : [];
 
+  /* ===========================
+     RENDER
+  ============================ */
+
   return (
-<div
-  className="
-    relative
-    order-1 lg:order-2
-    bg-white
-    text-gray-900
-    pt-4 pb-4 px-4 lg:p-8
-    rounded-2xl
-    shadow-lg
-    border border-gray-200
-    h-full
-    flex flex-col
-    overflow-hidden
-  "
-  style={{
-    WebkitTextSizeAdjust: "100%",
-    WebkitFontSmoothing: "antialiased",
-  }}
->
-  <button
-    onClick={() => setShowClearModal(true)}
-    className="
-      absolute top-4 right-4
-      text-sm font-medium
-      border border-red-500
-      text-red-600
-      px-3 py-1
-      rounded-lg
-      hover:bg-red-50
-      transition
-    "
-  >
-    Clear
-  </button>
+    <div
+      className="
+        relative
+        order-1 lg:order-2
+        bg-white
+        text-black
+        pt-4 pb-4 px-4 lg:p-8
+        rounded-2xl
+        shadow-lg
+        border border-gray-200
+        h-full
+        flex flex-col
+        overflow-hidden
+      "
+      style={{
+        WebkitTextSizeAdjust: "100%",
+        WebkitFontSmoothing: "antialiased",
+      }}
+    >
+      <button
+        onClick={() => setShowClearModal(true)}
+        className="
+          absolute top-4 right-4
+          text-sm font-medium
+          border border-red-500
+          text-red-600
+          px-3 py-1
+          rounded-lg
+          hover:bg-red-50
+          transition
+        "
+      >
+        Clear
+      </button>
 
       <div ref={containerRef} className="flex-1 overflow-y-auto">
+
+        {/* EMPTY STATE */}
         {!loading && !response && (
-          <div className="text-base font-semibold text-gray-600">
+          <div className="text-base font-semibold text-black">
             AI Response
           </div>
         )}
 
+        {/* LOADING */}
         <AnimatePresence>
           {loading && (
             <motion.div
@@ -174,6 +194,7 @@ export default function ResponseSection({
           )}
         </AnimatePresence>
 
+        {/* GENERATE MODE */}
         {!loading && mode === "generate" && typedContent && (
           <div>
             {typedContent.split("\n").map((line, index) => {
@@ -189,9 +210,9 @@ export default function ResponseSection({
                   className={
                     isHeading
                       ? index === 0
-                        ? "text-base font-bold text-gray-900"
-                        : "text-base font-bold mt-5"
-                      : "text-sm mt-1 leading-relaxed text-gray-800"
+                        ? "text-base font-bold text-black"
+                        : "text-base font-bold text-black mt-5"
+                      : "text-sm mt-1 leading-relaxed text-black"
                   }
                 >
                   {line}
@@ -201,15 +222,17 @@ export default function ResponseSection({
           </div>
         )}
 
+        {/* COMPARE MODE */}
         {!loading &&
           mode === "compare" &&
           response &&
           validActivities.length > 0 && (
             <div>
-              <h2 className="text-lg font-bold text-gray-900">
+              <h2 className="text-lg font-bold text-black">
                 Weekly Work Distribution (40 Hours)
               </h2>
-              <p className="text-sm text-gray-700 mb-4">
+
+              <p className="text-sm text-black mb-4">
                 Estimated Weekly Hours:{" "}
                 <span className="font-semibold">40 hrs</span>
               </p>
@@ -220,10 +243,11 @@ export default function ResponseSection({
                     key={index}
                     className="flex justify-between items-center bg-gray-100 px-4 py-3 rounded-lg"
                   >
-                    <span className="font-medium text-gray-800">
+                    <span className="font-medium text-black">
                       {item.title}
                     </span>
-                    <span className="text-gray-600 font-medium">
+
+                    <span className="text-black font-medium">
                       {item.hours} hrs / week
                     </span>
                   </div>
@@ -235,6 +259,10 @@ export default function ResponseSection({
     </div>
   );
 }
+
+/* ===========================
+   THINKING DOTS
+============================ */
 
 function ThinkingDots() {
   return (
