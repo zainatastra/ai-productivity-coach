@@ -148,9 +148,9 @@ export default function Home() {
 
         {/* MAIN */}
         <main className="flex-1 overflow-hidden mt-4">
-          <div className="max-w-[1600px] mx-auto h-full flex flex-col px-8">
+          <div className="max-w-[1600px] mx-auto h-full flex flex-col px-3 md:px-8">
 
-            <div className="flex-1 grid grid-rows-[2.6fr_2fr] md:grid-rows-1 md:grid-cols-2 gap-3 md:gap-10 pb-2 md:pb-4 min-h-0 items-stretch">
+            <div className="flex-1 grid grid-rows-[3fr_2fr] md:grid-rows-1 md:grid-cols-2 gap-3 md:gap-10 pb-2 md:pb-4 min-h-0 items-stretch">
 
               <InputSection
                 setResponse={setResponse}
