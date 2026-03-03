@@ -149,7 +149,7 @@ return (
       relative
       order-1 lg:order-2
       bg-white
-      pt-6 pb-6 px-5 lg:p-8
+      p-0
       rounded-2xl
       shadow-lg
       border border-gray-200
@@ -162,109 +162,119 @@ return (
       WebkitFontSmoothing: "antialiased",
       color: "#000000",
     }}
+  >
+    <div
+      ref={containerRef}
+      className="flex-1 overflow-y-auto p-6"
     >
-      <div ref={containerRef} className="flex-1 overflow-y-auto">
 
-        {/* EMPTY STATE */}
-        {!loading && !response && (
-          <div className="text-base font-semibold text-black">
-            AI Response
-          </div>
-        )}
+  {/* ================= HEADER AREA ================= */}
+  {!response && !loading && (
+    <div className="text-base font-semibold text-black">
+      AI Response
+    </div>
+  )}
 
-        {/* LOADING */}
-        <AnimatePresence>
-          {loading && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="mt-2 ml-1"
+  {loading && (
+    <div className="flex items-center gap-2">
+      {[0, 1, 2].map((i) => (
+        <motion.div
+          key={i}
+          className="w-3 h-3 bg-[#78D1F5] rounded-full"
+          animate={{
+            scale: [1, 1.4, 1],
+            opacity: [0.6, 1, 0.6],
+          }}
+          transition={{
+            duration: 0.8,
+            repeat: Infinity,
+            delay: i * 0.2,
+          }}
+        />
+      ))}
+    </div>
+  )}
+
+  {/* ================= GENERATED CONTENT ================= */}
+  {!loading && mode === "generate" && typedContent && (
+    <div>
+      {typedContent.split("\n").map((line, index) => {
+        const isHeading =
+          line === "INDUSTRY" ||
+          line === "WORK FIELD" ||
+          line === "WHY THIS WORK FIELD";
+
+        const isBullet = line.startsWith("•");
+
+        if (isHeading) {
+          return (
+            <p
+              key={index}
+              className={`text-lg font-bold text-black ${index === 0 ? "" : "mt-5"}`}
             >
-              <ThinkingDots />
-            </motion.div>
-          )}
-        </AnimatePresence>
+              {line}
+            </p>
+          );
+        }
 
-        {/* GENERATE MODE */}
-        {!loading && mode === "generate" && typedContent && (
-          <div>
-            {typedContent.split("\n").map((line, index) => {
-              const isHeading =
-                line === "INDUSTRY" ||
-                line === "WORK FIELD" ||
-                line === "WHY THIS WORK FIELD";
+        if (isBullet) {
+          return (
+            <p
+              key={index}
+              className="text-sm mt-2 leading-relaxed text-black"
+            >
+              • {renderWithBold(line.replace("• ", ""))}
+            </p>
+          );
+        }
 
-              const isBullet = line.startsWith("•");
+        return (
+          <p
+            key={index}
+            className="text-sm mt-2 leading-relaxed text-black"
+          >
+            {renderWithBold(line)}
+          </p>
+        );
+      })}
+    </div>
+  )}
 
-if (isHeading) {
-  return (
-    <h3
-      key={index}
-      className="text-xl font-extrabold text-black mt-6 tracking-wide"
-    >
-      {line}
-    </h3>
-  );
-}
+  {/* ================= COMPARE MODE ================= */}
+  {!loading &&
+    mode === "compare" &&
+    response &&
+    validActivities.length > 0 && (
+      <div>
+        <h2 className="text-lg font-bold text-black">
+          Weekly Work Distribution (40 Hours)
+        </h2>
 
-              if (isBullet) {
-                return (
-<p
-  key={index}
-  className="text-base mt-3 leading-relaxed text-black font-normal"
->
-                    • {renderWithBold(line.replace("• ", ""))}
-                  </p>
-                );
-              }
+        <p className="text-sm text-black mb-4">
+          Estimated Weekly Hours:{" "}
+          <span className="font-semibold">40 hrs</span>
+        </p>
 
-              return (
-<p
-  key={index}
-  className="text-base mt-3 leading-relaxed text-black font-normal"
->
-                  {renderWithBold(line)}
-                </p>
-              );
-            })}
-          </div>
-        )}
+        <div className="space-y-3">
+          {validActivities.map((item, index) => (
+            <div
+              key={index}
+              className="flex justify-between items-center bg-gray-100 px-4 py-3 rounded-lg"
+            >
+              <span className="font-medium text-black">
+                {item.title}
+              </span>
 
-        {/* COMPARE MODE (UNCHANGED) */}
-        {!loading &&
-          mode === "compare" &&
-          response &&
-          validActivities.length > 0 && (
-            <div>
-              <h2 className="text-lg font-bold text-black">
-                Weekly Work Distribution (40 Hours)
-              </h2>
-
-              <p className="text-sm text-black mb-4">
-                Estimated Weekly Hours:{" "}
-                <span className="font-semibold">40 hrs</span>
-              </p>
-
-              <div className="space-y-3">
-                {validActivities.map((item, index) => (
-                  <div
-                    key={index}
-                    className="flex justify-between items-center bg-gray-100 px-4 py-3 rounded-lg"
-                  >
-                    <span className="font-medium text-black">
-                      {item.title}
-                    </span>
-
-                    <span className="text-black font-medium">
-                      {item.hours} hrs / week
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <span className="text-black font-medium">
+                {item.hours} hrs / week
+              </span>
             </div>
-          )}
+          ))}
+        </div>
       </div>
+    )}
+
+</div>
     </div>
   );
 }
