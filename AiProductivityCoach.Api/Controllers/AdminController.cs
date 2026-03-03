@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Google.Cloud.Firestore;
-using Google.Apis.Auth.OAuth2;
 
 namespace AiProductivityCoach.Api.Controllers
 {
@@ -12,16 +11,10 @@ namespace AiProductivityCoach.Api.Controllers
     {
         private readonly FirestoreDb _firestore;
 
-        public AdminController()
+        // 🔥 Firestore injected via DI
+        public AdminController(FirestoreDb firestore)
         {
-            var credential = GoogleCredential
-                .FromFile("Firebase/firebase-service-account.json");
-
-            _firestore = new FirestoreDbBuilder
-            {
-                ProjectId = "ai-productivity-coach-d40b7",
-                Credential = credential
-            }.Build();
+            _firestore = firestore;
         }
 
         [HttpGet("dashboard")]
@@ -48,23 +41,14 @@ namespace AiProductivityCoach.Api.Controllers
             var last30DaysDate = DateTime.UtcNow.Date.AddDays(-30);
             var last7DaysDate = DateTime.UtcNow.Date.AddDays(-7);
 
-            // ============================
-            // USER ACQUISITION COUNTERS
-            // ============================
             int newUsers = 0;
             int returningUsers = 0;
             int inactiveOldUsers = 0;
 
-            // ============================
-            // ACTIVITY CLASSIFICATION COUNTERS
-            // ============================
             int highlyActiveUsers = 0;
             int moderateUsers = 0;
             int inactiveUsers = 0;
 
-            // ============================
-            // MAIN USER LOOP
-            // ============================
             foreach (var userDoc in usersSnapshot.Documents)
             {
                 var userData = userDoc.ToDictionary();
@@ -97,66 +81,39 @@ namespace AiProductivityCoach.Api.Controllers
                     {
                         var convDate = ts.ToDateTime().Date;
 
-                        // 7-DAY GRAPH
                         var graphKey = convDate.ToString("yyyy-MM-dd");
                         if (last7Days.ContainsKey(graphKey))
                             last7Days[graphKey]++;
 
-                        // 30-DAY ACQUISITION CHECK
                         if (convDate >= last30DaysDate)
                             hasConversationLast30Days = true;
 
-                        // 7-DAY ACTIVITY CHECK
                         if (convDate >= last7DaysDate)
                             promptsLast7Days++;
                     }
                 }
 
-                // ============================
-                // USER ACQUISITION CLASSIFICATION
-                // ============================
                 if (createdAt.HasValue)
                 {
                     if (createdAt.Value >= last30DaysDate)
-                    {
                         newUsers++;
-                    }
                     else if (hasConversationLast30Days)
-                    {
                         returningUsers++;
-                    }
                     else
-                    {
                         inactiveOldUsers++;
-                    }
                 }
 
-                // ============================
-                // ACTIVITY CLASSIFICATION
-                // ============================
                 if (promptsLast7Days >= 10)
-                {
                     highlyActiveUsers++;
-                }
                 else if (promptsLast7Days >= 1)
-                {
                     moderateUsers++;
-                }
                 else
-                {
                     inactiveUsers++;
-                }
             }
 
-            // ============================
-            // BUG PLACEHOLDER (SAFE)
-            // ============================
             int openBugs = 0;
             int resolvedBugs = 0;
 
-            // ============================
-            // USERS LIST
-            // ============================
             var usersList = usersSnapshot.Documents.Select(doc =>
             {
                 var data = doc.ToDictionary();
@@ -173,9 +130,6 @@ namespace AiProductivityCoach.Api.Controllers
                 };
             });
 
-            // ============================
-            // FINAL RESPONSE
-            // ============================
             return Ok(new
             {
                 totalUsers,
@@ -185,12 +139,10 @@ namespace AiProductivityCoach.Api.Controllers
                 graph = last7Days,
                 users = usersList,
 
-                // Acquisition
                 newUsers,
                 returningUsers,
                 inactiveOldUsers,
 
-                // Activity
                 highlyActiveUsers,
                 moderateUsers,
                 inactiveUsers

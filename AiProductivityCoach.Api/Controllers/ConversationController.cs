@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Google.Cloud.Firestore;
-using Google.Apis.Auth.OAuth2;
 using System.Text.Json;
 
 namespace AiProductivityCoach.Api.Controllers
@@ -13,16 +12,10 @@ namespace AiProductivityCoach.Api.Controllers
     {
         private readonly FirestoreDb _firestore;
 
-        public ConversationController()
+        // 🔥 Firestore injected via DI
+        public ConversationController(FirestoreDb firestore)
         {
-            var credential = GoogleCredential
-                .FromFile("Firebase/firebase-service-account.json");
-
-            _firestore = new FirestoreDbBuilder
-            {
-                ProjectId = "ai-productivity-coach-d40b7",
-                Credential = credential
-            }.Build();
+            _firestore = firestore;
         }
 
         // =========================================
@@ -77,7 +70,7 @@ namespace AiProductivityCoach.Api.Controllers
                     { "industry", model.Industry },
                     { "description", model.Description },
                     { "response", model.Response },
-                    { "language", model.Language ?? "en" }, // 🔥 STORE LANGUAGE
+                    { "language", model.Language ?? "en" },
                     { "isPinned", false },
                     { "createdAt", Timestamp.GetCurrentTimestamp() }
                 };
@@ -220,7 +213,7 @@ namespace AiProductivityCoach.Api.Controllers
         public string Industry { get; set; } = "";
         public string Description { get; set; } = "";
         public string Response { get; set; } = "";
-        public string? Language { get; set; } = "en"; // 🔥 NEW
+        public string? Language { get; set; } = "en";
     }
 
     public class UpdateConversationDto

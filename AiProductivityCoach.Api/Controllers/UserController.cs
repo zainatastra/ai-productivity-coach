@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Google.Cloud.Firestore;
-using Google.Apis.Auth.OAuth2;
 using System.Security.Claims;
 
 namespace AiProductivityCoach.Api.Controllers
@@ -13,16 +12,10 @@ namespace AiProductivityCoach.Api.Controllers
     {
         private readonly FirestoreDb _firestore;
 
-        public UserController()
+        // 🔥 Firestore injected via DI
+        public UserController(FirestoreDb firestore)
         {
-            var credential = GoogleCredential
-                .FromFile("Firebase/firebase-service-account.json");
-
-            _firestore = new FirestoreDbBuilder
-            {
-                ProjectId = "ai-productivity-coach-d40b7",
-                Credential = credential
-            }.Build();
+            _firestore = firestore;
         }
 
         // DTO to receive optional full name from frontend
@@ -42,7 +35,6 @@ namespace AiProductivityCoach.Api.Controllers
                 var uid = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 var email = User.FindFirst(ClaimTypes.Email)?.Value;
 
-                // 🔥 Try multiple possible name claim mappings
                 var tokenName =
                     User.FindFirst("name")?.Value ??
                     User.FindFirst(ClaimTypes.Name)?.Value;
@@ -53,22 +45,16 @@ namespace AiProductivityCoach.Api.Controllers
                 var userDoc = _firestore.Collection("users").Document(uid);
                 var snapshot = await userDoc.GetSnapshotAsync();
 
-                // ===============================
-                // 🔥 DETERMINE CORRECT FULL NAME
-                // ===============================
                 string fullName = "User";
 
-                // 1️⃣ Highest priority → frontend provided name (Google login sends this)
                 if (!string.IsNullOrWhiteSpace(dto?.FullName))
                 {
                     fullName = dto.FullName.Trim();
                 }
-                // 2️⃣ Second priority → Firebase token name claim
                 else if (!string.IsNullOrWhiteSpace(tokenName))
                 {
                     fullName = tokenName.Trim();
                 }
-                // 3️⃣ Last fallback → email prefix
                 else if (!string.IsNullOrWhiteSpace(email))
                 {
                     fullName = email.Split('@')[0];
@@ -76,9 +62,6 @@ namespace AiProductivityCoach.Api.Controllers
 
                 if (!snapshot.Exists)
                 {
-                    // ===============================
-                    // 🔥 CREATE USER
-                    // ===============================
                     var newUser = new Dictionary<string, object>
                     {
                         { "email", email ?? "" },
@@ -91,9 +74,6 @@ namespace AiProductivityCoach.Api.Controllers
                 }
                 else
                 {
-                    // ===============================
-                    // 🔥 AUTO UPDATE NAME IF CHANGED
-                    // ===============================
                     var existingData = snapshot.ToDictionary();
                     var existingName = existingData.ContainsKey("fullName")
                         ? existingData["fullName"]?.ToString()
