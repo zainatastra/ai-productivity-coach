@@ -69,7 +69,7 @@ useEffect(() => {
 
       const token = await currentUser.getIdToken();
 
-      const res = await fetch("http://localhost:5048/api/conversation", {
+      const res = await fetch("https://ai-productivity-coach-mlnn.onrender.com/api/conversation", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -137,7 +137,7 @@ useEffect(() => {
 
     const token = await currentUser.getIdToken();
 
-    await fetch(`http://localhost:5048/api/conversation/${id}`, {
+    await fetch(`https://ai-productivity-coach-mlnn.onrender.com/api/conversation/${id}`, {
       method: "PUT",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -157,7 +157,7 @@ useEffect(() => {
     const token = await currentUser.getIdToken();
 
     const res = await fetch(
-      `http://localhost:5048/api/conversation/${deleteTarget.id}`,
+      `https://ai-productivity-coach-mlnn.onrender.com/api/conversation/${deleteTarget.id}`,
       {
         method: "DELETE",
         headers: {

@@ -40,7 +40,7 @@ export default function InputSection({
 
       const token = await auth.currentUser?.getIdToken();
 
-      await fetch("http://localhost:5048/api/conversation/save", {
+      await fetch("https://ai-productivity-coach-mlnn.onrender.com/api/conversation/save", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,

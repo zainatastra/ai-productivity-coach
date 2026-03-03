@@ -97,7 +97,7 @@ const handleLogout = async () => {
         const token = await user.getIdToken();
 
         const res = await fetch(
-          "http://localhost:5048/api/admin/dashboard",
+          "https://ai-productivity-coach-mlnn.onrender.com/api/admin/dashboard",
           {
             headers: {
               Authorization: `Bearer ${token}`,
