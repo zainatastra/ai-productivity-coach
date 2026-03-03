@@ -221,7 +221,7 @@ const handleSignup = async () => {
               }}
               className="relative z-10 flex-1 py-2 text-sm font-medium"
             >
-              Sign Up
+              SignUp
             </button>
           </div>
 
