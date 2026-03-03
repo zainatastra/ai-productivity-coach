@@ -25,11 +25,11 @@ builder.Services.AddCors(options =>
             .WithOrigins(
                 "http://localhost:3000",
                 "https://localhost:3000",
-                "https://ai-productivity-coach-zeta.vercel.app" // ✅ Production frontend
+                "https://ai-productivity-coach-zeta.vercel.app"
             )
             .AllowAnyHeader()
             .AllowAnyMethod()
-            .AllowCredentials();
+            .SetIsOriginAllowed(origin => true); // ✅ important
     });
 });
 
@@ -87,24 +87,18 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-// Swagger
-app.UseSwagger();
-app.UseSwaggerUI();
-
-// Routing
 app.UseRouting();
 
-// ✅ CORS MUST COME AFTER UseRouting
-app.UseCors("AllowFrontend");
+app.UseCors("AllowFrontend"); // must be before auth
 
-// Auth
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Controllers
 app.MapControllers();
 
-// Health Check
+app.UseSwagger();
+app.UseSwaggerUI();
+
 app.MapGet("/", () => "AI Productivity Coach API is running 🚀");
 
 app.Run();
