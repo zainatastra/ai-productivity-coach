@@ -48,7 +48,7 @@ export default function AdminLoginPage() {
       const token = await result.user.getIdToken();
 
       const res = await fetch(
-        "http://localhost:5048/api/test/admin-users",
+        "https://ai-productivity-coach-mlnn.onrender.com/api/test/admin-users",
         {
           headers: {
             Authorization: `Bearer ${token}`,

@@ -79,7 +79,7 @@ const handleGoogleLogin = async () => {
 
 // In handleSignup, replace the fetch call with this:
 // In handleSignup, your fetch should look like this:
-await fetch("http://localhost:5048/api/User/sync", {
+await fetch("https://ai-productivity-coach-mlnn.onrender.com/api/User/sync", {
   method: "POST",
   headers: {
     Authorization: `Bearer ${token}`,
@@ -113,7 +113,7 @@ const handleLogin = async () => {
 
     const token = await result.user.getIdToken(true);
 
-await fetch("http://localhost:5048/api/User/sync", {
+await fetch("https://ai-productivity-coach-mlnn.onrender.com/api/User/sync", {
   method: "POST",
   headers: {
     Authorization: `Bearer ${token}`,
@@ -156,7 +156,7 @@ const handleSignup = async () => {
 
     const token = await result.user.getIdToken(true);
 
-    await fetch("http://localhost:5048/api/User/sync", {
+    await fetch("https://ai-productivity-coach-mlnn.onrender.com/api/User/sync", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
