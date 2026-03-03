@@ -29,45 +29,68 @@ export async function POST(req: Request) {
 
     const selectedLanguage = language === "de" ? "de" : "en";
 
-    let prompt = "";
-
-    /* ===========================
-       LANGUAGE SYSTEM INSTRUCTION
-    ============================ */
-
     const languageInstruction =
       selectedLanguage === "de"
         ? "Respond entirely in German language."
         : "Respond entirely in English language.";
 
+    let prompt = "";
+
     /* ===========================
-       GENERATE MODE
+       GENERATE MODE (ENHANCED)
     ============================ */
 
     if (mode === "generate") {
       prompt = `
-You are a senior productivity consultant.
+You are a senior AI workforce intelligence analyst with deep industry expertise.
 
-Industry: ${industry}
-Job Description: ${description}
+User Industry Input: ${industry}
+User Description: ${description}
 
 ${languageInstruction}
 
-Return ONLY valid JSON:
+OBJECTIVE:
+
+1. Clearly identify the correct Industry.
+2. Identify the specific Work Field within that industry.
+3. Provide a detailed professional explanation of that work field.
+4. Provide analytical reasoning explaining WHY this conclusion was reached,
+   strictly based on terminology, responsibilities, signals, and keywords
+   found in the user's description.
+
+STRICT QUALITY RULES:
+
+- The work_field explanation MUST be between 150–250 words.
+- It must contain multiple structured paragraphs.
+- Each reasoning bullet must be minimum 25 words.
+- Provide at least 4 reasoning bullet points.
+- Be analytical and professional.
+- Do not be generic.
+- Highlight important keywords using **double asterisks**.
+- Do NOT use markdown headings.
+- Do NOT include emojis.
+- Do NOT include extra commentary.
+- Return clean JSON only.
+
+Return ONLY valid JSON in this format:
 
 {
-  "summary": "80-100 word overview",
-  "improvements": ["4-5 actionable improvements"],
-  "daily_plan": ["4-5 daily execution steps"],
-  "growth_tips": ["4-5 long-term strategies"]
+  "industry": "Clear industry classification",
+  "work_field": "Detailed multi-paragraph professional explanation (150-250 words minimum)",
+  "reasoning": [
+    "Detailed analytical explanation with **bold keywords** (25+ words)",
+    "Detailed analytical explanation with **bold keywords** (25+ words)",
+    "Detailed analytical explanation with **bold keywords** (25+ words)",
+    "Detailed analytical explanation with **bold keywords** (25+ words)"
+  ]
 }
 
-No markdown. No explanation. JSON only.
+JSON only.
 `;
     }
 
     /* ===========================
-       COMPARE MODE
+       COMPARE MODE (UNCHANGED)
     ============================ */
 
     if (mode === "compare") {
@@ -96,8 +119,6 @@ Return ONLY valid JSON:
   ]
 }
 
-No markdown.
-No explanation.
 JSON only.
 `;
     }
@@ -115,7 +136,8 @@ JSON only.
           content: prompt,
         },
       ],
-      temperature: 0.7,
+      temperature: 0.6,
+      max_tokens: 900,
     });
 
     const raw = completion.choices[0]?.message?.content || "";
@@ -140,6 +162,16 @@ JSON only.
         { success: false, message: "Failed to parse AI response." },
         { status: 500 }
       );
+    }
+
+    /* ===========================
+       SAFETY FALLBACKS
+    ============================ */
+
+    if (mode === "generate") {
+      if (!parsed.industry) parsed.industry = industry;
+      if (!parsed.work_field) parsed.work_field = "Detailed analysis unavailable.";
+      if (!Array.isArray(parsed.reasoning)) parsed.reasoning = [];
     }
 
     if (mode === "compare") {

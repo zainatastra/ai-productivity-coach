@@ -9,6 +9,8 @@ interface Props {
   confirmText?: string;
   onCancel: () => void;
   onConfirm: () => void;
+  confirmDisabled?: boolean;   // ✅ ADD THIS
+  confirmClassName?: string;   // ✅ ADD THIS
 }
 
 export default function ConfirmModal({

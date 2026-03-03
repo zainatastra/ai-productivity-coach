@@ -56,44 +56,55 @@ export default function Sidebar({ onSelectConversation }: SidebarProps) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const [isLoadingChats, setIsLoadingChats] = useState(true);
+
   const profileRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  /* ================= FETCH CONVERSATIONS ================= */
 /* ================= FETCH CONVERSATIONS ================= */
 useEffect(() => {
   const fetchConversations = async () => {
+    setIsLoadingChats(true); // ✅ START LOADING
+
     try {
       const currentUser = auth.currentUser;
-      if (!currentUser) return;
+
+      if (!currentUser) {
+        setIsLoadingChats(false); // ✅ EARLY RETURN FIX
+        return;
+      }
 
       const token = await currentUser.getIdToken();
 
-      const res = await fetch("https://ai-productivity-coach-mlnn.onrender.com/api/conversation", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const res = await fetch(
+        "https://ai-productivity-coach-mlnn.onrender.com/api/conversation",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
-      // 🚨 Handle Unauthorized
       if (res.status === 401) {
-        console.warn("Unauthorized — skipping conversation fetch");
         setConversations([]);
+        setIsLoadingChats(false); // ✅ EARLY RETURN FIX
         return;
       }
 
       if (!res.ok) {
-        console.warn("Failed to fetch conversations:", res.status);
         setConversations([]);
+        setIsLoadingChats(false); // ✅ EARLY RETURN FIX
         return;
       }
 
       const data = await res.json();
 
-      // 🚨 Prevent crash if API does not return array
       if (!Array.isArray(data)) {
-        console.warn("Invalid conversations response");
         setConversations([]);
+        setIsLoadingChats(false); // ✅ EARLY RETURN FIX
         return;
       }
 
@@ -103,9 +114,12 @@ useEffect(() => {
       );
 
       setConversations(sorted);
+
     } catch (error) {
       console.error("Conversation fetch error:", error);
       setConversations([]);
+    } finally {
+      setIsLoadingChats(false); // ✅ ALWAYS STOP LOADING
     }
   };
 
@@ -115,9 +129,13 @@ useEffect(() => {
   /* ================= CLOSE MENUS ON OUTSIDE CLICK ================= */
   useEffect(() => {
     const handleClickOutside = (event: any) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setActiveMenu(null);
-      }
+if (
+  menuRef.current &&
+  !menuRef.current.contains(event.target) &&
+  !(event.target.closest?.(".menu-trigger"))
+) {
+  setActiveMenu(null);
+}
 
       if (profileRef.current && !profileRef.current.contains(event.target)) {
         setProfileOpen(false);
@@ -148,15 +166,21 @@ useEffect(() => {
   };
 
   /* ================= DELETE ================= */
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
+const handleDelete = async () => {
+  if (!deleteTarget) return;
 
+  setIsDeleting(true);
+
+  try {
     const currentUser = auth.currentUser;
-    if (!currentUser) return;
+    if (!currentUser) {
+  setIsDeleting(false);
+  return;
+}
 
     const token = await currentUser.getIdToken();
 
-    const res = await fetch(
+    await fetch(
       `https://ai-productivity-coach-mlnn.onrender.com/api/conversation/${deleteTarget.id}`,
       {
         method: "DELETE",
@@ -166,10 +190,6 @@ useEffect(() => {
       }
     );
 
-    if (!res.ok) {
-      console.warn("Delete failed but UI already updated");
-    }
-
     setConversations((prev) =>
       prev.filter((c) => c.id !== deleteTarget.id)
     );
@@ -177,17 +197,27 @@ useEffect(() => {
     setDeleteTarget(null);
     setShowToast(true);
     setTimeout(() => setShowToast(false), 2500);
-  };
+
+  } catch (err) {
+    console.error("Delete failed:", err);
+  } finally {
+    setIsDeleting(false);
+  }
+};
 
   /* ================= LOGOUT ================= */
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      setShowLogoutModal(false);
-    } catch (err) {
-      console.error("Logout failed:", err);
-    }
-  };
+const handleLogout = async () => {
+  setIsLoggingOut(true);
+
+  try {
+    await signOut(auth);
+    setShowLogoutModal(false);
+  } catch (err) {
+    console.error("Logout failed:", err);
+  } finally {
+    setIsLoggingOut(false);
+  }
+};
 
   /* ================= PIN ================= */
   const togglePin = async (conv: Conversation) => {
@@ -359,128 +389,168 @@ useEffect(() => {
 
       {/* ================= SECTION LABEL ================= */}
       <div className="pt-2 pb-1">
-        <p className="text-xs font-semibold text-gray-500 tracking-wide">
+        <p className="text-xs font-semibold text-gray-500">
           Recent Conversations
         </p>
       </div>
 
       {/* ================= CONVERSATION LIST ================= */}
       <div className="flex-1 overflow-y-auto py-3 space-y-3">
-        {conversations.map((conv) => (
-          <div
-            key={conv.id}
-            className={`relative group p-3 rounded-xl border transition cursor-pointer text-left ${
-              activeId === conv.id
-                ? "bg-gray-100 border-gray-300"
-                : "bg-white border-gray-200 hover:bg-gray-50"
-            }`}
-            onClick={() => {
-              setActiveId(conv.id);
-              onSelectConversation(conv);
+
+  {isLoadingChats ? (
+    <div className="flex items-center justify-center h-32">
+      <div className="flex gap-2">
+        {[0, 1, 2].map((i) => (
+          <motion.div
+            key={i}
+            className="w-2 h-2 bg-gray-400 rounded-full"
+            animate={{ opacity: [0.3, 1, 0.3] }}
+            transition={{
+              duration: 1,
+              repeat: Infinity,
+              delay: i * 0.2,
             }}
-          >
-            {editingId === conv.id ? (
-              <div className="flex items-center gap-2">
-                <input
-                  autoFocus
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  className="text-sm px-2 py-1 rounded-md border border-gray-300 w-full bg-white focus:outline-none focus:ring-2 focus:ring-gray-800"
-                />
-                <Check
-                  size={18}
-                  className="cursor-pointer"
-                  onClick={() => saveRename(conv)}
-                />
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                {conv.isPinned && (
-                  <Pin size={18} className="text-gray-600 shrink-0" />
-                )}
-                <p className="text-sm font-semibold truncate text-gray-800">
-                  {conv.title || conv.industry}
-                </p>
-              </div>
-            )}
-
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setActiveMenu(activeMenu === conv.id ? null : conv.id);
-              }}
-              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition"
-            >
-              <MoreHorizontal size={18} />
-            </button>
-
-            <AnimatePresence>
-              {activeMenu === conv.id && (
-                <motion.div
-                  ref={menuRef}
-                  initial={{ opacity: 0, y: -5, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -5, scale: 0.98 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute right-2 top-10 bg-white shadow-xl rounded-xl border border-gray-200 w-44 z-20 overflow-hidden"
-                >
-                  <button
-                    onClick={() => togglePin(conv)}
-                    className="flex items-center gap-2 px-4 py-2 w-full text-sm hover:bg-gray-100 transition text-left"
-                  >
-                    <Pin size={16} />
-                    {conv.isPinned ? "Unpin" : "Pin Chat"}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setEditingId(conv.id);
-                      setEditValue(conv.title || conv.industry);
-                      setActiveMenu(null);
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 w-full text-sm hover:bg-gray-100 transition text-left"
-                  >
-                    <Pencil size={16} />
-                    Rename
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setDeleteTarget(conv);
-                      setActiveMenu(null);
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 w-full text-sm text-red-600 text-left"
-                  >
-                    <Trash2 size={16} />
-                    Delete
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          />
         ))}
       </div>
+    </div>
+  ) : (
+    conversations.map((conv) => (
+      <div
+        key={conv.id}
+        className={`relative group px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer text-left shadow-sm ${
+          activeId === conv.id
+            ? "bg-white shadow-md"
+            : "bg-white hover:bg-gray-50 hover:shadow-md"
+        }`}
+        onClick={() => {
+          setActiveId(conv.id);
+          onSelectConversation(conv);
+        }}
+      >
+        {editingId === conv.id ? (
+          <div className="flex items-center gap-2">
+            <input
+              autoFocus
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveRename(conv);
+                if (e.key === "Escape") setEditingId(null);
+              }}
+              className="text-sm px-2 py-1 rounded-md border border-gray-300 w-full bg-white focus:outline-none focus:ring-2 focus:ring-gray-800"
+            />
+            <Check
+              size={18}
+              className="cursor-pointer text-gray-700 hover:text-black transition"
+              onClick={() => saveRename(conv)}
+            />
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 pr-8">
+            {conv.isPinned && (
+              <Pin size={16} className="text-gray-500 shrink-0" />
+            )}
+
+            <p className="text-sm font-normal text-gray-700 overflow-hidden whitespace-nowrap">
+              <span className="block overflow-hidden text-clip">
+                {conv.title || conv.industry}
+              </span>
+            </p>
+          </div>
+        )}
+
+        {/* 3 DOTS MENU */}
+        {editingId !== conv.id && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveMenu(activeMenu === conv.id ? null : conv.id);
+            }}
+            className="menu-trigger absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition"
+          >
+            <MoreHorizontal
+              size={18}
+              className="text-gray-500 hover:text-gray-700 transition"
+            />
+          </button>
+        )}
+
+        {/* DROPDOWN */}
+        <AnimatePresence>
+          {activeMenu === conv.id && (
+            <motion.div
+              ref={(el) => {
+                menuRef.current = el;
+              }}
+              initial={{ opacity: 0, y: -5, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -5, scale: 0.98 }}
+              transition={{ duration: 0.15 }}
+              className="absolute right-2 top-10 bg-white shadow-xl rounded-xl border border-gray-200 w-44 z-20 overflow-hidden"
+            >
+              <button
+                onClick={() => togglePin(conv)}
+                className="flex items-center gap-2 px-4 py-2 w-full text-sm hover:bg-gray-100 transition text-left"
+              >
+                <Pin size={16} />
+                {conv.isPinned ? "Unpin" : "Pin Chat"}
+              </button>
+
+              <button
+                onClick={() => {
+                  setEditingId(conv.id);
+                  setEditValue(conv.title || conv.industry);
+                  setActiveMenu(null);
+                }}
+                className="flex items-center gap-2 px-4 py-2 w-full text-sm hover:bg-gray-100 transition text-left"
+              >
+                <Pencil size={16} />
+                Rename
+              </button>
+
+              <button
+                onClick={() => {
+                  setDeleteTarget(conv);
+                  setActiveMenu(null);
+                }}
+                className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 w-full text-sm text-red-600 text-left"
+              >
+                <Trash2 size={16} />
+                Delete
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    ))
+  )}
+</div>
     </aside>
 
     {/* DELETE CONFIRM MODAL */}
-    <ConfirmModal
-      open={!!deleteTarget}
-      title="Are you sure you want to delete?"
-      description="This will permanently remove this conversation."
-      confirmText="Yes, Delete"
-      onCancel={() => setDeleteTarget(null)}
-      onConfirm={handleDelete}
-    />
+<ConfirmModal
+  open={!!deleteTarget}
+  title="Are you sure you want to delete?"
+  description="This will permanently remove this conversation."
+  confirmText={isDeleting ? "Deleting..." : "Yes, Delete"}
+  confirmDisabled={isDeleting}
+  confirmClassName={isDeleting ? "bg-black/60 cursor-not-allowed" : ""}
+  onCancel={() => !isDeleting && setDeleteTarget(null)}
+  onConfirm={handleDelete}
+/>
 
     {/* LOGOUT CONFIRM MODAL */}
-    <ConfirmModal
-      open={showLogoutModal}
-      title="Are you sure you want to logout?"
-      description="You will be signed out of your account."
-      confirmText="Yes, Logout"
-      onCancel={() => setShowLogoutModal(false)}
-      onConfirm={handleLogout}
-    />
+<ConfirmModal
+  open={showLogoutModal}
+  title="Are you sure you want to logout?"
+  description="You will be signed out of your account."
+  confirmText={isLoggingOut ? "Logging out..." : "Yes, Logout"}
+  confirmDisabled={isLoggingOut}
+  confirmClassName={isLoggingOut ? "bg-black/60 cursor-not-allowed" : ""}
+  onCancel={() => !isLoggingOut && setShowLogoutModal(false)}
+  onConfirm={handleLogout}
+/>
 
     <Toast
       show={showToast}

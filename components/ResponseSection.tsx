@@ -18,13 +18,12 @@ export default function ResponseSection({
   loading,
   mode,
   isRestored,
-  setShowClearModal,
 }: Props) {
   const [typedContent, setTypedContent] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
 
   /* ===========================
-     BUILD TEXT
+     BUILD NEW GENERATE TEXT
   ============================ */
 
   const buildGenerateText = (data: any) => {
@@ -32,27 +31,17 @@ export default function ResponseSection({
 
     let text = "";
 
-    if (data.summary) text += `SUMMARY\n${data.summary}\n\n`;
-
-    if (data.improvements?.length) {
-      text += `KEY IMPROVEMENTS\n`;
-      data.improvements.forEach((item: string) => {
-        text += `• ${item}\n`;
-      });
-      text += "\n";
+    if (data.industry) {
+      text += `INDUSTRY\n${data.industry}\n\n`;
     }
 
-    if (data.daily_plan?.length) {
-      text += `DAILY PLAN\n`;
-      data.daily_plan.forEach((item: string) => {
-        text += `• ${item}\n`;
-      });
-      text += "\n";
+    if (data.work_field) {
+      text += `WORK FIELD\n${data.work_field}\n\n`;
     }
 
-    if (data.growth_tips?.length) {
-      text += `GROWTH TIPS\n`;
-      data.growth_tips.forEach((item: string) => {
+    if (data.reasoning?.length) {
+      text += `WHY THIS WORK FIELD\n`;
+      data.reasoning.forEach((item: string) => {
         text += `• ${item}\n`;
       });
     }
@@ -74,37 +63,54 @@ export default function ResponseSection({
      TYPING ANIMATION
   ============================ */
 
-useEffect(() => {
-  if (!response || mode !== "generate") return;
+  useEffect(() => {
+    if (!response || mode !== "generate") return;
 
-  const fullText = buildGenerateText(response);
+    const fullText = buildGenerateText(response);
 
-  // 🚀 If state is restored, do NOT animate
-  if (isRestored) {
-    setTypedContent(fullText);
-    return;
-  }
-
-  // Normal typing animation
-  setTypedContent("");
-  let index = 0;
-
-  const interval = setInterval(() => {
-    index++;
-    setTypedContent(fullText.slice(0, index));
-
-    if (containerRef.current) {
-      containerRef.current.scrollTop =
-        containerRef.current.scrollHeight;
+    if (isRestored) {
+      setTypedContent(fullText);
+      return;
     }
 
-    if (index >= fullText.length) {
-      clearInterval(interval);
-    }
-  }, 8);
+    setTypedContent("");
+    let index = 0;
 
-  return () => clearInterval(interval);
-}, [response, mode, isRestored]);
+    const interval = setInterval(() => {
+      index++;
+      setTypedContent(fullText.slice(0, index));
+
+      if (containerRef.current) {
+        containerRef.current.scrollTop =
+          containerRef.current.scrollHeight;
+      }
+
+      if (index >= fullText.length) {
+        clearInterval(interval);
+      }
+    }, 8);
+
+    return () => clearInterval(interval);
+  }, [response, mode, isRestored]);
+
+  /* ===========================
+     PARSE BOLD TEXT (**text**)
+  ============================ */
+
+  const renderWithBold = (text: string) => {
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+
+    return parts.map((part, index) => {
+      if (part.startsWith("**") && part.endsWith("**")) {
+        return (
+          <span key={index} className="font-semibold text-black">
+            {part.replace(/\*\*/g, "")}
+          </span>
+        );
+      }
+      return <span key={index}>{part}</span>;
+    });
+  };
 
   /* ===========================
      SAFE ACTIVITY EXTRACTION
@@ -137,27 +143,26 @@ useEffect(() => {
      RENDER
   ============================ */
 
-  return (
-    <div
-      className="
-        relative
-        order-1 lg:order-2
-        bg-white
-        text-black
-        pt-4 pb-4 px-4 lg:p-8
-        rounded-2xl
-        shadow-lg
-        border border-gray-200
-        h-full
-        flex flex-col
-        overflow-hidden
-      "
-      style={{
-        WebkitTextSizeAdjust: "100%",
-        WebkitFontSmoothing: "antialiased",
-      }}
+return (
+  <div
+    className="
+      relative
+      order-1 lg:order-2
+      bg-white
+      pt-6 pb-6 px-5 lg:p-8
+      rounded-2xl
+      shadow-lg
+      border border-gray-200
+      h-full
+      flex flex-col
+      overflow-hidden
+    "
+    style={{
+      WebkitTextSizeAdjust: "100%",
+      WebkitFontSmoothing: "antialiased",
+      color: "#000000",
+    }}
     >
-
       <div ref={containerRef} className="flex-1 overflow-y-auto">
 
         {/* EMPTY STATE */}
@@ -186,30 +191,47 @@ useEffect(() => {
           <div>
             {typedContent.split("\n").map((line, index) => {
               const isHeading =
-                line === "SUMMARY" ||
-                line === "KEY IMPROVEMENTS" ||
-                line === "DAILY PLAN" ||
-                line === "GROWTH TIPS";
+                line === "INDUSTRY" ||
+                line === "WORK FIELD" ||
+                line === "WHY THIS WORK FIELD";
+
+              const isBullet = line.startsWith("•");
+
+if (isHeading) {
+  return (
+    <h3
+      key={index}
+      className="text-xl font-extrabold text-black mt-6 tracking-wide"
+    >
+      {line}
+    </h3>
+  );
+}
+
+              if (isBullet) {
+                return (
+<p
+  key={index}
+  className="text-base mt-3 leading-relaxed text-black font-normal"
+>
+                    • {renderWithBold(line.replace("• ", ""))}
+                  </p>
+                );
+              }
 
               return (
-                <p
-                  key={index}
-                  className={
-                    isHeading
-                      ? index === 0
-                        ? "text-base font-bold text-black"
-                        : "text-base font-bold text-black mt-5"
-                      : "text-sm mt-1 leading-relaxed text-black"
-                  }
-                >
-                  {line}
+<p
+  key={index}
+  className="text-base mt-3 leading-relaxed text-black font-normal"
+>
+                  {renderWithBold(line)}
                 </p>
               );
             })}
           </div>
         )}
 
-        {/* COMPARE MODE */}
+        {/* COMPARE MODE (UNCHANGED) */}
         {!loading &&
           mode === "compare" &&
           response &&
