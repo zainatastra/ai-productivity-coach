@@ -129,7 +129,7 @@ const handleLogout = async () => {
   if (loading)
     return (
       <div className="flex h-screen items-center justify-center">
-        <p className="text-gray-500 text-lg">Loading dashboard...</p>
+        <p className="text-gray-500 text-lg">Loading the dashboard...</p>
       </div>
     );
 
