@@ -447,7 +447,7 @@ const handleLogout = async () => {
             />
           </div>
         ) : (
-          <div className="flex items-center gap-2 pr-8">
+          <div className="flex items-center gap-2 pr-4.5">
             {conv.isPinned && (
               <Pin size={16} className="text-gray-500 shrink-0" />
             )}
