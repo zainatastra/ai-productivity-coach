@@ -61,14 +61,14 @@ export default function Header({
               onClick={() => router.push("/auth?mode=login")}
               className="h-9 px-4 rounded-xl border border-gray-300 text-sm bg-white text-gray-700 hover:bg-gray-100 transition"
             >
-              Log in
+              Login
             </button>
 
             <button
               onClick={() => router.push("/auth?mode=signup")}
               className="h-9 px-4 rounded-xl bg-black text-white text-sm hover:bg-gray-900 transition"
             >
-              Sign up
+              SignUp
             </button>
           </>
         )}
