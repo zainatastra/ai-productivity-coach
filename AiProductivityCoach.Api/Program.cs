@@ -25,8 +25,7 @@ builder.Services.AddCors(options =>
             .WithOrigins(
                 "http://localhost:3000",
                 "https://localhost:3000"
-                // 🔥 Add your Vercel domain here later
-                // "https://your-vercel-domain.vercel.app"
+                // Add your frontend production domain here later
             )
             .AllowAnyHeader()
             .AllowAnyMethod();
@@ -34,7 +33,7 @@ builder.Services.AddCors(options =>
 });
 
 // ==========================================
-// 🔐 FIREBASE INITIALIZATION (ENV BASED)
+// 🔐 FIREBASE INITIALIZATION
 // ==========================================
 
 var firebaseJson = Environment.GetEnvironmentVariable("FIREBASE_CREDENTIALS");
@@ -48,7 +47,6 @@ var credential = GoogleCredential
     .FromJson(firebaseJson)
     .CreateScoped("https://www.googleapis.com/auth/cloud-platform");
 
-// Prevent double initialization in case of hot reload
 if (FirebaseApp.DefaultInstance == null)
 {
     FirebaseApp.Create(new AppOptions
@@ -58,7 +56,7 @@ if (FirebaseApp.DefaultInstance == null)
 }
 
 // ==========================================
-// 🗄 FIRESTORE DI REGISTRATION
+// 🗄 FIRESTORE
 // ==========================================
 
 builder.Services.AddSingleton(provider =>
@@ -88,18 +86,18 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+// Enable Swagger in production too
+app.UseSwagger();
+app.UseSwaggerUI();
 
-// IMPORTANT: CORS must come before Auth
 app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Optional health check endpoint
+app.MapGet("/", () => "AI Productivity Coach API is running 🚀");
 
 app.Run();
