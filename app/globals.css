@@ -4,22 +4,62 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Force strict light mode */
+/* Smooth light UI foundation */
 html {
-  background-color: #ffffff;
-  color: #000000;
   scroll-behavior: smooth;
 }
 
 body {
-  background-color: #ffffff;
-  color: #000000;
+  @apply bg-gray-50 text-gray-800 antialiased;
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Remove all dark mode variable overrides completely */
+/* Headings */
+h1 {
+  @apply text-2xl md:text-3xl font-bold tracking-tight text-gray-900;
+}
 
-/* Custom Scrollbar */
+h2 {
+  @apply text-xl font-semibold text-gray-900;
+}
+
+h3 {
+  @apply text-lg font-semibold text-gray-800;
+}
+
+p {
+  @apply text-base leading-relaxed text-gray-600;
+}
+
+/* Light borders */
+.border-light {
+  @apply border border-gray-200;
+}
+
+/* Card Style */
+.card {
+  @apply bg-white rounded-2xl shadow-sm border border-gray-200 p-6;
+}
+
+/* Unified Button Style */
+.btn {
+  @apply px-5 py-2.5 rounded-xl text-sm font-medium transition duration-200 border border-gray-300 bg-white hover:bg-gray-100;
+}
+
+.btn-primary {
+  @apply bg-black text-white border-black hover:bg-gray-900;
+}
+
+.btn-outline {
+  @apply bg-white text-gray-700 border-gray-300 hover:bg-gray-100;
+}
+
+/* Header Style */
+.header-bg {
+  @apply bg-white/80 backdrop-blur-md border-b border-gray-200;
+}
+
+/* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
 }

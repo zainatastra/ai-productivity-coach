@@ -1,18 +1,10 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 
-/**
- * Force dynamic execution.
- * Prevents Vercel from trying to pre-render or analyze at build time.
- */
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
-    /* ===========================
-       ENV VALIDATION
-    ============================ */
-
     if (!process.env.OPENAI_API_KEY) {
       console.error("OPENAI_API_KEY is missing");
       return NextResponse.json(
@@ -21,16 +13,12 @@ export async function POST(req: Request) {
       );
     }
 
-    /* ===========================
-       CREATE OPENAI INSTANCE
-       (INSIDE HANDLER ONLY)
-    ============================ */
-
     const openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    const { industry, description, mode } = await req.json();
+    const { industry, description, mode, language } =
+      await req.json();
 
     if (!industry || !description || !mode) {
       return NextResponse.json(
@@ -39,7 +27,18 @@ export async function POST(req: Request) {
       );
     }
 
+    const selectedLanguage = language === "de" ? "de" : "en";
+
     let prompt = "";
+
+    /* ===========================
+       LANGUAGE SYSTEM INSTRUCTION
+    ============================ */
+
+    const languageInstruction =
+      selectedLanguage === "de"
+        ? "Respond entirely in German language."
+        : "Respond entirely in English language.";
 
     /* ===========================
        GENERATE MODE
@@ -51,6 +50,8 @@ You are a senior productivity consultant.
 
 Industry: ${industry}
 Job Description: ${description}
+
+${languageInstruction}
 
 Return ONLY valid JSON:
 
@@ -76,6 +77,8 @@ You are an expert workforce planning strategist.
 Industry: ${industry}
 Job Description: ${description}
 
+${languageInstruction}
+
 Create a realistic weekly workload distribution.
 
 Rules:
@@ -99,10 +102,6 @@ JSON only.
 `;
     }
 
-    /* ===========================
-       OPENAI CALL
-    ============================ */
-
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -121,10 +120,6 @@ JSON only.
 
     const raw = completion.choices[0]?.message?.content || "";
 
-    /* ===========================
-       SAFE JSON EXTRACTION
-    ============================ */
-
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
 
     if (!jsonMatch) {
@@ -139,17 +134,13 @@ JSON only.
 
     try {
       parsed = JSON.parse(jsonMatch[0]);
-    } catch (err) {
+    } catch {
       console.error("JSON Parse Error:", raw);
       return NextResponse.json(
         { success: false, message: "Failed to parse AI response." },
         { status: 500 }
       );
     }
-
-    /* ===========================
-       SAFETY FALLBACK (COMPARE)
-    ============================ */
 
     if (mode === "compare") {
       if (!parsed.activities || !Array.isArray(parsed.activities)) {

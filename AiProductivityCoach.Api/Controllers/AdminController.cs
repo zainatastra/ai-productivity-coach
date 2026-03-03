@@ -1,0 +1,200 @@
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Google.Cloud.Firestore;
+using Google.Apis.Auth.OAuth2;
+
+namespace AiProductivityCoach.Api.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    [Authorize(Roles = "admin")]
+    public class AdminController : ControllerBase
+    {
+        private readonly FirestoreDb _firestore;
+
+        public AdminController()
+        {
+            var credential = GoogleCredential
+                .FromFile("Firebase/firebase-service-account.json");
+
+            _firestore = new FirestoreDbBuilder
+            {
+                ProjectId = "ai-productivity-coach-d40b7",
+                Credential = credential
+            }.Build();
+        }
+
+        [HttpGet("dashboard")]
+        public async Task<IActionResult> GetDashboard()
+        {
+            var usersSnapshot = await _firestore
+                .Collection("users")
+                .GetSnapshotAsync();
+
+            int totalUsers = usersSnapshot.Count;
+            int totalResponses = 0;
+
+            var last7Days = new Dictionary<string, int>();
+
+            // ============================
+            // INITIALIZE LAST 7 DAYS GRAPH
+            // ============================
+            for (int i = 6; i >= 0; i--)
+            {
+                var date = DateTime.UtcNow.Date.AddDays(-i);
+                last7Days[date.ToString("yyyy-MM-dd")] = 0;
+            }
+
+            var last30DaysDate = DateTime.UtcNow.Date.AddDays(-30);
+            var last7DaysDate = DateTime.UtcNow.Date.AddDays(-7);
+
+            // ============================
+            // USER ACQUISITION COUNTERS
+            // ============================
+            int newUsers = 0;
+            int returningUsers = 0;
+            int inactiveOldUsers = 0;
+
+            // ============================
+            // ACTIVITY CLASSIFICATION COUNTERS
+            // ============================
+            int highlyActiveUsers = 0;
+            int moderateUsers = 0;
+            int inactiveUsers = 0;
+
+            // ============================
+            // MAIN USER LOOP
+            // ============================
+            foreach (var userDoc in usersSnapshot.Documents)
+            {
+                var userData = userDoc.ToDictionary();
+
+                DateTime? createdAt = null;
+
+                if (userData.ContainsKey("createdAt") &&
+                    userData["createdAt"] is Timestamp createdTs)
+                {
+                    createdAt = createdTs.ToDateTime().Date;
+                }
+
+                bool hasConversationLast30Days = false;
+                int promptsLast7Days = 0;
+
+                var convSnapshot = await _firestore
+                    .Collection("users")
+                    .Document(userDoc.Id)
+                    .Collection("conversations")
+                    .GetSnapshotAsync();
+
+                totalResponses += convSnapshot.Count;
+
+                foreach (var conv in convSnapshot.Documents)
+                {
+                    var convData = conv.ToDictionary();
+
+                    if (convData.ContainsKey("createdAt") &&
+                        convData["createdAt"] is Timestamp ts)
+                    {
+                        var convDate = ts.ToDateTime().Date;
+
+                        // 7-DAY GRAPH
+                        var graphKey = convDate.ToString("yyyy-MM-dd");
+                        if (last7Days.ContainsKey(graphKey))
+                            last7Days[graphKey]++;
+
+                        // 30-DAY ACQUISITION CHECK
+                        if (convDate >= last30DaysDate)
+                            hasConversationLast30Days = true;
+
+                        // 7-DAY ACTIVITY CHECK
+                        if (convDate >= last7DaysDate)
+                            promptsLast7Days++;
+                    }
+                }
+
+                // ============================
+                // USER ACQUISITION CLASSIFICATION
+                // ============================
+                if (createdAt.HasValue)
+                {
+                    if (createdAt.Value >= last30DaysDate)
+                    {
+                        newUsers++;
+                    }
+                    else if (hasConversationLast30Days)
+                    {
+                        returningUsers++;
+                    }
+                    else
+                    {
+                        inactiveOldUsers++;
+                    }
+                }
+
+                // ============================
+                // ACTIVITY CLASSIFICATION
+                // ============================
+                if (promptsLast7Days >= 10)
+                {
+                    highlyActiveUsers++;
+                }
+                else if (promptsLast7Days >= 1)
+                {
+                    moderateUsers++;
+                }
+                else
+                {
+                    inactiveUsers++;
+                }
+            }
+
+            // ============================
+            // BUG PLACEHOLDER (SAFE)
+            // ============================
+            int openBugs = 0;
+            int resolvedBugs = 0;
+
+            // ============================
+            // USERS LIST
+            // ============================
+            var usersList = usersSnapshot.Documents.Select(doc =>
+            {
+                var data = doc.ToDictionary();
+
+                return new
+                {
+                    id = doc.Id,
+                    email = data.ContainsKey("email") ? data["email"]?.ToString() : "",
+                    fullName = data.ContainsKey("fullName") ? data["fullName"]?.ToString() : "",
+                    role = data.ContainsKey("role") ? data["role"]?.ToString() : "",
+                    createdAt = data.ContainsKey("createdAt")
+                        ? ((Timestamp)data["createdAt"]).ToDateTime().ToString("yyyy-MM-dd")
+                        : ""
+                };
+            });
+
+            // ============================
+            // FINAL RESPONSE
+            // ============================
+            return Ok(new
+            {
+                totalUsers,
+                totalResponses,
+                openBugs,
+                resolvedBugs,
+                graph = last7Days,
+                users = usersList,
+
+                // Acquisition
+                newUsers,
+                returningUsers,
+                inactiveOldUsers,
+
+                // Activity
+                highlyActiveUsers,
+                moderateUsers,
+                inactiveUsers
+            });
+        }
+    }
+}

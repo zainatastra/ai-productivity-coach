@@ -1,6 +1,9 @@
 "use client";
 
 import { generateProductivity, compareIndustry } from "../services/api";
+import { getAuth } from "firebase/auth";
+import { app } from "@/services/firebase";
+import { useAuth } from "@/services/AuthContext";
 
 interface Props {
   setResponse: (value: any) => void;
@@ -11,6 +14,8 @@ interface Props {
 
   industryData: string;
   descriptionData: string;
+
+  language: "en" | "de"; // 🔥 NEW
 }
 
 export default function InputSection({
@@ -21,41 +26,100 @@ export default function InputSection({
   setMode,
   industryData,
   descriptionData,
+  language, // 🔥 NEW
 }: Props) {
+  const { user } = useAuth();
+  const auth = getAuth(app);
+
+  /* =========================================
+     SAVE CONVERSATION
+  ========================================= */
+  const saveConversation = async (responseData: any) => {
+    try {
+      if (!user || user.isAnonymous) return;
+
+      const token = await auth.currentUser?.getIdToken();
+
+      await fetch("http://localhost:5048/api/conversation/save", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          industry: industryData,
+          description: descriptionData,
+          response: JSON.stringify(responseData),
+          language: language, // 🔥 SAVE LANGUAGE
+        }),
+      });
+
+      console.log("Conversation saved.");
+    } catch (err) {
+      console.error("Failed to save conversation:", err);
+    }
+  };
+
+  /* =========================================
+     GENERATE
+  ========================================= */
   const handleGenerate = async () => {
     if (!industryData || !descriptionData) return;
 
-    setMode("generate");
-    setLoading(true);
-    setResponse(null);
+    try {
+      setMode("generate");
+      setLoading(true);
+      setResponse(null);
 
-    const result = await generateProductivity(industryData, descriptionData);
+      const result = await generateProductivity(
+        industryData,
+        descriptionData,
+        language // 🔥 PASS LANGUAGE
+      );
 
-    setResponse(result);
-    setLoading(false);
+      setResponse(result);
+
+      await saveConversation(result);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  /* =========================================
+     COMPARE
+  ========================================= */
   const handleCompare = async () => {
     if (!industryData || !descriptionData) return;
 
-    setMode("compare");
-    setLoading(true);
-    setResponse(null);
+    try {
+      setMode("compare");
+      setLoading(true);
+      setResponse(null);
 
-    const result = await compareIndustry(industryData, descriptionData);
+      const result = await compareIndustry(
+        industryData,
+        descriptionData,
+        language // 🔥 PASS LANGUAGE
+      );
 
-    setResponse(result);
-    setLoading(false);
+      setResponse(result);
+
+      await saveConversation(result);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="order-2 lg:order-1 bg-white p-4 lg:p-8 rounded-2xl shadow-lg border border-gray-200 
-                    h-full flex flex-col justify-between overflow-hidden">
-
-      {/* Inputs */}
+    <div
+      className="order-2 lg:order-1 bg-white p-4 lg:p-8 rounded-2xl shadow-lg border border-gray-200 
+                 h-full flex flex-col justify-between overflow-hidden"
+    >
       <div className="flex flex-col gap-3">
-
-        {/* Desktop polish only */}
         <input
           type="text"
           placeholder="Write your industry..."
@@ -77,9 +141,7 @@ export default function InputSection({
         />
       </div>
 
-      {/* Buttons */}
       <div className="flex flex-col gap-3 mt-4">
-
         <button
           onClick={handleGenerate}
           className="w-full bg-[#78D1F5] text-white 
@@ -99,7 +161,6 @@ export default function InputSection({
         >
           Compare
         </button>
-
       </div>
     </div>
   );

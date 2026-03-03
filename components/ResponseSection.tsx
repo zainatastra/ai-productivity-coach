@@ -74,35 +74,37 @@ export default function ResponseSection({
      TYPING ANIMATION
   ============================ */
 
-  useEffect(() => {
-    if (!response || mode !== "generate") return;
+useEffect(() => {
+  if (!response || mode !== "generate") return;
 
-    const fullText = buildGenerateText(response);
+  const fullText = buildGenerateText(response);
 
-    if (isRestored && typedContent === "") {
-      setTypedContent(fullText);
-      return;
+  // 🚀 If state is restored, do NOT animate
+  if (isRestored) {
+    setTypedContent(fullText);
+    return;
+  }
+
+  // Normal typing animation
+  setTypedContent("");
+  let index = 0;
+
+  const interval = setInterval(() => {
+    index++;
+    setTypedContent(fullText.slice(0, index));
+
+    if (containerRef.current) {
+      containerRef.current.scrollTop =
+        containerRef.current.scrollHeight;
     }
 
-    setTypedContent("");
-    let index = 0;
+    if (index >= fullText.length) {
+      clearInterval(interval);
+    }
+  }, 8);
 
-    const interval = setInterval(() => {
-      index++;
-      setTypedContent(fullText.slice(0, index));
-
-      if (containerRef.current) {
-        containerRef.current.scrollTop =
-          containerRef.current.scrollHeight;
-      }
-
-      if (index >= fullText.length) {
-        clearInterval(interval);
-      }
-    }, 8);
-
-    return () => clearInterval(interval);
-  }, [response, mode]);
+  return () => clearInterval(interval);
+}, [response, mode, isRestored]);
 
   /* ===========================
      SAFE ACTIVITY EXTRACTION
@@ -155,28 +157,13 @@ export default function ResponseSection({
         WebkitFontSmoothing: "antialiased",
       }}
     >
-      <button
-        onClick={() => setShowClearModal(true)}
-        className="
-          absolute top-4 right-4
-          text-sm font-medium
-          border border-red-500
-          text-red-600
-          px-3 py-1
-          rounded-lg
-          hover:bg-red-50
-          transition
-        "
-      >
-        Clear
-      </button>
 
       <div ref={containerRef} className="flex-1 overflow-y-auto">
 
         {/* EMPTY STATE */}
         {!loading && !response && (
           <div className="text-base font-semibold text-black">
-            AI Response:
+            AI Response
           </div>
         )}
 
