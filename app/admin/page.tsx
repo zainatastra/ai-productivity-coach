@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
 import { getFirestore, collection, getDocs } from "firebase/firestore";
 import { Eye } from "lucide-react";
+import { API_BASE_URL } from "@/services/api";
 import { adminApp } from "@/services/firebase";
 import {
   LineChart,
@@ -129,7 +130,7 @@ const handleLogout = async () => {
         const token = await user.getIdToken();
 
         const res = await fetch(
-          "https://ai-productivity-coach-mlnn.onrender.com/api/admin/dashboard",
+          `${API_BASE_URL}/api/admin/dashboard`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -162,7 +163,7 @@ const handleLogout = async () => {
 useEffect(() => {
   const fetchUIText = async () => {
     try {
-      const res = await fetch("http://localhost:5048/api/Admin/ui-texts");
+      const res = await fetch(`${API_BASE_URL}/api/Admin/ui-texts`);
       const data = await res.json();
       setUiTexts(data);
     } catch (err) {
@@ -364,7 +365,7 @@ const filteredUsers = data.users
     // ============================
     // SAVE TO BACKEND
     // ============================
-    const res = await fetch("http://localhost:5048/api/Admin/ui-texts", {
+    const res = await fetch(`${API_BASE_URL}/api/Admin/ui-texts`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

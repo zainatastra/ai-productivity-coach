@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 
+import { API_BASE_URL } from "@/services/api";
+
 type Language = "en" | "de";
 
 interface LanguageContextType {
@@ -37,7 +39,7 @@ export function LanguageProvider({
     const fetchUIText = async () => {
       try {
         const url =
-          "http://localhost:5048/api/Admin/ui-texts"
+          `${API_BASE_URL}/api/Admin/ui-texts`
 
         console.log("FETCHING UI TEXTS:", url); // ✅ DEBUG
 

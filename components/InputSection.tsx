@@ -6,6 +6,7 @@ import { getAuth } from "firebase/auth";
 import { app } from "@/services/firebase";
 import { useAuth } from "@/services/AuthContext";
 import { useLanguage } from "@/services/LanguageContext";
+import { API_BASE_URL } from "@/services/api";
 
 interface Props {
   setResponse: (value: any) => void;
@@ -47,7 +48,7 @@ export default function InputSection({
 
       const token = await auth.currentUser?.getIdToken();
 
-      await fetch("https://ai-productivity-coach-mlnn.onrender.com/api/conversation/save", {
+      await fetch(`${API_BASE_URL}/api/Conversation/save`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,

@@ -8,6 +8,10 @@ interface ApiResponse<T> {
   message?: string;
 }
 
+// ✅ BASE URL (LOCAL + PRODUCTION)
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5048";
+
 /* =====================================================
    GENERATE PRODUCTIVITY
 ===================================================== */
@@ -16,14 +20,14 @@ export async function generateProductivity(
   description: string,
   language: Language
 ) {
-  const res = await fetch("/api/productivity", {
+  const res = await fetch(`${API_BASE_URL}/api/productivity`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       industry,
       description,
       mode: "generate",
-      language, // 🔥 PASS LANGUAGE
+      language,
     }),
   });
 
@@ -46,14 +50,14 @@ export async function compareIndustry(
   description: string,
   language: Language
 ) {
-  const res = await fetch("/api/productivity", {
+  const res = await fetch(`${API_BASE_URL}/api/productivity`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       industry,
       description,
       mode: "compare",
-      language, // 🔥 PASS LANGUAGE
+      language,
     }),
   });
 

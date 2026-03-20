@@ -5,6 +5,7 @@ import { getAuth, signOut } from "firebase/auth";
 import { app } from "@/services/firebase";
 import { useAuth } from "@/services/AuthContext";
 import { useLanguage } from "@/services/LanguageContext";
+import { API_BASE_URL } from "@/services/api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   MoreHorizontal,
@@ -91,7 +92,7 @@ export default function Sidebar({
         const token = await currentUser.getIdToken();
 
         const res = await fetch(
-          "https://ai-productivity-coach-mlnn.onrender.com/api/conversation",
+          `${API_BASE_URL}/api/Conversation`,
           {
             headers: { Authorization: `Bearer ${token}` },
           }
@@ -158,7 +159,7 @@ export default function Sidebar({
     const token = await currentUser.getIdToken();
 
     await fetch(
-      `https://ai-productivity-coach-mlnn.onrender.com/api/conversation/${id}`,
+      `${API_BASE_URL}/api/Conversation/${id}`,
       {
         method: "PUT",
         headers: {
@@ -183,7 +184,7 @@ export default function Sidebar({
       const token = await currentUser.getIdToken();
 
       await fetch(
-        `https://ai-productivity-coach-mlnn.onrender.com/api/conversation/${deleteTarget.id}`,
+        `${API_BASE_URL}/api/Conversation/${deleteTarget.id}`,
         {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token}` },
