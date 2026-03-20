@@ -11,6 +11,7 @@ interface Props {
   mode: "generate" | "compare" | null;
   isRestored: boolean;
   setShowClearModal: (value: boolean) => void;
+  isGuest?: boolean; // ✅ ADD THIS
 }
 
 export default function ResponseSection({
@@ -18,6 +19,7 @@ export default function ResponseSection({
   loading,
   mode,
   isRestored,
+  isGuest,
 }: Props) {
   const [typedContent, setTypedContent] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);

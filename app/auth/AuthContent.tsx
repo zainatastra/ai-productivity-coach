@@ -13,9 +13,9 @@ import { Eye, EyeOff } from "lucide-react";
 import Image from "next/image";
 import ConfirmModal from "@/components/ConfirmModal";
 
-import { createUserWithEmailAndPassword } from "firebase/auth";
+import PhoneInput from "@/components/PhoneInput";
 
-import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { createUserWithEmailAndPassword } from "firebase/auth";
 
 import { onAuthStateChanged } from "firebase/auth";
 
@@ -30,7 +30,13 @@ export default function AuthContent() {
   const [mode, setMode] = useState<"login" | "signup">(initialMode);
   const [showPassword, setShowPassword] = useState(false);
 
-  const [fullName, setFullName] = useState("");
+  const [name, setName] = useState("");
+  const [surname, setSurname] = useState("");
+  const [company, setCompany] = useState("");
+  
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [newsletter, setNewsletter] = useState(false);
+  
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -40,6 +46,8 @@ export default function AuthContent() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
+
+  const [phone, setPhone] = useState("");
 
   useEffect(() => {
     const urlMode =
@@ -52,49 +60,22 @@ export default function AuthContent() {
     setModalOpen(true);
   };
 
-  useEffect(() => {
+useEffect(() => {
   const unsubscribe = onAuthStateChanged(auth, (user) => {
-    if (user) {
-      router.replace("/");
+    if (!user) return;
+
+    // prevent redirect during verification flow
+    if (typeof window !== "undefined") {
+      const pendingVerification = sessionStorage.getItem("pendingVerification");
+
+      if (!pendingVerification) {
+        router.replace("/");
+      }
     }
   });
 
   return () => unsubscribe();
 }, [auth, router]);
-
-const handleGoogleLogin = async () => {
-  try {
-    setLoading(true);
-    setTopError("");
-
-    const provider = new GoogleAuthProvider();
-    const result = await signInWithPopup(auth, provider);
-
-    const token = await result.user.getIdToken(true);
-
-    const fullName =
-      result.user.displayName ||
-      result.user.email?.split("@")[0] ||
-      "User";
-
-// In handleSignup, replace the fetch call with this:
-// In handleSignup, your fetch should look like this:
-await fetch("https://ai-productivity-coach-mlnn.onrender.com/api/User/sync", {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({ fullName: fullName }), // ✅ use the form's fullName state variable
-});
-
-    router.replace("/");
-  } catch {
-    setTopError("Google authentication failed. Please try again.");
-  } finally {
-    setLoading(false);
-  }
-};
 
   /* ================= LOGIN ================= */
 const handleLogin = async () => {
@@ -119,7 +100,12 @@ await fetch("https://ai-productivity-coach-mlnn.onrender.com/api/User/sync", {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",  // ✅ added
   },
-  body: JSON.stringify({ fullName }),     // ✅ added
+  body: JSON.stringify({
+  name,
+  surname,
+  company,
+  telephone: phone,
+}),// ✅ added
 });
 
     router.replace("/");
@@ -140,38 +126,53 @@ const handleSignup = async () => {
   setFieldError("");
   setTopError("");
 
-  if (!fullName || !email || !password) {
-    openModal("Please fill in Full Name, Email and Password to continue.");
-    return;
-  }
+if (!name || !surname || !company || !phone || !email || !password) {
+  openModal("Please fill in all required fields.");
+  return;
+}
+
+if (!termsAccepted) {
+  openModal("You must accept the Terms of Use and Privacy Policy.");
+  return;
+}
+
+if (!phone || !phone.startsWith("+")) {
+  openModal("Please enter a valid phone number.");
+  return;
+}
 
   try {
     setLoading(true);
 
-    const result = await createUserWithEmailAndPassword(auth, email, password);
-
-    await updateProfile(result.user, { displayName: fullName });
-
-    await result.user.reload();
-
-    const token = await result.user.getIdToken(true);
-
-    await fetch("https://ai-productivity-coach-mlnn.onrender.com/api/User/sync", {
+    // ✅ STEP 1: Send OTP ONLY (NO Firebase yet)
+    const res = await fetch("http://localhost:5048/api/auth/send-otp", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",   // ✅ must be here
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify({ fullName }),      // ✅ must be here
+      body: JSON.stringify({ email }),
     });
 
-    router.replace("/");
-  } catch (error: any) {
-    if (error.code === "auth/email-already-in-use") {
-      setFieldError("This email is already registered. Please login.");
-    } else {
-      setTopError("Something went wrong. Please try again.");
+    if (!res.ok) {
+      throw new Error("Failed to send OTP");
     }
+
+    // ✅ STEP 2: Store everything in session
+    sessionStorage.setItem("verifyEmail", email);
+    sessionStorage.setItem("verifyPassword", password);
+    sessionStorage.setItem("verifyName", name);
+    sessionStorage.setItem("verifySurname", surname);
+    sessionStorage.setItem("verifyCompany", company);
+    sessionStorage.setItem("verifyTelephone", phone);
+    sessionStorage.setItem("verifyNewsletter", newsletter.toString());
+
+    sessionStorage.setItem("pendingVerification", "true");
+
+    // ✅ STEP 3: Go to verify page (NO FLASH NOW)
+    router.push("/verify");
+
+  } catch (error) {
+    setTopError("Failed to send verification code. Please try again.");
   } finally {
     setLoading(false);
   }
@@ -201,7 +202,7 @@ const handleSignup = async () => {
               initial={false}
               animate={{ x: mode === "login" ? "0%" : "100%" }}
               transition={{ type: "spring", stiffness: 500, damping: 35 }}
-              className="absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] rounded-full bg-white border border-black"
+              className="absolute top-0 left-0 w-1/2 h-full bg-white rounded-full shadow border border-gray-300"
             />
 
             <button
@@ -278,9 +279,12 @@ const handleSignup = async () => {
         </div>
       </div>
 
-      <div className="text-sm text-black mb-6 cursor-pointer">
-        Forgot password?
-      </div>
+<div
+  onClick={() => router.push("/forgot-password")}
+  className="text-sm text-black mb-6 cursor-pointer"
+>
+  Forgot password?
+</div>
 
       <button
         onClick={handleLogin}
@@ -302,15 +306,44 @@ const handleSignup = async () => {
 
       <input
         type="text"
-        placeholder="Full Name"
+        placeholder="Name *"
         className="w-full mb-3 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
-        value={fullName}
-        onChange={(e) => setFullName(e.target.value)}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
       />
 
       <input
+        type="text"
+        placeholder="Surname *"
+        className="w-full mb-3 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+        value={surname}
+        onChange={(e) => setSurname(e.target.value)}
+      />
+
+      <input
+        type="text"
+        placeholder="Company *"
+        className="w-full mb-3 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+        value={company}
+        onChange={(e) => setCompany(e.target.value)}
+      />
+
+<div className="mb-3">
+  <label className="text-sm text-gray-600 mb-1 block">
+    Phone number *
+  </label>
+
+<PhoneInput
+  value={phone}
+  onChange={(val) => {
+    setPhone(val);
+  }}
+/>
+</div>
+
+      <input
         type="email"
-        placeholder="Email"
+        placeholder="Email *"
         className={`w-full mb-3 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-black ${
           fieldError ? "border-red-500" : "border-gray-300"
         }`}
@@ -318,10 +351,10 @@ const handleSignup = async () => {
         onChange={(e) => setEmail(e.target.value)}
       />
 
-      <div className="relative mb-4">
+      <div className="relative mb-3">
         <input
           type={showPassword ? "text" : "password"}
-          placeholder="Password"
+          placeholder="Password *"
           className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black pr-12"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -334,6 +367,35 @@ const handleSignup = async () => {
           {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
         </div>
       </div>
+
+      {/* TERMS */}
+<label className="flex items-start gap-2 text-sm text-gray-600">
+  <input
+  type="checkbox"
+  checked={termsAccepted}
+  onChange={(e) => setTermsAccepted(e.target.checked)}
+  className="mt-1"
+/>
+
+  <span>
+    I agree to the{" "}
+    <a
+      href="/terms"
+      target="_blank"
+      className="underline hover:text-black"
+    >
+      T&Cs
+    </a>{" "}
+    and{" "}
+    <a
+      href="/privacy-policy"
+      target="_blank"
+      className="underline hover:text-black"
+    >
+      Privacy Policy
+    </a>
+  </span>
+</label>
 
       <button
         onClick={handleSignup}
@@ -348,35 +410,17 @@ const handleSignup = async () => {
 
 </AnimatePresence>
 
-{/* ================= OR SECTION ================= */}
-<div className="flex items-center my-6">
-  <div className="flex-1 border-t border-gray-300"></div>
-  <span className="px-3 text-sm text-gray-500">OR</span>
-  <div className="flex-1 border-t border-gray-300"></div>
-</div>
-
-{/* ================= GOOGLE BUTTON ================= */}
-<button
-  onClick={handleGoogleLogin}
-  disabled={loading}
-  className="relative w-full py-3 border border-gray-300 rounded-xl text-sm font-medium flex items-center justify-center disabled:opacity-50"
->
-  <div className="absolute left-4">
-    <Image
-      src="/google.png"
-      alt="google"
-      width={26}
-      height={26}
-    />
-  </div>
-  {loading ? "Processing..." : "Continue with Google"}
-</button>
-
 {/* ================= TERMS ================= */}
 <div className="flex justify-center gap-4 text-sm text-gray-600 mt-6">
-  <span>Terms of Use</span>
-  <span>|</span>
-  <span>Privacy Policy</span>
+<a href="/terms" target="_blank" className="hover:underline">
+  T&Cs
+</a>
+
+<span>|</span>
+
+<a href="/privacy-policy" target="_blank" className="hover:underline">
+  Privacy Policy
+</a>
 </div>
 
 </div>

@@ -11,12 +11,92 @@ namespace AiProductivityCoach.Api.Controllers
     {
         private readonly FirestoreDb _firestore;
 
-        // 🔥 Firestore injected via DI
         public AdminController(FirestoreDb firestore)
         {
             _firestore = firestore;
         }
 
+        // =====================================================
+        // 🔥 GET UI TEXT (AUTO-CREATE IF NOT EXISTS)
+        // =====================================================
+        [HttpGet("ui-texts")]
+        [AllowAnonymous] // ⚠️ TEMP: allow frontend access
+        public async Task<IActionResult> GetUIText()
+        {
+            var docRef = _firestore
+                .Collection("ui_texts")
+                .Document("global");
+
+            var doc = await docRef.GetSnapshotAsync();
+
+            // ✅ AUTO CREATE
+            if (!doc.Exists)
+            {
+                var defaultData = new Dictionary<string, object>
+                {
+                    { "productivityCoach", new Dictionary<string, string> {
+                        { "en", "Productivity Coach" },
+                        { "de", "Produktivitäts-Coach" }
+                    }},
+                    { "newChat", new Dictionary<string, string> {
+                        { "en", "New Chat" },
+                        { "de", "Neuer Chat" }
+                    }},
+                    { "recentConversations", new Dictionary<string, string> {
+                        { "en", "Recent Conversations" },
+                        { "de", "Letzte Gespräche" }
+                    }},
+                    { "aiProductivityCoach", new Dictionary<string, string> {
+                        { "en", "AI Productivity Coach" },
+                        { "de", "KI Produktivitäts-Coach" }
+                    }},
+                    { "clear", new Dictionary<string, string> {
+                        { "en", "Clear" },
+                        { "de", "Löschen" }
+                    }},
+                    { "industryPlaceholder", new Dictionary<string, string> {
+                        { "en", "Write your industry..." },
+                        { "de", "Geben Sie Ihre Branche ein..." }
+                    }},
+                    { "jobPlaceholder", new Dictionary<string, string> {
+                        { "en", "Tell about your job 3-5 sentences..." },
+                        { "de", "Beschreiben Sie Ihren Job in 3-5 Sätzen..." }
+                    }},
+                    { "makeProductive", new Dictionary<string, string> {
+                        { "en", "Make Me Productive" },
+                        { "de", "Mach mich produktiv" }
+                    }},
+                    { "compare", new Dictionary<string, string> {
+                        { "en", "Compare" },
+                        { "de", "Vergleichen" }
+                    }}
+                };
+
+                await docRef.SetAsync(defaultData);
+                return Ok(defaultData);
+            }
+
+            return Ok(doc.ToDictionary());
+        }
+
+        // =====================================================
+        // 💾 SAVE UI TEXT (ADMIN ONLY)
+        // =====================================================
+[HttpPost("ui-texts")]
+public async Task<IActionResult> SaveUIText([FromBody] Dictionary<string, Dictionary<string, string>> data)
+{
+    var docRef = _firestore
+        .Collection("ui_texts")
+        .Document("global");
+
+    await docRef.SetAsync(data);
+
+    return Ok(new { success = true });
+}
+
+        // =====================================================
+        // 📊 DASHBOARD (UNCHANGED)
+        // =====================================================
         [HttpGet("dashboard")]
         public async Task<IActionResult> GetDashboard()
         {
@@ -29,9 +109,6 @@ namespace AiProductivityCoach.Api.Controllers
 
             var last7Days = new Dictionary<string, int>();
 
-            // ============================
-            // INITIALIZE LAST 7 DAYS GRAPH
-            // ============================
             for (int i = 6; i >= 0; i--)
             {
                 var date = DateTime.UtcNow.Date.AddDays(-i);
