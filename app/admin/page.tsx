@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
+import { getFirestore, collection, getDocs } from "firebase/firestore";
+import { Eye } from "lucide-react";
 import { adminApp } from "@/services/firebase";
 import {
   LineChart,
@@ -61,6 +63,7 @@ type AdminMenu =
   | "users"
   | "bugs"
   | "content"
+  | "conversations"
   | "settings";
 
 const [activeMenu, setActiveMenu] =
@@ -72,6 +75,35 @@ const [visibleCount, setVisibleCount] = useState(10);
 const [roleFilter, setRoleFilter] = useState("All");
 const [showLogoutModal, setShowLogoutModal] = useState(false);
 const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+const [conversations, setConversations] = useState<any[]>([]);
+const [selectedUserConversations, setSelectedUserConversations] = useState<any[]>([]);
+const [conversationModalOpen, setConversationModalOpen] = useState(false);
+
+// ============================
+// CONTENT EDIT STATE
+// ============================
+const [uiTexts, setUiTexts] = useState<any>({});
+const [selectedField, setSelectedField] = useState<string | null>(null);
+const [modalOpen, setModalOpen] = useState(false);
+
+const [tempEN, setTempEN] = useState("");
+const [tempDE, setTempDE] = useState("");
+
+// ============================
+// UI CONTENT FIELDS
+// ============================
+const contentFields = [
+  { key: "productivityCoach", label: "Productivity Coach" },
+  { key: "newChat", label: "New Chat" },
+  { key: "recentConversations", label: "Recent Conversations" },
+  { key: "aiProductivityCoach", label: "AI Productivity Coach" },
+  { key: "clear", label: "Clear Button" },
+  { key: "industryPlaceholder", label: "Industry Placeholder" },
+  { key: "jobPlaceholder", label: "Job Placeholder" },
+  { key: "makeProductive", label: "Make Me Productive" },
+  { key: "compare", label: "Compare Button" },
+];
 
 const handleLogout = async () => {
   try {
@@ -104,6 +136,7 @@ const handleLogout = async () => {
             },
           }
         );
+        
 
         if (!res.ok) {
           setUnauthorized(true);
@@ -122,6 +155,60 @@ const handleLogout = async () => {
 
     return () => unsubscribe();
   }, []);
+
+  // =========================================
+// FETCH UI TEXTS (ADD HERE)
+// =========================================
+useEffect(() => {
+  const fetchUIText = async () => {
+    try {
+      const res = await fetch("http://localhost:5048/api/Admin/ui-texts");
+      const data = await res.json();
+      setUiTexts(data);
+    } catch (err) {
+      console.error("Failed to fetch UI texts:", err);
+    }
+  };
+
+  fetchUIText();
+}, []);
+
+// =========================================
+// FETCH CONVERSATIONS (ADD HERE)
+// =========================================
+useEffect(() => {
+  const fetchConversations = async () => {
+    try {
+      const db = getFirestore(adminApp);
+
+      const usersSnapshot = await getDocs(collection(db, "users"));
+
+      const allData: any[] = [];
+
+      for (const userDoc of usersSnapshot.docs) {
+        const userData = userDoc.data();
+
+        const convSnapshot = await getDocs(
+          collection(db, "users", userDoc.id, "conversations")
+        );
+
+        const conversations = convSnapshot.docs.map((doc) => doc.data());
+
+        allData.push({
+          userId: userDoc.id,
+          fullName: userData.fullName,
+          conversations,
+        });
+      }
+
+      setConversations(allData);
+    } catch (err) {
+      console.error("Error fetching conversations:", err);
+    }
+  };
+
+  fetchConversations();
+}, []);
 
   // =========================================
   // LOADING
@@ -241,6 +328,63 @@ const filteredUsers = data.users
     { name: "Moderate", value: data.moderateUsers, color: "#1e3a8a" },
     { name: "Inactive", value: data.inactiveUsers, color: "#374151" },
   ];
+
+ const handleSaveAll = async () => {
+  try {
+    // ============================
+    // VALIDATION
+    // ============================
+    for (const field of contentFields) {
+      const item = uiTexts[field.key];
+
+      if (!item?.en?.trim()) {
+        alert(`${field.label} (English) is required.`);
+        return;
+      }
+
+      if (!item?.de?.trim()) {
+        alert(`${field.label} (German) is required.`);
+        return;
+      }
+    }
+
+    // ============================
+    // 🔥 AUTH TOKEN (THIS WAS MISSING)
+    // ============================
+    const auth = getAuth(adminApp);
+    const user = auth.currentUser;
+
+    if (!user) {
+      alert("User not authenticated");
+      return;
+    }
+
+    const token = await user.getIdToken();
+
+    // ============================
+    // SAVE TO BACKEND
+    // ============================
+    const res = await fetch("http://localhost:5048/api/Admin/ui-texts", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`, // 🔥 FIX
+      },
+      body: JSON.stringify(uiTexts),
+    });
+
+    if (!res.ok) {
+      console.error("Save failed:", await res.text());
+      alert("Failed to save content.");
+      return;
+    }
+
+    alert("✅ Content saved successfully!");
+  } catch (err) {
+    console.error(err);
+    alert("Something went wrong.");
+  }
+};
 
   // =========================================
   // UI
@@ -365,6 +509,21 @@ const filteredUsers = data.users
           <FileText size={18} />
           Content
         </button>
+
+        <button
+  onClick={() => {
+    setActiveMenu("conversations");
+    setMobileSidebarOpen(false);
+  }}
+  className={`flex items-center gap-3 w-full px-3 py-2 rounded-xl transition-all duration-200 ${
+    activeMenu === "conversations"
+      ? "bg-gray-100 text-gray-900 font-medium"
+      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+  }`}
+>
+  <MessageSquare size={18} />
+  Conversations
+</button>
 
         <button
           onClick={() => {
@@ -766,53 +925,281 @@ const filteredUsers = data.users
   </>
 )}
 
+{/* ================= CONTENT SCREEN ================= */}
+{activeMenu === "content" && (
+  <>
+    <h2 className="text-2xl font-bold mb-8">
+      Content Management
+    </h2>
+
+    <div className="bg-white p-6 rounded-2xl shadow-md border border-gray-100">
+      <div className="grid gap-4">
+        {contentFields.map((field) => (
+          <div
+            key={field.key}
+            className="flex items-center justify-between border border-gray-200 rounded-xl px-4 py-3 bg-white"
+          >
+            <span className="text-gray-800 font-medium">
+              {field.label}
+            </span>
+
+            <button
+              className="p-2 rounded-lg hover:bg-gray-100 transition"
+              onClick={() => {
+                setSelectedField(field.key);
+                setTempEN(uiTexts?.[field.key]?.en || "");
+                setTempDE(uiTexts?.[field.key]?.de || "");
+                setModalOpen(true);
+              }}
+            >
+              ✏️
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-8">
+        <button
+          onClick={handleSaveAll}
+          className="w-full bg-black text-white py-3 rounded-xl"
+        >
+          Save Changes
+        </button>
+      </div>
+    </div>
+  </>
+)}
+
+{/* ================= CONVERSATIONS SCREEN ================= */}
+{activeMenu === "conversations" && (
+  <>
+    <h2 className="text-2xl font-bold mb-8">
+      Conversations
+    </h2>
+
+    <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden h-[70vh] overflow-y-auto">
+
+      <table className="w-full text-left text-sm">
+        <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
+          <tr className="text-gray-600">
+            <th className="py-4 px-6">User</th>
+            <th>Conversations Count</th>
+            <th className="text-center">View</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {conversations.map((user, index) => (
+            <tr
+              key={index}
+              className="border-b border-gray-100 hover:bg-gray-50 transition"
+            >
+              <td className="py-4 px-6 font-medium text-gray-900">
+                {user.fullName || "Unknown User"}
+              </td>
+
+              <td className="text-gray-700">
+                {user.conversations.length}
+              </td>
+
+              <td className="text-center">
+                <button
+                  onClick={() => {
+                    setSelectedUserConversations(user.conversations);
+                    setConversationModalOpen(true);
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg"
+                >
+                  <Eye size={18} />
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+    </div>
+  </>
+)}
+
     </motion.div>
   </AnimatePresence>
 
+  {/* ================= LOGOUT MODAL ================= */}
   <AnimatePresence>
-  {showLogoutModal && (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-    >
+    {showLogoutModal && (
       <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.95, opacity: 0 }}
-        transition={{ duration: 0.2 }}
-        className="bg-white rounded-2xl shadow-xl w-[400px] p-6 text-center"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
       >
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">
-          Are you sure you want to logout?
-        </h3>
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.95, opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="bg-white rounded-2xl shadow-xl w-[400px] p-6 text-center"
+        >
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            Are you sure you want to logout?
+          </h3>
 
-        <p className="text-sm text-gray-500 mb-6">
-          You will be signed out of your account.
-        </p>
+          <p className="text-sm text-gray-500 mb-6">
+            You will be signed out of your account.
+          </p>
 
-        <div className="flex justify-center gap-4">
-          <button
-            onClick={() => setShowLogoutModal(false)}
-            className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition"
-          >
-            Cancel
-          </button>
+          <div className="flex justify-center gap-4">
+            <button
+              onClick={() => setShowLogoutModal(false)}
+              className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition"
+            >
+              Cancel
+            </button>
 
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 rounded-lg bg-black text-white hover:opacity-90 transition"
-          >
-            Yes, Logout
-          </button>
-        </div>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 rounded-lg bg-black text-white hover:opacity-90 transition"
+            >
+              Yes, Logout
+            </button>
+          </div>
+        </motion.div>
       </motion.div>
-    </motion.div>
-  )}
-</AnimatePresence>
+    )}
+  </AnimatePresence>
+
+  {/* ================= CONTENT EDIT MODAL ================= */}
+  <AnimatePresence>
+    {modalOpen && (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      >
+        <motion.div
+          initial={{ scale: 0.9 }}
+          animate={{ scale: 1 }}
+          exit={{ scale: 0.9 }}
+          className="bg-white rounded-2xl w-[400px] p-6"
+        >
+          <h3 className="text-lg font-semibold mb-4">
+            Edit Content
+          </h3>
+
+          <div className="mb-4">
+            <label className="text-sm text-gray-600">
+              English 🇬🇧
+            </label>
+            <input
+              value={tempEN}
+              onChange={(e) => setTempEN(e.target.value)}
+              className="w-full mt-1 p-2 border rounded-lg"
+            />
+          </div>
+
+          <div className="mb-6">
+            <label className="text-sm text-gray-600">
+              German 🇩🇪
+            </label>
+            <input
+              value={tempDE}
+              onChange={(e) => setTempDE(e.target.value)}
+              className="w-full mt-1 p-2 border rounded-lg"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => setModalOpen(false)}
+              className="px-4 py-2 border rounded-lg"
+            >
+              Cancel
+            </button>
+
+            <button
+              onClick={() => {
+                if (!tempEN.trim() || !tempDE.trim()) {
+                  alert("Both English and German fields are required.");
+                  return;
+                }
+
+                if (!selectedField) return;
+
+                setUiTexts((prev: any) => ({
+                  ...prev,
+                  [selectedField]: {
+                    en: tempEN,
+                    de: tempDE,
+                  },
+                }));
+
+                setModalOpen(false);
+              }}
+              className="px-4 py-2 bg-black text-white rounded-lg"
+            >
+              Done
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+
+  {/* ================= CONVERSATION MODAL ================= */}
+  <AnimatePresence>
+    {conversationModalOpen && (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      >
+        <motion.div
+          initial={{ scale: 0.9 }}
+          animate={{ scale: 1 }}
+          exit={{ scale: 0.9 }}
+          className="bg-white rounded-2xl w-[700px] max-h-[80vh] overflow-y-auto p-6"
+        >
+          <h3 className="text-lg font-semibold mb-4">
+            User Conversations
+          </h3>
+
+          <div className="space-y-4">
+            {selectedUserConversations.map((conv, index) => (
+              <div
+                key={index}
+                className="border border-gray-200 rounded-xl p-4"
+              >
+                <p><strong>Industry:</strong> {conv.industry}</p>
+                <p><strong>Description:</strong> {conv.description}</p>
+                <p><strong>Language:</strong> {conv.language}</p>
+
+                <p className="mt-2">
+                  <strong>AI Response:</strong>
+                </p>
+                <p className="text-gray-700 mt-1">
+                  {conv.response}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-end mt-6">
+            <button
+              onClick={() => setConversationModalOpen(false)}
+              className="px-4 py-2 bg-black text-white rounded-lg"
+            >
+              Close
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    )}
+  </AnimatePresence>
 
 </main>
-    </div>
-  );
+</div>
+);
 }

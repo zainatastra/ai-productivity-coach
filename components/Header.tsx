@@ -4,6 +4,7 @@ import { useAuth } from "@/services/AuthContext";
 import { useRouter } from "next/navigation";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { Menu } from "lucide-react";
+import { useLanguage } from "@/services/LanguageContext"; // ✅ ADD THIS
 
 interface HeaderProps {
   setShowClearModal?: (value: boolean) => void;
@@ -16,6 +17,7 @@ export default function Header({
 }: HeaderProps) {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const { t } = useLanguage(); // ✅ ADD THIS
 
   return (
     <div className="relative w-full flex items-center justify-between px-4 md:px-8 py-1 md:py-1.3 bg-[#f9f9f9] border-b border-gray-200">
@@ -23,7 +25,7 @@ export default function Header({
       {/* LEFT SECTION */}
       <div className="flex items-center gap-3">
 
-        {/* HAMBURGER (ONLY WHEN LOGGED IN) */}
+        {/* HAMBURGER */}
         {!loading && user && (
           <button
             onClick={() => setMobileSidebarOpen?.(true)}
@@ -46,7 +48,7 @@ export default function Header({
             md:absolute md:left-1/2 md:-translate-x-1/2
           "
         >
-          AI Productivity Coach
+          {t("aiProductivityCoach")} {/* ✅ UPDATED */}
         </h1>
       </div>
 
@@ -78,7 +80,7 @@ export default function Header({
             onClick={() => setShowClearModal?.(true)}
             className="h-9 px-4 rounded-xl border border-gray-300 text-sm bg-white text-red-600 hover:bg-red-50 transition"
           >
-            Clear
+            {t("clear")} {/* ✅ UPDATED */}
           </button>
         )}
       </div>
