@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "firebase/auth";
 import { adminApp } from "@/services/firebase";
 import { Eye, EyeOff } from "lucide-react";
+import { API_BASE_URL } from "@/services/api";
 import { motion } from "framer-motion";
 
 export default function AdminLoginPage() {
@@ -48,7 +49,7 @@ export default function AdminLoginPage() {
       const token = await result.user.getIdToken();
 
       const res = await fetch(
-        "https://ai-productivity-coach-mlnn.onrender.com/api/test/admin-users",
+        `${API_BASE_URL}/api/test/admin-users`,
         {
           headers: {
             Authorization: `Bearer ${token}`,

@@ -17,6 +17,8 @@ import PhoneInput from "@/components/PhoneInput";
 
 import { createUserWithEmailAndPassword } from "firebase/auth";
 
+import { API_BASE_URL } from "@/services/api";
+
 import { onAuthStateChanged } from "firebase/auth";
 
 export default function AuthContent() {
@@ -94,7 +96,7 @@ const handleLogin = async () => {
 
     const token = await result.user.getIdToken(true);
 
-await fetch("https://ai-productivity-coach-mlnn.onrender.com/api/User/sync", {
+await fetch(`${API_BASE_URL}/api/User/sync`, {
   method: "POST",
   headers: {
     Authorization: `Bearer ${token}`,
@@ -145,7 +147,7 @@ if (!phone || !phone.startsWith("+")) {
     setLoading(true);
 
     // ✅ STEP 1: Send OTP ONLY (NO Firebase yet)
-    const res = await fetch("http://localhost:5048/api/auth/send-otp", {
+    const res = await fetch(`${API_BASE_URL}/api/auth/send-otp`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

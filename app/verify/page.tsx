@@ -7,6 +7,9 @@ import {
   updateProfile,
   getAuth,
 } from "firebase/auth";
+
+import { API_BASE_URL } from "@/services/api";
+
 import { app } from "@/services/firebase";
 
 export default function VerifyPage() {
@@ -94,7 +97,7 @@ export default function VerifyPage() {
       setError("");
 
       const res = await fetch(
-        "http://localhost:5048/api/auth/verify-otp",
+        `${API_BASE_URL}/api/auth/verify-otp`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -133,7 +136,7 @@ export default function VerifyPage() {
       const token = await result.user.getIdToken(true);
 
       await fetch(
-        "https://ai-productivity-coach-mlnn.onrender.com/api/User/sync",
+        `${API_BASE_URL}/api/User/sync`,
         {
           method: "POST",
           headers: {
@@ -170,7 +173,7 @@ export default function VerifyPage() {
   const resendCode = async () => {
     try {
       const res = await fetch(
-        "http://localhost:5048/api/auth/send-otp",
+        `${API_BASE_URL}/api/auth/send-otp`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
