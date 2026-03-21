@@ -20,7 +20,7 @@ export async function generateProductivity(
   description: string,
   language: Language
 ) {
-  const res = await fetch(`${API_BASE_URL}/api/productivity`, {
+  const res = await fetch(`${API_BASE_URL}/api/Productivity`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -50,7 +50,7 @@ export async function compareIndustry(
   description: string,
   language: Language
 ) {
-  const res = await fetch(`${API_BASE_URL}/api/productivity`, {
+  const res = await fetch(`${API_BASE_URL}/api/Productivity`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

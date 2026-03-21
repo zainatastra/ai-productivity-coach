@@ -81,13 +81,14 @@ export default function InputSection({
       setIsSubmitting(true);
       setMode("generate");
       setLoading(true);
-      setResponse(null);
 
       const result = await generateProductivity(
         industryData,
         descriptionData,
         language
       );
+
+      console.log("API RESULT:", result);
 
       setResponse(result);
       await saveConversation(result);
@@ -118,7 +119,6 @@ export default function InputSection({
       setIsSubmitting(true);
       setMode("compare");
       setLoading(true);
-      setResponse(null);
 
       const result = await compareIndustry(
         industryData,
