@@ -28,11 +28,18 @@ export default function ResponseSection({
      BUILD NEW GENERATE TEXT
   ============================ */
 
-  const buildGenerateText = (data: any) => {
-    if (!data) return "";
+const buildGenerateText = (data: any): string => {
+  if (!data) return "";
 
-    let text = "";
+  // ✅ HANDLE YOUR CURRENT API RESPONSE
+  if (typeof data?.message === "string") {
+    return data.message;
+  }
 
+  let text = "";
+
+  // structured format (future-ready)
+  if (data?.industry || data?.work_field || data?.reasoning) {
     if (data.industry) {
       text += `INDUSTRY\n${data.industry}\n\n`;
     }
@@ -41,25 +48,34 @@ export default function ResponseSection({
       text += `WORK FIELD\n${data.work_field}\n\n`;
     }
 
-    if (data.reasoning?.length) {
+    if (Array.isArray(data.reasoning)) {
       text += `WHY THIS WORK FIELD\n`;
       data.reasoning.forEach((item: string) => {
         text += `• ${item}\n`;
       });
     }
 
-    return text;
-  };
+    return text.trim();
+  }
+
+  // fallback
+  if (typeof data === "string") return data;
+
+  if (data?.data) return buildGenerateText(data.data);
+  if (data?.result) return buildGenerateText(data.result);
+
+  return JSON.stringify(data, null, 2);
+};
 
   /* ===========================
      RESET WHEN CLEARED
   ============================ */
 
-  useEffect(() => {
-    if (!response) {
-      setTypedContent("");
-    }
-  }, [response]);
+useEffect(() => {
+  if (response === null) {
+    setTypedContent("");
+  }
+}, [response]);
 
   /* ===========================
      TYPING ANIMATION
@@ -198,7 +214,7 @@ return (
   )}
 
   {/* ================= GENERATED CONTENT ================= */}
-  {!loading && mode === "generate" && typedContent && (
+  {response && mode === "generate" && (
     <div>
       {typedContent.split("\n").map((line, index) => {
         const isHeading =
