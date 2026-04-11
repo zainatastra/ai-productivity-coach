@@ -286,7 +286,7 @@ return (
   </div>
 </div>
 
-        <h2 className="text-2xl font-semibold text-center mt-4">
+        <h2 className="text-2xl font-semibold text-center my-4">
           {t.welcome}
         </h2>
 
