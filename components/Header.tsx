@@ -48,7 +48,7 @@ export default function Header({
             md:absolute md:left-1/2 md:-translate-x-1/2
           "
         >
-          {t("aiProductivityCoach")} {/* ✅ UPDATED */}
+          {t("Ey Eric! Make me Productive!")} {/* ✅ UPDATED */}
         </h1>
       </div>
 
@@ -61,14 +61,14 @@ export default function Header({
           <>
             <button
               onClick={() => router.push("/auth?mode=login")}
-              className="h-9 px-4 rounded-xl border border-gray-300 text-sm bg-white text-gray-700 hover:bg-gray-100 transition"
+              className="h-9 px-5 rounded-full border border-gray-300 text-sm font-medium bg-white text-gray-800 hover:bg-gray-100 hover:shadow-sm transition"
             >
               Login
             </button>
 
             <button
               onClick={() => router.push("/auth?mode=signup")}
-              className="h-9 px-4 rounded-xl bg-black text-white text-sm hover:bg-gray-900 transition"
+              className="h-9 px-5 rounded-full bg-black text-white text-sm font-medium hover:bg-gray-900 transition shadow-sm"
             >
               SignUp
             </button>
@@ -78,7 +78,7 @@ export default function Header({
         {!loading && user && (
           <button
             onClick={() => setShowClearModal?.(true)}
-            className="h-9 px-4 rounded-xl border border-gray-300 text-sm bg-white text-red-600 hover:bg-red-50 transition"
+            className="h-9 px-5 rounded-full border border-gray-300 text-sm font-medium bg-white text-red-600 hover:bg-red-50 hover:shadow-sm transition"
           >
             {t("clear")} {/* ✅ UPDATED */}
           </button>

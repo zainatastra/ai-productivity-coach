@@ -6,6 +6,20 @@ using AiProductivityCoach.Api.Auth;
 var builder = WebApplication.CreateBuilder(args);
 
 // ==========================================
+// 🔥 LOAD ENV VARIABLES
+// ==========================================
+
+builder.Configuration.AddEnvironmentVariables();
+
+// Override OpenAI key from ENV if available
+var openAiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+
+if (!string.IsNullOrWhiteSpace(openAiKey))
+{
+    builder.Configuration["OpenAI:ApiKey"] = openAiKey;
+}
+
+// ==========================================
 // 🔥 SERVICES
 // ==========================================
 
@@ -14,7 +28,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // ==========================================
-// 🌍 CORS CONFIGURATION (UPDATED FOR PRODUCTION)
+// 🌍 CORS CONFIGURATION
 // ==========================================
 
 builder.Services.AddCors(options =>
@@ -29,25 +43,36 @@ builder.Services.AddCors(options =>
             )
             .AllowAnyHeader()
             .AllowAnyMethod()
-            .SetIsOriginAllowed(origin => true); // ✅ important
+            .SetIsOriginAllowed(origin => true);
     });
 });
 
 // ==========================================
-// 🔐 FIREBASE INITIALIZATION
+// 🔐 FIREBASE INITIALIZATION (HYBRID FIX)
 // ==========================================
 
-var firebaseJson = Environment.GetEnvironmentVariable("FIREBASE_CREDENTIALS");
+var firebasePath = Environment.GetEnvironmentVariable("FIREBASE_CREDENTIALS_PATH");
 
-if (string.IsNullOrWhiteSpace(firebaseJson))
+// ✅ Fallback to local file (DEV)
+if (string.IsNullOrWhiteSpace(firebasePath))
 {
-    throw new Exception("FIREBASE_CREDENTIALS environment variable is not set.");
+    firebasePath = Path.Combine(Directory.GetCurrentDirectory(), "Firebase", "firebase-key.json");
 }
 
+// ❌ If still not found → stop app
+if (!File.Exists(firebasePath))
+{
+    throw new Exception($"❌ Firebase credentials file not found at: {firebasePath}");
+}
+
+Console.WriteLine("🔥 Firebase Path: " + firebasePath);
+
+// ✅ SINGLE credential instance
 var credential = GoogleCredential
-    .FromJson(firebaseJson)
+    .FromFile(firebasePath)
     .CreateScoped("https://www.googleapis.com/auth/cloud-platform");
 
+// ✅ Initialize Firebase
 if (FirebaseApp.DefaultInstance == null)
 {
     FirebaseApp.Create(new AppOptions
@@ -89,7 +114,7 @@ var app = builder.Build();
 
 app.UseRouting();
 
-app.UseCors("AllowFrontend"); // must be before auth
+app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -100,5 +125,13 @@ app.UseSwagger();
 app.UseSwaggerUI();
 
 app.MapGet("/", () => "AI Productivity Coach API is running 🚀");
+
+// ==========================================
+// 🧪 DEBUG
+// ==========================================
+
+Console.WriteLine("=================================");
+Console.WriteLine("OPENAI KEY LOADED: " + (builder.Configuration["OpenAI:ApiKey"] ?? "NULL"));
+Console.WriteLine("=================================");
 
 app.Run();

@@ -17,8 +17,8 @@ interface Props {
   industryData: string;
   descriptionData: string;
   language: "en" | "de";
-  isLoggedIn: boolean;           // ✅ ADDED
-  setShowAuthModal: (v: boolean) => void; // ✅ ADDED
+  isLoggedIn: boolean;
+  setShowAuthModal: (v: boolean) => void;
 }
 
 export default function InputSection({
@@ -30,8 +30,8 @@ export default function InputSection({
   industryData,
   descriptionData,
   language,
-  isLoggedIn,           // ✅ ADDED
-  setShowAuthModal,     // ✅ ADDED
+  isLoggedIn,
+  setShowAuthModal,
 }: Props) {
   const { user } = useAuth();
   const auth = getAuth(app);
@@ -69,7 +69,7 @@ export default function InputSection({
   };
 
   /* =========================================
-     GENERATE
+     GENERATE (FIXED)
   ========================================= */
   const handleGenerate = async () => {
     if (!industryData || !descriptionData) {
@@ -79,8 +79,11 @@ export default function InputSection({
 
     try {
       setIsSubmitting(true);
+
+      // ✅ IMPORTANT: reset first
       setMode("generate");
       setLoading(true);
+      setResponse(null);
 
       const result = await generateProductivity(
         industryData,
@@ -90,10 +93,16 @@ export default function InputSection({
 
       console.log("API RESULT:", result);
 
-      setResponse(result);
-      await saveConversation(result);
+      // ✅ FORCE NEW OBJECT (fixes UI not updating)
+      const freshResult = {
+        ...result,
+        _ts: Date.now(),
+      };
+
+      setResponse(freshResult);
+      await saveConversation(freshResult);
     } catch (err) {
-      console.error(err);
+      console.error("Generate error:", err);
     } finally {
       setLoading(false);
       setIsSubmitting(false);
@@ -101,10 +110,9 @@ export default function InputSection({
   };
 
   /* =========================================
-     COMPARE
+     COMPARE (FIXED)
   ========================================= */
   const handleCompare = async () => {
-    // ✅ If not logged in, show auth modal instead
     if (!isLoggedIn) {
       setShowAuthModal(true);
       return;
@@ -117,8 +125,11 @@ export default function InputSection({
 
     try {
       setIsSubmitting(true);
+
+      // ✅ Reset state
       setMode("compare");
       setLoading(true);
+      setResponse(null);
 
       const result = await compareIndustry(
         industryData,
@@ -126,10 +137,15 @@ export default function InputSection({
         language
       );
 
-      setResponse(result);
-      await saveConversation(result);
+      const freshResult = {
+        ...result,
+        _ts: Date.now(),
+      };
+
+      setResponse(freshResult);
+      await saveConversation(freshResult);
     } catch (err) {
-      console.error(err);
+      console.error("Compare error:", err);
     } finally {
       setLoading(false);
       setIsSubmitting(false);
@@ -138,6 +154,8 @@ export default function InputSection({
 
   return (
     <div className="order-2 lg:order-1 bg-white p-4 lg:p-8 rounded-2xl shadow-lg border border-gray-200 h-full flex flex-col justify-between overflow-hidden">
+      
+      {/* INPUTS */}
       <div className="flex flex-col gap-3">
         <input
           type="text"
@@ -155,8 +173,9 @@ export default function InputSection({
         />
       </div>
 
+      {/* BUTTONS */}
       <div className="flex flex-col gap-3 mt-4">
-        {/* GENERATE BUTTON — unchanged */}
+        
         <button
           onClick={handleGenerate}
           disabled={isSubmitting}
@@ -167,7 +186,6 @@ export default function InputSection({
           {isSubmitting ? "Loading..." : t("makeProductive")}
         </button>
 
-        {/* ✅ COMPARE BUTTON — shows auth modal if not logged in */}
         <button
           onClick={handleCompare}
           disabled={isSubmitting}
@@ -177,6 +195,7 @@ export default function InputSection({
         >
           {t("compare")}
         </button>
+
       </div>
     </div>
   );

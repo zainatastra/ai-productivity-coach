@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { motion } from "framer-motion";
+
 type Lang = "en" | "de";
 
 export default function PrivacyPolicyPage() {
@@ -24,33 +26,59 @@ export default function PrivacyPolicyPage() {
         </p>
 
         {/* 🔥 LANGUAGE SWITCHER */}
-        <div className="flex justify-center mt-6">
-          <div className="flex bg-white/10 backdrop-blur-md rounded-full p-1 border border-white/20">
+<div className="flex justify-center mt-6">
+  <div className="relative flex bg-white/10 backdrop-blur-md rounded-full p-1 border border-white/20 w-[160px]">
 
-            <button
-              onClick={() => setLang("en")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm transition ${
-                lang === "en"
-                  ? "bg-white text-black"
-                  : "text-white/80 hover:text-white"
-              }`}
-            >
-              🇺🇸 EN
-            </button>
+    {/* 🔥 SLIDING PILL */}
+    <motion.div
+      initial={false}
+      animate={{ x: lang === "en" ? 0 : "100%" }}
+      transition={{
+        type: "spring",
+        stiffness: 400,
+        damping: 30
+      }}
+      className="absolute top-1 left-1 w-1/2 h-[calc(100%-8px)] bg-white rounded-full"
+    />
 
-            <button
-              onClick={() => setLang("de")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm transition ${
-                lang === "de"
-                  ? "bg-white text-black"
-                  : "text-white/80 hover:text-white"
-              }`}
-            >
-              🇩🇪 DE
-            </button>
+    {/* EN */}
+    <button
+      onClick={() => setLang("en")}
+      className={`relative z-10 flex items-center justify-center gap-2 flex-1 py-2 text-sm font-medium ${
+        lang === "en" ? "text-black" : "text-white/70"
+      }`}
+    >
+      <img
+        src="/us.png"
+        alt="EN"
+        className="w-4 h-4 rounded-sm object-cover"
+        onError={(e) => {
+          e.currentTarget.style.display = "none";
+        }}
+      />
+      EN
+    </button>
 
-          </div>
-        </div>
+    {/* DE */}
+    <button
+      onClick={() => setLang("de")}
+      className={`relative z-10 flex items-center justify-center gap-2 flex-1 py-2 text-sm font-medium ${
+        lang === "de" ? "text-black" : "text-white/70"
+      }`}
+    >
+      <img
+        src="/de.png"
+        alt="DE"
+        className="w-4 h-4 rounded-sm object-cover"
+        onError={(e) => {
+          e.currentTarget.style.display = "none";
+        }}
+      />
+      DE
+    </button>
+
+  </div>
+</div>
 
       </div>
 

@@ -98,7 +98,7 @@ const contentFields = [
   { key: "productivityCoach", label: "Productivity Coach" },
   { key: "newChat", label: "New Chat" },
   { key: "recentConversations", label: "Recent Conversations" },
-  { key: "aiProductivityCoach", label: "AI Productivity Coach" },
+  { key: "Ey Eric! Mach mich produktiv!", label: "Ey Eric! Make me Productive!" },
   { key: "clear", label: "Clear Button" },
   { key: "industryPlaceholder", label: "Industry Placeholder" },
   { key: "jobPlaceholder", label: "Job Placeholder" },
