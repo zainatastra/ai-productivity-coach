@@ -48,28 +48,19 @@ builder.Services.AddCors(options =>
 });
 
 // ==========================================
-// 🔐 FIREBASE INITIALIZATION (HYBRID FIX)
+// 🔐 FIREBASE INITIALIZATION (FIXED FOR RENDER)
 // ==========================================
 
-var firebasePath = Environment.GetEnvironmentVariable("FIREBASE_CREDENTIALS_PATH");
+var firebaseJson = Environment.GetEnvironmentVariable("FIREBASE_CREDENTIALS");
 
-// ✅ Fallback to local file (DEV)
-if (string.IsNullOrWhiteSpace(firebasePath))
+if (string.IsNullOrWhiteSpace(firebaseJson))
 {
-    firebasePath = Path.Combine(Directory.GetCurrentDirectory(), "Firebase", "firebase-key.json");
+    throw new Exception("❌ FIREBASE_CREDENTIALS environment variable is missing.");
 }
 
-// ❌ If still not found → stop app
-if (!File.Exists(firebasePath))
-{
-    throw new Exception($"❌ Firebase credentials file not found at: {firebasePath}");
-}
-
-Console.WriteLine("🔥 Firebase Path: " + firebasePath);
-
-// ✅ SINGLE credential instance
+// ✅ Create credential from ENV JSON
 var credential = GoogleCredential
-    .FromFile(firebasePath)
+    .FromJson(firebaseJson)
     .CreateScoped("https://www.googleapis.com/auth/cloud-platform");
 
 // ✅ Initialize Firebase
@@ -132,6 +123,7 @@ app.MapGet("/", () => "AI Productivity Coach API is running 🚀");
 
 Console.WriteLine("=================================");
 Console.WriteLine("OPENAI KEY LOADED: " + (builder.Configuration["OpenAI:ApiKey"] ?? "NULL"));
+Console.WriteLine("FIREBASE ENV LOADED: " + (!string.IsNullOrEmpty(firebaseJson)));
 Console.WriteLine("=================================");
 
 app.Run();
