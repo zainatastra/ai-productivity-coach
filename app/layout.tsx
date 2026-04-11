@@ -11,7 +11,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "AI Productivity Coach",
+  title: "Ey Eric! Make me Productive!",
   description: "Optimize your professional life with AI insights.",
 };
 

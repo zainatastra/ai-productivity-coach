@@ -8,7 +8,7 @@ import {
 } from "firebase/auth";
 import { app } from "@/services/firebase";
 import { useRouter, useSearchParams } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 import Image from "next/image";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -16,6 +16,8 @@ import ConfirmModal from "@/components/ConfirmModal";
 import PhoneInput from "@/components/PhoneInput";
 
 import { createUserWithEmailAndPassword } from "firebase/auth";
+
+import FloatingInput from "@/components/FloatingInput";
 
 import { API_BASE_URL } from "@/services/api";
 
@@ -45,6 +47,8 @@ export default function AuthContent() {
 
   const [fieldError, setFieldError] = useState("");
   const [topError, setTopError] = useState("");
+
+  const [lang, setLang] = useState<"en" | "de">("en");
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
@@ -180,264 +184,304 @@ if (!phone || !phone.startsWith("+")) {
   }
 };
 
-  return (
-    <>
-      <div className="min-h-screen flex items-center justify-center bg-white px-4">
+// 🌍 TRANSLATIONS
+const t = {
+  en: {
+    welcome: "Welcome",
+    login: "Login",
+    signup: "Sign Up",
+    email: "Email",
+    password: "Password",
+    name: "Name *",
+    surname: "Surname *",
+    company: "Company *",
+    forgot: "Forgot password?",
+    create: "Create Account",
+    loggingIn: "Logging in...",
+    creating: "Creating...",
+    agree: "I agree to the",
+    terms: "T&Cs",
+    privacy: "Privacy Policy",
+    missing: "Missing Information",
+  },
+  de: {
+    welcome: "Willkommen",
+    login: "Anmelden",
+    signup: "Registrieren",
+    email: "E-Mail",
+    password: "Passwort",
+    name: "Vorname *",
+    surname: "Nachname *",
+    company: "Firma *",
+    forgot: "Passwort vergessen?",
+    create: "Konto erstellen",
+    loggingIn: "Anmeldung läuft...",
+    creating: "Wird erstellt...",
+    agree: "Ich stimme den",
+    terms: "AGB",
+    privacy: "Datenschutzbestimmungen",
+    missing: "Fehlende Angaben",
+  },
+}[lang];
 
-        <div className="w-full max-w-md border border-gray-300 rounded-2xl p-8 shadow-sm min-h-[640px]">
+return (
+  <>
+    <div className="min-h-screen flex items-center justify-center bg-white px-4">
 
-          <h1 className="text-xl font-semibold text-center mb-1">
-            AI-Productivity Coach
-          </h1>
+      <div className="w-full max-w-md border border-gray-300 rounded-2xl p-8 shadow-sm min-h-[640px]">
 
-          <h2 className="text-2xl font-semibold text-center mt-6">
-            Welcome
-          </h2>
+        <h1 className="text-xl font-semibold text-center mb-1">
+          AI-Productivity Coach
+        </h1>
 
-          <p className="text-sm text-gray-500 text-center mb-6">
-            Please enter your details
-          </p>
+        {/* 🌍 LANGUAGE SWITCHER */}
+{/* 🌍 LANGUAGE SWITCHER */}
+<div className="flex justify-center mt-4 mb-2">
+  <div className="relative flex bg-gray-100 rounded-full p-1 border border-gray-200 w-[140px]">
 
-          {/* TOGGLE */}
-          <div className="relative flex bg-gray-100 rounded-full p-1 mb-6 overflow-hidden">
+    {/* 🔥 SLIDING BACKGROUND */}
+    <motion.div
+      initial={false}
+      animate={{
+        x: lang === "en" ? 0 : "100%"
+      }}
+      transition={{
+        type: "spring",
+        stiffness: 400,
+        damping: 30
+      }}
+      className="absolute top-1 left-1 w-1/2 h-[calc(100%-8px)] bg-white rounded-full shadow"
+    />
+
+    {/* EN */}
+    <button
+      onClick={() => setLang("en")}
+      className={`relative z-10 flex items-center justify-center gap-2 flex-1 py-1.5 text-sm font-medium ${
+        lang === "en" ? "text-black" : "text-gray-500"
+      }`}
+    >
+      <img
+        src="/us.png"
+        alt="EN"
+        className="w-4 h-4 rounded-sm object-cover"
+      />
+      EN
+    </button>
+
+    {/* DE */}
+    <button
+      onClick={() => setLang("de")}
+      className={`relative z-10 flex items-center justify-center gap-2 flex-1 py-1.5 text-sm font-medium ${
+        lang === "de" ? "text-black" : "text-gray-500"
+      }`}
+    >
+      <img
+        src="/de.png"
+        alt="DE"
+        className="w-4 h-4 rounded-sm object-cover"
+      />
+      DE
+    </button>
+
+  </div>
+</div>
+
+        <h2 className="text-2xl font-semibold text-center mt-4">
+          {t.welcome}
+        </h2>
+
+        {/* TOGGLE */}
+        <div className="relative flex bg-gray-100 rounded-full p-1 mb-6 overflow-hidden">
+          <motion.div
+            initial={false}
+            animate={{ x: mode === "login" ? "0%" : "100%" }}
+            transition={{ type: "spring", stiffness: 500, damping: 35 }}
+            className="absolute top-0 left-0 w-1/2 h-full bg-white rounded-full shadow border border-gray-300"
+          />
+
+          <button
+            onClick={() => {
+              setMode("login");
+              router.replace("/auth?mode=login");
+            }}
+            className="relative z-10 flex-1 py-2 text-sm font-medium"
+          >
+            {t.login}
+          </button>
+
+          <button
+            onClick={() => {
+              setMode("signup");
+              router.replace("/auth?mode=signup");
+            }}
+            className="relative z-10 flex-1 py-2 text-sm font-medium"
+          >
+            {t.signup}
+          </button>
+        </div>
+
+        {/* TOP ERROR */}
+        {topError && (
+          <div className="text-red-600 text-sm mb-3 text-center">
+            {topError}
+          </div>
+        )}
+
+        {/* FIELD ERROR */}
+        {fieldError && (
+          <div className="text-red-600 text-sm mb-2">
+            {fieldError}
+          </div>
+        )}
+
+        <AnimatePresence mode="wait">
+
+          {/* ================= LOGIN ================= */}
+          {mode === "login" ? (
             <motion.div
-              initial={false}
-              animate={{ x: mode === "login" ? "0%" : "100%" }}
-              transition={{ type: "spring", stiffness: 500, damping: 35 }}
-              className="absolute top-0 left-0 w-1/2 h-full bg-white rounded-full shadow border border-gray-300"
+              key="login"
+              initial={{ opacity: 0, x: -40 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 40 }}
+              transition={{ duration: 0.35 }}
+            >
+
+              <FloatingInput
+                label={t.email}
+                value={email}
+                onChange={setEmail}
+                type="email"
+                error={!!fieldError}
+              />
+
+              <div className="relative mb-4">
+                <FloatingInput
+                  label={t.password}
+                  value={password}
+                  onChange={setPassword}
+                  type={showPassword ? "text" : "password"}
+                />
+
+                <div
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-5 top-1/2 -translate-y-1/2 cursor-pointer text-gray-600"
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </div>
+              </div>
+
+              <div
+                onClick={() => router.push("/forgot-password")}
+                className="text-sm text-black mb-6 cursor-pointer"
+              >
+                {t.forgot}
+              </div>
+
+              <button
+                onClick={handleLogin}
+                disabled={loading}
+                className="w-full py-3 bg-black text-white rounded-full text-sm font-medium"
+              >
+                {loading ? t.loggingIn : t.login}
+              </button>
+
+            </motion.div>
+          ) : (
+
+          /* ================= SIGNUP ================= */
+          <motion.div
+            key="signup"
+            initial={{ opacity: 0, x: 40 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -40 }}
+            transition={{ duration: 0.35 }}
+          >
+
+            <FloatingInput label={t.name} value={name} onChange={setName} />
+            <FloatingInput label={t.surname} value={surname} onChange={setSurname} />
+            <FloatingInput label={t.company} value={company} onChange={setCompany} />
+
+            <div className="mb-4">
+              <PhoneInput value={phone} onChange={setPhone} />
+            </div>
+
+            <FloatingInput
+              label={t.email}
+              value={email}
+              onChange={setEmail}
+              type="email"
             />
 
+            <div className="relative mb-4">
+              <FloatingInput
+                label={t.password}
+                value={password}
+                onChange={setPassword}
+                type={showPassword ? "text" : "password"}
+              />
+
+              <div
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-5 top-1/2 -translate-y-1/2 cursor-pointer"
+              >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </div>
+            </div>
+
+            <label className="flex items-center gap-3 text-sm text-gray-600 mb-4 cursor-pointer">
+
+              <input
+                type="checkbox"
+                checked={termsAccepted}
+                onChange={(e) => setTermsAccepted(e.target.checked)}
+                className="hidden"
+              />
+
+              <div className={`w-[18px] h-[18px] flex items-center justify-center rounded-md border ${
+                termsAccepted ? "bg-black border-black" : "border-gray-300"
+              }`}>
+                {termsAccepted && (
+                  <svg className="w-[10px] h-[10px] text-white" viewBox="0 0 24 24">
+                    <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="3" fill="none"/>
+                  </svg>
+                )}
+              </div>
+
+              <span>
+                {t.agree}{" "}
+                <a href="/terms" className="underline">{t.terms}</a>{" "}
+                and{" "}
+                <a href="/privacy-policy" className="underline">{t.privacy}</a>
+              </span>
+
+            </label>
+
             <button
-              onClick={() => {
-                setMode("login");
-                router.replace("/auth?mode=login");
-              }}
-              className="relative z-10 flex-1 py-2 text-sm font-medium"
+              onClick={handleSignup}
+              disabled={loading}
+              className="w-full py-3 bg-black text-white rounded-full text-sm font-medium"
             >
-              Login
+              {loading ? t.creating : t.create}
             </button>
 
-            <button
-              onClick={() => {
-                setMode("signup");
-                router.replace("/auth?mode=signup");
-              }}
-              className="relative z-10 flex-1 py-2 text-sm font-medium"
-            >
-              SignUp
-            </button>
-          </div>
-
-          {/* TOP ERROR */}
-          {topError && (
-            <div className="text-red-600 text-sm mb-3 text-center">
-              {topError}
-            </div>
+          </motion.div>
           )}
 
-          {/* FIELD ERROR */}
-          {fieldError && (
-            <div className="text-red-600 text-sm mb-2">
-              {fieldError}
-            </div>
-          )}
+        </AnimatePresence>
 
-          {/* ================= FULL FORM WITH BUTTER SMOOTH SWITCH ================= */}
-<AnimatePresence mode="wait">
-
-  {mode === "login" ? (
-    <motion.div
-      key="login"
-      initial={{ opacity: 0, x: -40 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 40 }}
-      transition={{ duration: 0.35, ease: "easeInOut" }}
-    >
-
-      <input
-        type="email"
-        placeholder="Email"
-        className={`w-full mb-3 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-black ${
-          fieldError ? "border-red-500" : "border-gray-300"
-        }`}
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-
-      <div className="relative mb-1">
-        <input
-          type={showPassword ? "text" : "password"}
-          placeholder="Password"
-          className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black pr-12"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-
-        <div
-          onClick={() => setShowPassword(!showPassword)}
-          className="absolute right-4 top-1/2 -translate-y-1/2 cursor-pointer text-gray-600"
-        >
-          {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-        </div>
       </div>
+    </div>
 
-<div
-  onClick={() => router.push("/forgot-password")}
-  className="text-sm text-black mb-6 cursor-pointer"
->
-  Forgot password?
-</div>
+    <ConfirmModal
+      open={modalOpen}
+      title={t.missing}
+      description={modalMessage}
+      confirmText="OK"
+      onCancel={() => setModalOpen(false)}
+      onConfirm={() => setModalOpen(false)}
+    />
 
-      <button
-        onClick={handleLogin}
-        disabled={loading}
-        className="w-full py-3 bg-black text-white rounded-xl text-sm font-medium transition disabled:opacity-50"
-      >
-        {loading ? "Logging in..." : "Login"}
-      </button>
-
-    </motion.div>
-  ) : (
-    <motion.div
-      key="signup"
-      initial={{ opacity: 0, x: 40 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -40 }}
-      transition={{ duration: 0.35, ease: "easeInOut" }}
-    >
-
-      <input
-        type="text"
-        placeholder="Name *"
-        className="w-full mb-3 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
-
-      <input
-        type="text"
-        placeholder="Surname *"
-        className="w-full mb-3 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
-        value={surname}
-        onChange={(e) => setSurname(e.target.value)}
-      />
-
-      <input
-        type="text"
-        placeholder="Company *"
-        className="w-full mb-3 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
-        value={company}
-        onChange={(e) => setCompany(e.target.value)}
-      />
-
-<div className="mb-3">
-  <label className="text-sm text-gray-600 mb-1 block">
-    Phone number *
-  </label>
-
-<PhoneInput
-  value={phone}
-  onChange={(val) => {
-    setPhone(val);
-  }}
-/>
-</div>
-
-      <input
-        type="email"
-        placeholder="Email *"
-        className={`w-full mb-3 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-black ${
-          fieldError ? "border-red-500" : "border-gray-300"
-        }`}
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-
-      <div className="relative mb-3">
-        <input
-          type={showPassword ? "text" : "password"}
-          placeholder="Password *"
-          className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black pr-12"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-
-        <div
-          onClick={() => setShowPassword(!showPassword)}
-          className="absolute right-4 top-1/2 -translate-y-1/2 cursor-pointer text-gray-600"
-        >
-          {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-        </div>
-      </div>
-
-      {/* TERMS */}
-<label className="flex items-start gap-2 text-sm text-gray-600">
-  <input
-  type="checkbox"
-  checked={termsAccepted}
-  onChange={(e) => setTermsAccepted(e.target.checked)}
-  className="mt-1"
-/>
-
-  <span>
-    I agree to the{" "}
-    <a
-      href="/terms"
-      target="_blank"
-      className="underline hover:text-black"
-    >
-      T&Cs
-    </a>{" "}
-    and{" "}
-    <a
-      href="/privacy-policy"
-      target="_blank"
-      className="underline hover:text-black"
-    >
-      Privacy Policy
-    </a>
-  </span>
-</label>
-
-      <button
-        onClick={handleSignup}
-        disabled={loading}
-        className="w-full py-3 bg-black text-white rounded-xl text-sm font-medium transition disabled:opacity-50"
-      >
-        {loading ? "Creating..." : "Create Account"}
-      </button>
-
-    </motion.div>
-  )}
-
-</AnimatePresence>
-
-{/* ================= TERMS ================= */}
-<div className="flex justify-center gap-4 text-sm text-gray-600 mt-6">
-<a href="/terms" target="_blank" className="hover:underline">
-  T&Cs
-</a>
-
-<span>|</span>
-
-<a href="/privacy-policy" target="_blank" className="hover:underline">
-  Privacy Policy
-</a>
-</div>
-
-</div>
-</div>
-
-{/* ================= MODAL ================= */}
-<ConfirmModal
-  open={modalOpen}
-  title="Missing Information"
-  description={modalMessage}
-  confirmText="OK"
-  onCancel={() => setModalOpen(false)}
-  onConfirm={() => setModalOpen(false)}
-/>
-
-</>
+  </>
 );
+
 }

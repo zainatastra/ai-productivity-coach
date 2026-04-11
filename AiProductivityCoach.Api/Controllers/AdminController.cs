@@ -47,7 +47,7 @@ namespace AiProductivityCoach.Api.Controllers
                         { "de", "Letzte Gespräche" }
                     }},
                     { "aiProductivityCoach", new Dictionary<string, string> {
-                        { "en", "AI Productivity Coach" },
+                        { "en", "Ey Eric! Make me Productive!" },
                         { "de", "KI Produktivitäts-Coach" }
                     }},
                     { "clear", new Dictionary<string, string> {

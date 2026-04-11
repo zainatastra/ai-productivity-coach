@@ -74,8 +74,8 @@ publish/
 # ==========================================
 
 # Firebase service account key
-**/firebase-service-account.json
-**/Firebase/firebase-service-account.json
+**/firebase-key.json
+**/firebase/*.json
 
 # local Firebase files
 .firebase/

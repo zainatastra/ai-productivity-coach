@@ -34,13 +34,13 @@ export default function LanguageSwitcher() {
       {/* ACTIVE BUTTON */}
       <button
         onClick={() => setOpen((prev) => !prev)}
-        className="
-          h-9 px-4 rounded-xl
-          border border-gray-300
-          bg-white text-gray-700 text-sm
-          hover:bg-gray-100 transition
-          flex items-center justify-center gap-2
-        "
+className="
+  h-9 px-5 rounded-full
+  border border-gray-300
+  bg-white text-gray-800 text-sm font-medium
+  hover:bg-gray-100 hover:shadow-sm transition
+  flex items-center justify-center gap-2
+"
       >
         <img
           src={active?.flag}
