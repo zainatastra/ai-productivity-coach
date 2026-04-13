@@ -6,18 +6,30 @@ using AiProductivityCoach.Api.Auth;
 var builder = WebApplication.CreateBuilder(args);
 
 // ==========================================
-// 🔥 LOAD ENV VARIABLES
+// 🔥 CONFIGURATION
 // ==========================================
 
-builder.Configuration.AddEnvironmentVariables();
+builder.Configuration
+    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
+    .AddEnvironmentVariables();
 
-// Override OpenAI key from ENV if available
-var openAiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+// ==========================================
+// 🔑 OPENAI KEY
+// ==========================================
 
-if (!string.IsNullOrWhiteSpace(openAiKey))
+var openAiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY")
+    ?? builder.Configuration["OpenAI:ApiKey"];
+
+if (string.IsNullOrWhiteSpace(openAiKey))
 {
-    builder.Configuration["OpenAI:ApiKey"] = openAiKey;
+    throw new InvalidOperationException(
+        "OpenAI API key is not configured. " +
+        "Set the OPENAI_API_KEY environment variable or OpenAI:ApiKey in appsettings."
+    );
 }
+
+builder.Configuration["OpenAI:ApiKey"] = openAiKey;
 
 // ==========================================
 // 🔥 SERVICES
@@ -28,62 +40,110 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // ==========================================
-// 🌍 CORS CONFIGURATION
+// 🌍 CORS
 // ==========================================
+
+var allowedOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .Get<string[]>()
+    ?? new[]
+    {
+        "http://localhost:3000",
+        "https://localhost:3000",
+        "https://ai-productivity-coach-zeta.vercel.app"
+    };
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
         policy
-            .WithOrigins(
-                "http://localhost:3000",
-                "https://localhost:3000",
-                "https://ai-productivity-coach-zeta.vercel.app"
-            )
+            .WithOrigins(allowedOrigins)
             .AllowAnyHeader()
-            .AllowAnyMethod()
-            .SetIsOriginAllowed(origin => true);
+            .AllowAnyMethod();
     });
 });
 
 // ==========================================
-// 🔐 FIREBASE INITIALIZATION (FIXED FOR RENDER)
+// 🔐 FIREBASE CREDENTIAL RESOLUTION
+// Priority: ENV var → local firebase-key.json (dev only)
 // ==========================================
 
 var firebaseJson = Environment.GetEnvironmentVariable("FIREBASE_CREDENTIALS");
 
 if (string.IsNullOrWhiteSpace(firebaseJson))
 {
-    throw new Exception("❌ FIREBASE_CREDENTIALS environment variable is missing.");
+    if (builder.Environment.IsDevelopment())
+    {
+        // ✅ Local dev: load from file inside Firebase/ folder
+        var localKeyPath = Path.Combine(
+            Directory.GetCurrentDirectory(),
+            "Firebase",
+            "firebase-key.json"
+        );
+
+        if (File.Exists(localKeyPath))
+        {
+            firebaseJson = File.ReadAllText(localKeyPath);
+            Console.WriteLine("[Firebase] Loaded credentials from local firebase-key.json");
+        }
+        else
+        {
+            throw new InvalidOperationException(
+                $"[Firebase] Running in Development but no credentials found. " +
+                $"Set FIREBASE_CREDENTIALS env var OR place firebase-key.json at: {localKeyPath}"
+            );
+        }
+    }
+    else
+    {
+        // ❌ Production/Staging must always use env var — never ship key files
+        throw new InvalidOperationException(
+            "[Firebase] FIREBASE_CREDENTIALS environment variable is required in non-development environments. " +
+            "Set it in your hosting provider (Render, Railway, etc.) as a secret environment variable."
+        );
+    }
 }
 
-// ✅ Create credential from ENV JSON
-var credential = GoogleCredential
-    .FromJson(firebaseJson)
-    .CreateScoped("https://www.googleapis.com/auth/cloud-platform");
+// ==========================================
+// 🔐 FIREBASE INITIALIZATION
+// ==========================================
 
-// ✅ Initialize Firebase
+GoogleCredential credential;
+
+try
+{
+    credential = GoogleCredential
+        .FromJson(firebaseJson)
+        .CreateScoped("https://www.googleapis.com/auth/cloud-platform");
+}
+catch (Exception ex)
+{
+    throw new InvalidOperationException(
+        "[Firebase] Failed to parse Firebase credentials JSON. Ensure it is a valid service account key.", ex
+    );
+}
+
 if (FirebaseApp.DefaultInstance == null)
 {
-    FirebaseApp.Create(new AppOptions
-    {
-        Credential = credential
-    });
+    FirebaseApp.Create(new AppOptions { Credential = credential });
+    Console.WriteLine("[Firebase] FirebaseApp initialized.");
 }
 
 // ==========================================
 // 🗄 FIRESTORE
 // ==========================================
 
-builder.Services.AddSingleton(provider =>
-{
-    return new FirestoreDbBuilder
+var firestoreProjectId = builder.Configuration["Firebase:ProjectId"]
+    ?? "ai-productivity-coach-d40b7";
+
+builder.Services.AddSingleton(_ =>
+    new FirestoreDbBuilder
     {
-        ProjectId = "ai-productivity-coach-d40b7",
+        ProjectId = firestoreProjectId,
         Credential = credential
-    }.Build();
-});
+    }.Build()
+);
 
 // ==========================================
 // 🔐 AUTHENTICATION
@@ -93,15 +153,20 @@ builder.Services
     .AddAuthentication("Firebase")
     .AddScheme<
         Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions,
-        FirebaseAuthenticationHandler>("Firebase", null);
+        FirebaseAuthenticationHandler
+    >("Firebase", null);
 
 builder.Services.AddAuthorization();
 
 // ==========================================
-// 🚀 APP PIPELINE
+// 🚀 BUILD APP
 // ==========================================
 
 var app = builder.Build();
+
+// ==========================================
+// 🔧 MIDDLEWARE PIPELINE
+// ==========================================
 
 app.UseRouting();
 
@@ -112,18 +177,37 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-app.UseSwagger();
-app.UseSwaggerUI();
+// Swagger only in non-production to avoid exposing API surface
+if (!app.Environment.IsProduction())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
-app.MapGet("/", () => "AI Productivity Coach API is running 🚀");
+app.MapGet("/", () => Results.Ok(new
+{
+    status = "running",
+    app = "AI Productivity Coach API",
+    environment = app.Environment.EnvironmentName,
+    timestamp = DateTime.UtcNow
+}));
+
+// Health check endpoint for Render / uptime monitors
+app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
 
 // ==========================================
-// 🧪 DEBUG
+// 🧪 STARTUP DIAGNOSTICS (non-production only)
 // ==========================================
 
-Console.WriteLine("=================================");
-Console.WriteLine("OPENAI KEY LOADED: " + (builder.Configuration["OpenAI:ApiKey"] ?? "NULL"));
-Console.WriteLine("FIREBASE ENV LOADED: " + (!string.IsNullOrEmpty(firebaseJson)));
-Console.WriteLine("=================================");
+if (!app.Environment.IsProduction())
+{
+    Console.WriteLine("===========================================");
+    Console.WriteLine($"  Environment : {app.Environment.EnvironmentName}");
+    Console.WriteLine($"  OpenAI Key  : {(string.IsNullOrEmpty(openAiKey) ? "❌ MISSING" : "✅ Loaded")}");
+    Console.WriteLine($"  Firebase    : ✅ Loaded");
+    Console.WriteLine($"  Firestore   : Project = {firestoreProjectId}");
+    Console.WriteLine($"  CORS Origins: {string.Join(", ", allowedOrigins)}");
+    Console.WriteLine("===========================================");
+}
 
 app.Run();
