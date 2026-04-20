@@ -5,6 +5,7 @@ import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
 import { getFirestore, collection, getDocs } from "firebase/firestore";
 import { Eye } from "lucide-react";
 import { API_BASE_URL } from "@/services/api";
+import { useLanguage } from "@/services/LanguageContext";
 import { adminApp } from "@/services/firebase";
 import {
   LineChart,
@@ -58,6 +59,7 @@ export default function AdminDashboard() {
 const [data, setData] = useState<DashboardData | null>(null);
 const [loading, setLoading] = useState(true);
 const [unauthorized, setUnauthorized] = useState(false);
+const { language } = useLanguage();
 
 type AdminMenu =
   | "dashboard"
@@ -1026,49 +1028,53 @@ const filteredUsers = data.users
     </motion.div>
   </AnimatePresence>
 
-  {/* ================= LOGOUT MODAL ================= */}
-  <AnimatePresence>
-    {showLogoutModal && (
+{/* ================= LOGOUT MODAL ================= */}
+<AnimatePresence>
+  {showLogoutModal && (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+    >
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        className="bg-white rounded-2xl shadow-xl w-[400px] p-6 text-center"
       >
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.95, opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          className="bg-white rounded-2xl shadow-xl w-[400px] p-6 text-center"
-        >
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            Are you sure you want to logout?
-          </h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">
+          {language === "de"
+            ? "Sind Sie sicher, dass Sie sich abmelden möchten?"
+            : "Are you sure you want to logout?"}
+        </h3>
 
-          <p className="text-sm text-gray-500 mb-6">
-            You will be signed out of your account.
-          </p>
+        <p className="text-sm text-gray-500 mb-6">
+          {language === "de"
+            ? "Sie werden von Ihrem Konto abgemeldet."
+            : "You will be signed out of your account."}
+        </p>
 
-          <div className="flex justify-center gap-4">
-            <button
-              onClick={() => setShowLogoutModal(false)}
-              className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition"
-            >
-              Cancel
-            </button>
+        <div className="flex justify-center gap-4">
+          <button
+            onClick={() => setShowLogoutModal(false)}
+            className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition"
+          >
+            {language === "de" ? "Abbrechen" : "Cancel"}
+          </button>
 
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 rounded-lg bg-black text-white hover:opacity-90 transition"
-            >
-              Yes, Logout
-            </button>
-          </div>
-        </motion.div>
+          <button
+            onClick={handleLogout}
+            className="px-4 py-2 rounded-lg bg-black text-white hover:opacity-90 transition"
+          >
+            {language === "de" ? "Ja, abmelden" : "Yes, Logout"}
+          </button>
+        </div>
       </motion.div>
-    )}
-  </AnimatePresence>
+    </motion.div>
+  )}
+</AnimatePresence>
 
   {/* ================= CONTENT EDIT MODAL ================= */}
   <AnimatePresence>

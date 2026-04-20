@@ -10,7 +10,8 @@ var builder = WebApplication.CreateBuilder(args);
 // ==========================================
 
 builder.Configuration
-    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+    .SetBasePath(Directory.GetCurrentDirectory())
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
     .AddEnvironmentVariables();
 
@@ -32,7 +33,7 @@ if (string.IsNullOrWhiteSpace(openAiKey))
 builder.Configuration["OpenAI:ApiKey"] = openAiKey;
 
 // ==========================================
-// 🔥 SERVICES
+// 🔥 CORE SERVICES
 // ==========================================
 
 builder.Services.AddControllers();
@@ -131,13 +132,13 @@ if (FirebaseApp.DefaultInstance == null)
 }
 
 // ==========================================
-// 🗄 FIRESTORE
+// 🗄 FIRESTORE  (✅ FIX: explicit generic type)
 // ==========================================
 
 var firestoreProjectId = builder.Configuration["Firebase:ProjectId"]
     ?? "ai-productivity-coach-d40b7";
 
-builder.Services.AddSingleton(_ =>
+builder.Services.AddSingleton<FirestoreDb>(_ =>
     new FirestoreDbBuilder
     {
         ProjectId = firestoreProjectId,
@@ -145,16 +146,15 @@ builder.Services.AddSingleton(_ =>
     }.Build()
 );
 
+Console.WriteLine($"[Firestore] Registered in DI (Project = {firestoreProjectId})");
+
 // ==========================================
 // 🔐 AUTHENTICATION
 // ==========================================
 
 builder.Services
     .AddAuthentication("Firebase")
-    .AddScheme<
-        Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions,
-        FirebaseAuthenticationHandler
-    >("Firebase", null);
+    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, FirebaseAuthenticationHandler>("Firebase", null);
 
 builder.Services.AddAuthorization();
 
