@@ -28,55 +28,49 @@ export default function Home() {
   open: false,
 });
 
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  /* ===============================
-     RESTORE LOCAL STATE
-  =============================== */
-  useEffect(() => {
-    const saved = localStorage.getItem("aiProductivityState");
+const [isHydrated, setIsHydrated] = useState(false);
 
-    if (saved) {
+/* ================= RESTORE RESPONSE (LOAD + LOGIN) ================= */
+useEffect(() => {
+  if (typeof window === "undefined") return;
+
+  const saved = localStorage.getItem("ai_response");
+
+  if (saved) {
+    try {
       const parsed = JSON.parse(saved);
 
-      setIndustryData(parsed.industry || "");
-      setDescriptionData(parsed.description || "");
-      setMode(parsed.mode || null);
-
-      if (parsed.response) {
-        setResponse(parsed.response);
-        setIsRestored(true);
+      // ✅ FIX: rely on reasoning (always present), not industry
+      if (parsed && parsed.reasoning) {
+        setResponse(parsed);
+        setMode("generate");
       }
+    } catch (e) {
+      console.error("Failed to restore response:", e);
     }
-  }, []);
+  }
 
-  /* ===============================
-     SAVE STATE
-  =============================== */
-  useEffect(() => {
-    const state = {
-      response,
-      mode,
-      industry: industryData,
-      description: descriptionData,
-    };
+  // ✅ VERY IMPORTANT: hydration AFTER restore
+  setIsHydrated(true);
 
-    localStorage.setItem("aiProductivityState", JSON.stringify(state));
-  }, [response, mode, industryData, descriptionData]);
+}, [user]);
 
   /* ===============================
      CLEAR HANDLER
   =============================== */
-  const handleClear = () => {
-    localStorage.removeItem("aiProductivityState");
+const handleClear = () => {
+  localStorage.removeItem("ai_response");
+  localStorage.removeItem("ai_input");
 
-    setResponse(null);
-    setMode(null);
-    setIndustryData("");
-    setDescriptionData("");
-    setIsRestored(false);
-    setShowClearModal(false);
-  };
+  setResponse(null);
+  setMode(null);
+  setIndustryData("");
+  setDescriptionData("");
+  setIsRestored(false);
+  setShowClearModal(false);
+};
 
 const handleSelectConversation = (conversation: any) => {
   if (!conversation) {
@@ -103,10 +97,13 @@ const handleSelectConversation = (conversation: any) => {
   setIsRestored(true);
 };
 
-  if (authLoading) return null;
+  if (authLoading || !isHydrated) return null;
 
   const isLoggedIn = user && !user.isAnonymous;
   const showSidebar = true;
+
+  // ✅ BLOCK RENDER UNTIL HYDRATED
+if (!isHydrated) return null;
 
   return (
     <div className="h-screen flex bg-gray-100 overflow-hidden">
@@ -143,19 +140,18 @@ const handleSelectConversation = (conversation: any) => {
         )}
       </AnimatePresence>
 
-      {/* ================= DESKTOP SIDEBAR ================= */}
-      {showSidebar && (
-        <div className="hidden md:block">
-<Sidebar
-  key={response?._ts || "empty"}   // 🔥 FORCE RE-RENDER
-  onSelectConversation={handleSelectConversation}
-  disabled={!isLoggedIn}
-  industryData={industryData}
-  descriptionData={descriptionData}
-  response={response}
-/>
-        </div>
-      )}
+{/* ================= DESKTOP SIDEBAR ================= */}
+{showSidebar && (
+  <div className="hidden md:block">
+    <Sidebar
+      onSelectConversation={handleSelectConversation}
+      disabled={!isLoggedIn}
+      industryData={industryData}
+      descriptionData={descriptionData}
+      response={response}
+    />
+  </div>
+)}
 
       {/* ================= RIGHT SIDE ================= */}
       <div className="flex-1 flex flex-col">
@@ -187,26 +183,39 @@ const handleSelectConversation = (conversation: any) => {
               isLoggedIn={!!isLoggedIn}
               setShowAuthModal={setShowAuthModal}
               language={language}
+              isHydrated={isHydrated}
             />
 
           </div>
         </main>
 
-        {/* ================= CLEAR MODAL ================= */}
-        <AnimatePresence>
-          {showClearModal && (
-            <ConfirmModal
-              open={showClearModal}
-              title="Are you sure you want to clear?"
-              description="This will remove your current response and input."
-              confirmText="Yes, Clear"
-              onCancel={() => setShowClearModal(false)}
-              onConfirm={handleClear}
-            />
-          )}
-        </AnimatePresence>
+{/* ================= CLEAR MODAL ================= */}
+<AnimatePresence>
+  {showClearModal && (
+    <ConfirmModal
+      open={showClearModal}
+      title={
+        language === "de"
+          ? "Sind Sie sicher, dass Sie löschen möchten?"
+          : "Are you sure you want to clear?"
+      }
+      description={
+        language === "de"
+          ? "Dies entfernt Ihre aktuelle Antwort und Eingabe."
+          : "This will remove your current response and input."
+      }
+      confirmText={
+        language === "de"
+          ? "Ja, löschen"
+          : "Yes, Clear"
+      }
+      onCancel={() => setShowClearModal(false)}
+      onConfirm={handleClear}
+    />
+  )}
+</AnimatePresence>
 
-        {/* ================= AUTH MODAL ================= */}
+{/* ================= AUTH MODAL ================= */}
 <AnimatePresence>
   {showAuthModal.open && (
     <motion.div
@@ -216,40 +225,57 @@ const handleSelectConversation = (conversation: any) => {
       exit={{ opacity: 0 }}
     >
       <motion.div
-        className="bg-white rounded-2xl p-6 w-[400px] text-center shadow-xl"
+        className="relative bg-white rounded-2xl p-6 w-[400px] text-center shadow-xl"
         initial={{ scale: 0.9 }}
         animate={{ scale: 1 }}
         exit={{ scale: 0.9 }}
       >
+
+        {/* ❌ CLOSE BUTTON */}
+        <button
+          onClick={() => setShowAuthModal({ open: false })}
+          className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 transition"
+        >
+          ✕
+        </button>
+
+        {/* TITLE */}
         <h3 className="text-lg font-semibold mb-2">
-          Register to continue
+          {language === "de"
+            ? "Anmelden oder Registrieren, um fortzufahren"
+            : "Login or Register to Continue"}
         </h3>
 
-        <p className="text-sm text-gray-500 mb-6">
-          You have to register in order to see the next step.
-          <br />
-          It is totally free.
+        {/* DESCRIPTION */}
+        <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+          {language === "de"
+            ? "Um die Vergleichsfunktion zu nutzen und personalisierte Einblicke zu erhalten, melden Sie sich bitte an oder erstellen Sie ein kostenloses Konto."
+            : "To access the compare feature and unlock personalized insights, please log in or create a free account."}
         </p>
 
+        {/* ACTION BUTTONS */}
         <div className="flex justify-center gap-3">
           
-          {/* CANCEL */}
-          <button
-            onClick={() => setShowAuthModal({ open: false })}
-            className="px-4 py-2 border border-gray-300 rounded-lg text-sm"
-          >
-            Cancel
-          </button>
-
           {/* LOGIN */}
           <button
             onClick={() => {
               setShowAuthModal({ open: false });
               router.push("/auth?mode=login");
             }}
-            className="px-4 py-2 bg-black text-white rounded-lg text-sm"
+            className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-100 transition"
           >
-            Login
+            {language === "de" ? "Anmelden" : "Login"}
+          </button>
+
+          {/* REGISTER */}
+          <button
+            onClick={() => {
+              setShowAuthModal({ open: false });
+              router.push("/auth?mode=signup");
+            }}
+            className="px-4 py-2 bg-black text-white rounded-lg text-sm hover:bg-gray-900 transition"
+          >
+            {language === "de" ? "Registrieren" : "Register"}
           </button>
 
         </div>

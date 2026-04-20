@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { generateProductivity, compareIndustry } from "@/services/api";
+import { useLanguage } from "@/services/LanguageContext";
 
 interface Props {
   response: any;
@@ -22,6 +23,8 @@ interface Props {
   setShowAuthModal: (v: { open: boolean; type?: string }) => void;
 
   language: "en" | "de";
+
+  isHydrated: boolean; // ✅ ADD THIS
 }
 
 const parseAIResponse = (text: any) => {
@@ -63,47 +66,36 @@ export default function ProductivitySection({
   isLoggedIn,
   setShowAuthModal,
   language,
+  isHydrated, // ✅ ADD THIS
 }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [typedContent, setTypedContent] = useState("");
   const [isFlipping, setIsFlipping] = useState(false);
 
-  const [hasSubmitted, setHasSubmitted] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+const containerRef = useRef<HTMLDivElement>(null);
 
-  // ✅ RESTORE FROM LOCAL STORAGE (NEW)
-  useEffect(() => {
-    const saved = localStorage.getItem("ai_response");
+// ✅ RESTORE FROM LOCAL STORAGE (LOAD + LOGIN + FIX MODE + INPUTS)
+const hasRestoredRef = useRef(false);
 
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
+useEffect(() => {
+  if (typeof window === "undefined") return;
 
-        if (parsed && parsed.industry) {
-          setResponse(parsed);
-          setHasSubmitted(true);
-        }
-      } catch (err) {
-        console.error("Failed to restore response:", err);
-      }
+  const savedInput = localStorage.getItem("ai_input");
+
+  if (savedInput) {
+    try {
+      const inputParsed = JSON.parse(savedInput);
+
+      setIndustryData(inputParsed.industry || "");
+      setDescriptionData(inputParsed.description || "");
+    } catch (err) {
+      console.error("Failed to restore input:", err);
     }
-  }, []);
+  }
 
-  useEffect(() => {
-    if (!response) {
-      setHasSubmitted(false);
-    }
-  }, [response]);
+  hasRestoredRef.current = true;
 
-  useEffect(() => {
-    if (!industryData && !descriptionData) {
-      setHasSubmitted(false);
-      setResponse(null);
-
-      // ✅ CLEAR STORAGE (NEW)
-      localStorage.removeItem("ai_response");
-    }
-  }, [industryData, descriptionData]);
+}, [isLoggedIn]);
 
   /* ================= BUILD TEXT ================= */
   const buildGenerateText = (data: any): string => {
@@ -142,9 +134,8 @@ export default function ProductivitySection({
     return "";
   };
 
-  /* ================= TYPING EFFECT ================= */
+/* ================= TYPING EFFECT ================= */
 useEffect(() => {
-  // ✅ ONLY TYPE ON GENERATE (NOT COMPARE)
   if (!response || mode !== "generate") return;
 
   const fullText = response?.reasoning || "";
@@ -154,9 +145,11 @@ useEffect(() => {
     return;
   }
 
-  setTypedContent("");
+  // 🔥 If already populated → DO NOTHING
+  if (typedContent.length > 0) return;
 
   let index = 0;
+  setTypedContent("");
 
   const interval = setInterval(() => {
     index++;
@@ -173,7 +166,21 @@ useEffect(() => {
   }, 8);
 
   return () => clearInterval(interval);
+
 }, [response, mode]);
+
+/* ================= FORCE SHOW ON RESTORE ================= */
+useEffect(() => {
+  if (!response || mode !== "generate") return;
+
+  const fullText = response?.reasoning || "";
+
+  if (!fullText) return;
+
+  // 🔥 ALWAYS ensure text is visible after restore/login
+  setTypedContent(fullText);
+
+}, [response]);
 
 /* ================= GENERATE ================= */
 const handleGenerate = async () => {
@@ -199,7 +206,6 @@ const handleGenerate = async () => {
     setResponse(null);
     setTypedContent("");
     setMode("generate");
-    setHasSubmitted(true);
 
     const result = await generateProductivity(
       industryData,
@@ -219,11 +225,25 @@ const handleGenerate = async () => {
       _ts: Date.now(),
     };
 
+    // ✅ SAVE RESPONSE
     localStorage.setItem("ai_response", JSON.stringify(freshResult));
 
-    // 🔥 THINKING → TYPING (NO EXTRA FLIP)
+    // ✅ SAVE ORIGINAL INPUT (CRITICAL FOR COMPARE)
+    localStorage.setItem(
+      "ai_input",
+      JSON.stringify({
+        industry: industryData,
+        description: descriptionData,
+      })
+    );
+
+    // 🔥 THINKING → RESPONSE
     setTimeout(() => {
       setResponse(freshResult);
+
+      // ✅ IMPORTANT: instantly show full text after generation
+      setTypedContent(parsed.reasoning || "");
+
       setLoading(false);
     }, 300);
 
@@ -241,17 +261,15 @@ const handleGenerate = async () => {
     };
 
     setResponse(fallback);
+    setTypedContent(fallback.reasoning);
     setLoading(false);
+
     localStorage.setItem("ai_response", JSON.stringify(fallback));
 
   } finally {
     setIsSubmitting(false);
-
-    // ❌ DO NOT TOUCH isFlipping HERE
-    // (THIS WAS CAUSING DOUBLE FLIP)
   }
 };
-
 
 /* ================= COMPARE ================= */
 const handleCompare = async () => {
@@ -365,29 +383,45 @@ return (
     >
 
       {/* ================= INITIAL STATE ================= */}
-      {!hasSubmitted && !loading && (
+      {!response && !loading && (
         <div className="flex flex-col h-full justify-between">
 
-          {/* TOP */}
-          <div>
-            <div className="max-w-3xl mx-auto bg-gray-50 rounded-xl p-5 md:p-6 text-left shadow-sm">
-              {language === "de" ? (
-                <p className="text-gray-800 text-sm leading-relaxed whitespace-pre-line">
-                  Ey Eric! Mach mich produktiv!
-                  {"\n"}Die Welt dreht sich super schnell.
-                  {"\n"}Wer kann schon sagen, ob er die aktuell besten Tools und Methoden für seine Arbeit verwendet.
-                  {"\n"}Ey Eric analysiert Deine Arbeitsweise und schlägt Dir Tools und Methoden vor, um diese zu verbessern.
-                </p>
-              ) : (
-                <p className="text-gray-800 text-sm leading-relaxed whitespace-pre-line">
-                  Hey Eric! Make me productive!
-                  {"\n"}The world is spinning very fast.
-                  {"\n"}Who can really say whether they are using the best tools and methods for their work right now?
-                  {"\n"}Ey Eric analyzes your way of working and suggests tools and methods to improve it.
-                </p>
-              )}
-            </div>
-          </div>
+{/* ================= TOP BANNER ================= */}
+<div className="w-full mb-6">
+  <div className="w-full bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-[40px] px-6 md:px-10 py-6 md:py-8 shadow-sm">
+
+    <div className="flex items-start gap-4">
+
+      {/* ICON */}
+      <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-white shadow-sm border border-gray-200">
+        <img
+          src="/star.png"
+          alt="icon"
+          className="w-6 h-6 object-contain"
+        />
+      </div>
+
+      {/* TEXT CONTENT */}
+      <div className="flex-1">
+
+        {/* TITLE */}
+        <h2 className="text-base md:text-lg font-semibold text-gray-900 mb-2">
+          {language === "de"
+            ? "Ey Eric! Mach mich produktiv!"
+            : "Hey Eric! Make me productive!"}
+        </h2>
+
+        {/* DESCRIPTION */}
+        <p className="text-sm md:text-[15px] text-gray-600 leading-relaxed">
+          {language === "de"
+            ? "Die Welt dreht sich super schnell. Wer kann schon sagen, ob er die aktuell besten Tools und Methoden nutzt? Ey Eric analysiert Deine Arbeitsweise und schlägt Dir gezielte Verbesserungen vor."
+            : "The world is moving fast. Who can confidently say they are using the best tools and methods? Ey Eric analyzes your workflow and suggests smarter ways to improve it."}
+        </p>
+
+      </div>
+    </div>
+  </div>
+</div>
 
 {/* FORM */}
 <div className="w-full flex flex-col gap-4">
@@ -435,123 +469,151 @@ return (
 )}
 
 {/* ================= RESPONSE ================= */}
-{hasSubmitted && response && (
+{response && (
   <div className="flex-1 w-full flex flex-col min-h-0 transition-opacity duration-500 opacity-100">
 
-    <div className="flex-1 overflow-y-auto pr-2 min-h-0">
+<div className="flex-1 overflow-y-auto pr-2 min-h-0">
 
-      {/* INDUSTRY */}
-      <div className="mb-6">
-        <p className="text-sm font-bold text-black tracking-wide animate-fadeIn">
-          INDUSTRY
-        </p>
-        <p className="text-lg font-semibold text-black mt-1">
-          {response.industry || "—"}
-        </p>
-      </div>
-
-      {/* WORK FIELD */}
-      <div className="mb-6">
-        <p className="text-sm font-bold text-black tracking-wide animate-fadeIn">
-          WORK FIELD
-        </p>
-        <p className="text-base text-black mt-1">
-          {response.work_field || "—"}
-        </p>
-      </div>
-
-      {/* DESCRIPTION (ONLY THIS TYPES) */}
-      <div className="mb-6">
-        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
-          {renderWithBold(typedContent)}
-        </p>
-      </div>
-
-      {/* BENCHMARK */}
-      <div className="mb-6">
-        <p className="text-sm font-bold text-black tracking-wide animate-fadeIn">
-          BENCHMARK
-        </p>
-
-        <p className="text-sm text-gray-700 mt-1">
-          {response?.benchmark
-            ? response.benchmark
-                .split(/(\d{1,3}(?:,\d{3})*(?:\s*(?:to|–|-)\s*\d{1,3}(?:,\d{3})*)?)/g)
-                .map((part: string, i: number) => {
-                  if (/\d/.test(part)) {
-                    return (
-                      <span key={i} className="font-semibold text-black">
-                        {part}
-                      </span>
-                    );
-                  }
-                  return <span key={i}>{part}</span>;
-                })
-            : "Estimating based on similar roles..."}
-        </p>
-
-        {/* NEXT QUESTION / THINKING */}
-        <div className="mt-4">
-
-{/* 🔥 PRIORITY 1: SHOW THINKING DURING COMPARE */}
-{loading && mode === "compare" ? (
-  <div className="transition-opacity duration-300">
-    <ThinkingAnimation inline />
+  {/* INDUSTRY */}
+  <div className="mb-6">
+    <p className="text-sm font-bold text-black tracking-wide animate-fadeIn">
+      {language === "de" ? "BRANCHE" : "INDUSTRY"}
+    </p>
+    <p className="text-lg font-semibold text-black mt-1">
+      {response.industry || "—"}
+    </p>
   </div>
 
-) : response?.compare ? (
-  <p className="text-sm font-bold mb-2" style={{ color: "#22c55e" }}>
-    {language === "de"
-      ? "Sehen Sie, welche Aktivitäten sie während ihrer Arbeitswoche durchführen:"
-      : "See what activities they spend their working week doing:"}
-  </p>
+  {/* WORK FIELD */}
+  <div className="mb-6">
+    <p className="text-sm font-bold text-black tracking-wide animate-fadeIn">
+      {language === "de" ? "ARBEITSBEREICH" : "WORK FIELD"}
+    </p>
+    <p className="text-base text-black mt-1">
+      {response.work_field || "—"}
+    </p>
+  </div>
 
-) : (
-  <p className="text-sm font-bold" style={{ color: "#2563eb" }}>
-    {language === "de"
-      ? "Möchten Sie sehen, welche Aktivitäten sie während ihrer Arbeitswoche durchführen?"
-      : "Would you like to see what activities they spend their working week doing?"}
-  </p>
-)}
+  {/* DESCRIPTION */}
+  <div className="mb-6">
+    <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+      {renderWithBold(typedContent)}
+    </p>
+  </div>
 
+  {/* BENCHMARK */}
+  <div className="mb-6">
+    <p className="text-sm font-bold text-black tracking-wide animate-fadeIn">
+      {language === "de" ? "BENCHMARK" : "BENCHMARK"}
+    </p>
+
+    <p className="text-sm text-gray-700 mt-1">
+      {response?.benchmark
+        ? response.benchmark
+            .split(/(\d{1,3}(?:,\d{3})*(?:\s*(?:to|–|-)\s*\d{1,3}(?:,\d{3})*)?)/g)
+            .map((part: string, i: number) => {
+              if (/\d/.test(part)) {
+                return (
+                  <span key={i} className="font-semibold text-black">
+                    {part}
+                  </span>
+                );
+              }
+              return <span key={i}>{part}</span>;
+            })
+        : "Estimating based on similar roles..."}
+    </p>
+
+    {/* 🔥 PROMINENT CTA BLOCK */}
+    <div className="mt-5">
+  {loading && mode === "compare" ? (
+    <div className="transition-opacity duration-300">
+      <ThinkingAnimation inline />
+    </div>
+  ) : response?.compare ? (
+
+    // ✅ FORCE COLOR (CANNOT BE OVERRIDDEN)
+    <p
+      className="text-sm font-bold mb-2 text-green-600"
+      style={{ color: "#20c55e" }}
+    >
+      {language === "de"
+        ? "Sehen Sie, welche Aktivitäten sie während ihrer Arbeitswoche durchführen:"
+        : "See what activities they spend their working week doing:"}
+    </p>
+
+  ) : (
+    <div className="relative rounded-2xl border border-blue-200 shadow-sm overflow-hidden">
+      
+      {/* GLOW */}
+      <div className="absolute inset-0 animate-glow pointer-events-none"></div>
+
+      {/* CONTENT */}
+      <div className="relative z-10 flex items-start gap-3 px-5 py-4">
+        
+        {/* Icon */}
+        <div className="flex items-center justify-center w-9 h-9">
+          <img 
+            src="/star.png" 
+            alt="star"
+            className="w-7 h-7 object-contain drop-shadow-sm"
+          />
+        </div>
+
+        {/* Text */}
+        <div>
+          <p className="text-sm font-semibold text-gray-800">
+            {language === "de"
+              ? "Möchten Sie sehen, welche Aktivitäten sie während ihrer Arbeitswoche durchführen?"
+              : "Would you like to see what activities they spend their working week doing?"}
+          </p>
+
+          <p className="text-sm text-gray-600 mt-1">
+            {language === "de"
+              ? "↓ Klicken Sie auf „Vergleichen“, um es herauszufinden"
+              : "↓ Click Compare to find out"}
+          </p>
         </div>
       </div>
-
-      {/* COMPARE RESULT (SMOOTH FADE-IN) */}
-{response?.compare && (
-  <div className="mt-6 space-y-3 animate-fadeIn">
-    {response.compare
-      .split("\n")
-      .map((line: string, i: number) => {
-        if (!line || !line.trim()) return null;
-
-        // ✅ ONLY ACCEPT PROPER TIME FORMAT (e.g. 3–5, 20-24)
-        const match = line.match(
-          /^(.+?)\s*[—-]\s*(\d{1,2}\s*[–-]\s*\d{1,2}.*)$/
-        );
-
-        if (!match) return null;
-
-        const activity = match[1].trim();
-        const time = match[2].trim();
-
-        return (
-          <div
-            key={i}
-            className="flex justify-between items-center bg-gray-100 px-4 py-3 rounded-xl transition-all duration-300"
-          >
-            <span className="text-sm text-gray-800">
-              {activity}
-            </span>
-            <span className="text-sm font-medium text-gray-700">
-              {time}
-            </span>
-          </div>
-        );
-      })}
-  </div>
-)}
     </div>
+  )}
+</div>
+  </div>
+
+  {/* COMPARE RESULT */}
+  {response?.compare && (
+    <div className="mt-6 space-y-3 animate-fadeIn">
+      {response.compare
+        .split("\n")
+        .map((line: string, i: number) => {
+          if (!line || !line.trim()) return null;
+
+          const match = line.match(
+            /^(.+?)\s*[—-]\s*(\d{1,2}\s*[–-]\s*\d{1,2}.*)$/
+          );
+
+          if (!match) return null;
+
+          const activity = match[1].trim();
+          const time = match[2].trim();
+
+          return (
+            <div
+              key={i}
+              className="flex justify-between items-center bg-gray-100 px-4 py-3 rounded-xl transition-all duration-300"
+            >
+              <span className="text-sm text-gray-800">
+                {activity}
+              </span>
+              <span className="text-sm font-medium text-gray-700">
+                {time}
+              </span>
+            </div>
+          );
+        })}
+    </div>
+  )}
+</div>
 
     {/* BUTTON */}
     <div className="pt-4 shrink-0">

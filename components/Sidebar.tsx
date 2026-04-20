@@ -76,6 +76,7 @@ export default function Sidebar({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isLoadingChats, setIsLoadingChats] = useState(true);
+  const { language } = useLanguage();
 
   // 🔥 TYPING STATES (NEW)
 const [typedIndustry, setTypedIndustry] = useState("");
@@ -319,14 +320,17 @@ useEffect(() => {
 {!isLoggedIn ? (
   <div className="mt-40 space-y-4">
 
-    {/* ================= DASHBOARD ================= */}
-    <div className="px-2">
-      <button className="flex items-center gap-2 w-full px-4 py-2 rounded-xl text-sm transition
-        bg-gray-100 hover:bg-gray-200 text-gray-800">
-        <LayoutDashboard size={18} />
-        Dashboard
-      </button>
-    </div>
+{/* ================= DASHBOARD ================= */}
+<div className="px-2">
+  <button className="flex items-center gap-2 w-full px-4 py-2 rounded-xl text-sm transition
+    bg-gray-100 hover:bg-gray-200 text-gray-800">
+    
+    <LayoutDashboard size={18} />
+    
+    {language === "de" ? "Übersicht" : "Dashboard"}
+    
+  </button>
+</div>
 
      {/* ================= AI SUMMARY ================= */}
 
@@ -339,7 +343,7 @@ useEffect(() => {
 {/* INDUSTRY */}
 <div>
   <p className="text-sm font-bold text-black tracking-wide animate-fadeIn">
-    INDUSTRY
+    {language === "de" ? "BRANCHE" : "INDUSTRY"}
   </p>
   <p className="text-sm font-semibold text-black">
     {typedIndustry || "—"}
@@ -349,7 +353,7 @@ useEffect(() => {
 {/* WORK FIELD */}
 <div>
   <p className="text-sm font-bold text-black tracking-wide animate-fadeIn">
-    WORK FIELD
+    {language === "de" ? "ARBEITSBEREICH" : "WORK FIELD"}
   </p>
   <p className="text-sm text-black">
     {typedWorkField || "—"}
@@ -359,7 +363,7 @@ useEffect(() => {
 {/* BENCHMARK */}
 <div>
   <p className="text-sm font-bold text-black tracking-wide animate-fadeIn">
-    BENCHMARK
+    {language === "de" ? "BENCHMARK" : "BENCHMARK"}
   </p>
 
   <p className="text-sm text-gray-700">
@@ -385,25 +389,34 @@ useEffect(() => {
   </div>
 ) : (
   <>
+
     {/* ================= NEW CHAT (LOGGED-IN ONLY) ================= */}
-    <div className="py-3">
-      <button
-onClick={() => {
-  if (disabled) return;
-  setActiveId(null);
-  setActiveMenu(null); // optional clean reset
-  onSelectConversation(null);
-}}
-        disabled={disabled}
-className={`w-full px-5 py-3 rounded-full border border-gray-300 text-sm bg-white text-gray-800 transition duration-200 text-left font-medium ${
-  disabled
-    ? "opacity-50 cursor-not-allowed"
-    : "hover:bg-gray-100 hover:shadow-sm"
-}`}
-      >
-        + {t("newChat")}
-      </button>
-    </div>
+<div className="py-3">
+  <button
+    onClick={() => {
+      if (disabled) return;
+      setActiveId(null);
+      setActiveMenu(null);
+      onSelectConversation(null);
+    }}
+    disabled={disabled}
+    className={`w-full flex items-center gap-2 px-5 py-3 rounded-full border border-gray-300 text-sm bg-white text-gray-800 transition duration-200 text-left font-medium ${
+      disabled
+        ? "opacity-50 cursor-not-allowed"
+        : "hover:bg-gray-100 hover:shadow-sm"
+    }`}
+  >
+    {/* ICON */}
+    <img
+      src="/chat.png"
+      alt="chat"
+      className="w-4 h-4 object-contain"
+    />
+
+    {/* TEXT */}
+    {t("newChat")}
+  </button>
+</div>
 
     {/* ================= AI SUMMARY (LOGGED-IN) ================= */}
 {response && response.industry && (
@@ -412,7 +425,7 @@ className={`w-full px-5 py-3 rounded-full border border-gray-300 text-sm bg-whit
   {/* INDUSTRY */}
   <div>
     <p className="text-sm font-bold text-black tracking-wide animate-fadeIn">
-      INDUSTRY
+      {language === "de" ? "BRANCHE" : "INDUSTRY"}
     </p>
     <p className="text-sm font-semibold text-black">
       {typedIndustry || "—"}
@@ -422,7 +435,7 @@ className={`w-full px-5 py-3 rounded-full border border-gray-300 text-sm bg-whit
   {/* WORK FIELD */}
   <div>
     <p className="text-sm font-bold text-black tracking-wide animate-fadeIn">
-      WORK FIELD
+      {language === "de" ? "ARBEITSBEREICH" : "WORK FIELD"}
     </p>
     <p className="text-sm text-black">
       {typedWorkField || "—"}
@@ -432,7 +445,7 @@ className={`w-full px-5 py-3 rounded-full border border-gray-300 text-sm bg-whit
 {/* BENCHMARK */}
 <div>
   <p className="text-sm font-bold text-black tracking-wide animate-fadeIn">
-    BENCHMARK
+    {language === "de" ? "BENCHMARK" : "BENCHMARK"}
   </p>
   <p className="text-sm text-gray-700">
 {typedBenchmark
@@ -499,15 +512,15 @@ className={`w-full px-5 py-3 rounded-full border border-gray-300 text-sm bg-whit
                     setActiveId(conv.id);
                     onSelectConversation(conv);
                   }}
-                  className={`relative group px-4 py-3 rounded-xl transition-all duration-200 text-left shadow-sm ${
-                    disabled
-                      ? "opacity-50 cursor-not-allowed"
-                      : "cursor-pointer"
-                  } ${
-                    activeId === conv.id
-                      ? "bg-white shadow-md"
-                      : "bg-white hover:bg-gray-50 hover:shadow-md"
-                  }`}
+className={`relative group px-5 py-2.5 rounded-full transition-all duration-200 text-left shadow-sm border ${
+  disabled
+    ? "opacity-50 cursor-not-allowed"
+    : "cursor-pointer"
+} ${
+  activeId === conv.id
+    ? "bg-gray-200 text-gray-900 border-gray-300"
+    : "bg-white border-gray-200 hover:bg-gray-50"
+}`}
                 >
                   {editingId === conv.id ? (
                     <div className="flex items-center gap-2">
@@ -644,105 +657,107 @@ className={`w-full px-5 py-3 rounded-full border border-gray-300 text-sm bg-whit
               />
             </div>
 
-            {/* DROPDOWN MENU */}
-            <AnimatePresence>
-              {profileOpen && !disabled && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 8 }}
-                  transition={{ duration: 0.2 }}
-                  className="absolute left-0 right-0 bottom-full mb-2 bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 overflow-hidden"
-                >
-                  <div className="px-4 py-3 text-sm text-gray-700">
-                    {user?.email}
-                  </div>
+{/* DROPDOWN MENU */}
+<AnimatePresence>
+  {profileOpen && !disabled && (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 8 }}
+      transition={{ duration: 0.2 }}
+      className="absolute left-0 right-0 bottom-full mb-2 bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 overflow-hidden"
+    >
+      <div className="px-4 py-3 text-sm text-gray-700">
+        {user?.email}
+      </div>
 
-                  <div className="border-t border-gray-200" />
+      <div className="border-t border-gray-200" />
 
-                  <button
-                    disabled={disabled}
-                    className="flex items-center gap-3 w-full px-4 py-3 text-sm hover:bg-gray-100 transition text-left"
-                  >
-                    <Settings size={18} />
-                    Settings
-                  </button>
+      {/* SETTINGS */}
+      <button
+        disabled={disabled}
+        className="flex items-center gap-3 w-full px-4 py-3 text-sm hover:bg-gray-100 transition text-left"
+      >
+        <Settings size={18} />
+        {language === "de" ? "Einstellungen" : "Settings"}
+      </button>
 
-                  <div>
-                    <button
-                      onClick={() => {
-                        if (disabled) return;
-                        setHelpOpen(!helpOpen);
-                      }}
-                      disabled={disabled}
-                      className="flex items-center justify-between w-full px-4 py-3 text-sm hover:bg-gray-100 transition text-left"
-                    >
-                      <div className="flex items-center gap-3">
-                        <HelpCircle size={18} />
-                        Help
-                      </div>
-                      <ChevronDown
-                        size={16}
-                        className={`transition-transform ${
-                          !helpOpen ? "rotate-180" : ""
-                        }`}
-                      />
-                    </button>
+      {/* HELP */}
+      <div>
+        <button
+          onClick={() => {
+            if (disabled) return;
+            setHelpOpen(!helpOpen);
+          }}
+          disabled={disabled}
+          className="flex items-center justify-between w-full px-4 py-3 text-sm hover:bg-gray-100 transition text-left"
+        >
+          <div className="flex items-center gap-3">
+            <HelpCircle size={18} />
+            {language === "de" ? "Hilfe" : "Help"}
+          </div>
+          <ChevronDown
+            size={16}
+            className={`transition-transform ${
+              !helpOpen ? "rotate-180" : ""
+            }`}
+          />
+        </button>
 
-                    <AnimatePresence>
-                      {helpOpen && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: "auto" }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.2 }}
-                          className="overflow-hidden bg-gray-50"
-                        >
-                          <button
-                            disabled={disabled}
-                            className="flex items-center gap-3 w-full px-8 py-2 text-sm hover:bg-gray-100 transition text-left"
-                          >
-                            <HelpCircle size={16} />
-                            Help Center
-                          </button>
+        <AnimatePresence>
+          {helpOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden bg-gray-50"
+            >
+              <button
+                disabled={disabled}
+                className="flex items-center gap-3 w-full px-8 py-2 text-sm hover:bg-gray-100 transition text-left"
+              >
+                <HelpCircle size={16} />
+                {language === "de" ? "Hilfe-Center" : "Help Center"}
+              </button>
 
-                          <button
-                            disabled={disabled}
-                            className="flex items-center gap-3 w-full px-8 py-2 text-sm hover:bg-gray-100 transition text-left"
-                          >
-                            <Bug size={16} />
-                            Report Bug
-                          </button>
+              <button
+                disabled={disabled}
+                className="flex items-center gap-3 w-full px-8 py-2 text-sm hover:bg-gray-100 transition text-left"
+              >
+                <Bug size={16} />
+                {language === "de" ? "Fehler melden" : "Report Bug"}
+              </button>
 
-                          <button
-                            disabled={disabled}
-                            className="flex items-center gap-3 w-full px-8 py-2 text-sm hover:bg-gray-100 transition text-left"
-                          >
-                            <FileText size={16} />
-                            Terms & Policies
-                          </button>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
+              <button
+                disabled={disabled}
+                className="flex items-center gap-3 w-full px-8 py-2 text-sm hover:bg-gray-100 transition text-left"
+              >
+                <FileText size={16} />
+                {language === "de" ? "Bedingungen & Richtlinien" : "Terms & Policies"}
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
-                  <div className="border-t border-gray-200" />
+      <div className="border-t border-gray-200" />
 
-                  {/* LOGOUT BUTTON */}
-                  <button
-                    onClick={() => {
-                      if (disabled) return;
-                      setShowLogoutModal(true);
-                    }}
-                    disabled={disabled}
-                    className="flex items-center gap-3 w-full px-4 py-3 text-sm hover:bg-gray-100 transition text-red-600 text-left"
-                  >
-                    <LogOut size={18} />
-                    Logout
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
+      {/* LOGOUT */}
+      <button
+        onClick={() => {
+          if (disabled) return;
+          setShowLogoutModal(true);
+        }}
+        disabled={disabled}
+        className="flex items-center gap-3 w-full px-4 py-3 text-sm hover:bg-gray-100 transition text-red-600 text-left"
+      >
+        <LogOut size={18} />
+        {language === "de" ? "Abmelden" : "Logout"}
+      </button>
+    </motion.div>
+  )}
+</AnimatePresence>
           </div>
         )}
 
@@ -760,17 +775,33 @@ className={`w-full px-5 py-3 rounded-full border border-gray-300 text-sm bg-whit
         onConfirm={handleDelete}
       />
 
-      {/* ================= LOGOUT CONFIRM MODAL ================= */}
-      <ConfirmModal
-        open={showLogoutModal}
-        title="Are you sure you want to logout?"
-        description="You will be signed out of your account."
-        confirmText={isLoggingOut ? "Logging out..." : "Yes, Logout"}
-        confirmDisabled={isLoggingOut}
-        confirmClassName={isLoggingOut ? "bg-black/60 cursor-not-allowed" : ""}
-        onCancel={() => !isLoggingOut && setShowLogoutModal(false)}
-        onConfirm={handleLogout}
-      />
+{/* ================= LOGOUT CONFIRM MODAL ================= */}
+<ConfirmModal
+  open={showLogoutModal}
+  title={
+    language === "de"
+      ? "Sind Sie sicher, dass Sie sich abmelden möchten?"
+      : "Are you sure you want to logout?"
+  }
+  description={
+    language === "de"
+      ? "Sie werden von Ihrem Konto abgemeldet."
+      : "You will be signed out of your account."
+  }
+  confirmText={
+    isLoggingOut
+      ? language === "de"
+        ? "Wird abgemeldet..."
+        : "Logging out..."
+      : language === "de"
+        ? "Ja, abmelden"
+        : "Yes, Logout"
+  }
+  confirmDisabled={isLoggingOut}
+  confirmClassName={isLoggingOut ? "bg-black/60 cursor-not-allowed" : ""}
+  onCancel={() => !isLoggingOut && setShowLogoutModal(false)}
+  onConfirm={handleLogout}
+/>
 
       {/* ================= TOAST ================= */}
       <Toast show={showToast} message="SUCCESS ! Conversation Deleted" />

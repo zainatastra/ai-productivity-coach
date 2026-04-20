@@ -4,7 +4,7 @@ import { useAuth } from "@/services/AuthContext";
 import { useRouter } from "next/navigation";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { Menu } from "lucide-react";
-import { useLanguage } from "@/services/LanguageContext"; // ✅ ADD THIS
+import { useLanguage } from "@/services/LanguageContext";
 
 interface HeaderProps {
   setShowClearModal?: (value: boolean) => void;
@@ -17,7 +17,7 @@ export default function Header({
 }: HeaderProps) {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const { t } = useLanguage(); // ✅ ADD THIS
+  const { language } = useLanguage(); // ✅ USE language (not t)
 
   return (
     <div className="relative w-full flex items-center justify-between px-4 md:px-8 py-1 md:py-1.3 bg-[#f9f9f9] border-b border-gray-200">
@@ -48,7 +48,9 @@ export default function Header({
             md:absolute md:left-1/2 md:-translate-x-1/2
           "
         >
-          {t("Ey Eric! Make me Productive!")} {/* ✅ UPDATED */}
+          {language === "de"
+            ? "Hey Eric! Mach mich produktiv!"
+            : "Ey Eric! Make me Productive!"}
         </h1>
       </div>
 
@@ -57,30 +59,32 @@ export default function Header({
 
         <LanguageSwitcher />
 
+        {/* AUTH BUTTONS */}
         {!loading && !user && (
           <>
             <button
               onClick={() => router.push("/auth?mode=login")}
               className="h-9 px-5 rounded-full border border-gray-300 text-sm font-medium bg-white text-gray-800 hover:bg-gray-100 hover:shadow-sm transition"
             >
-              Login
+              {language === "de" ? "Anmelden" : "Login"}
             </button>
 
             <button
               onClick={() => router.push("/auth?mode=signup")}
               className="h-9 px-5 rounded-full bg-black text-white text-sm font-medium hover:bg-gray-900 transition shadow-sm"
             >
-              SignUp
+              {language === "de" ? "Registrieren" : "Sign Up"}
             </button>
           </>
         )}
 
+        {/* CLEAR BUTTON */}
         {!loading && user && (
           <button
             onClick={() => setShowClearModal?.(true)}
             className="h-9 px-5 rounded-full border border-gray-300 text-sm font-medium bg-white text-red-600 hover:bg-red-50 hover:shadow-sm transition"
           >
-            {t("clear")} {/* ✅ UPDATED */}
+            {language === "de" ? "Löschen" : "Clear"}
           </button>
         )}
       </div>

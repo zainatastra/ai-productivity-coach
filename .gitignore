@@ -68,6 +68,9 @@ next-env.d.ts
 # publish output
 publish/
 
+# 🔥 LOCAL CONFIG (VERY IMPORTANT)
+appsettings.Development.json
+
 
 # ==========================================
 # 🔥 FIREBASE / SECRETS

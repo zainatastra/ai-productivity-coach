@@ -119,3 +119,21 @@ button {
 .animate-fadeIn {
   animation: fadeIn 0.4s ease forwards;
 }
+
+@keyframes glowPulse {
+  0% {
+    background-color: rgba(191, 219, 254, 0.7);
+  }
+
+  50% {
+    background-color: rgba(147, 197, 253, 1);
+  }
+
+  100% {
+    background-color: rgba(191, 219, 254, 0.7);
+  }
+}
+
+.animate-glow {
+  animation: glowPulse 1.8s ease-in-out infinite;
+}
