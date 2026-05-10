@@ -23,69 +23,121 @@ export default function LanguageSwitcher() {
         setOpen(false);
       }
     };
-
     document.addEventListener("mousedown", handleClickOutside);
-    return () =>
-      document.removeEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   return (
-    <div ref={ref} className="relative">
-      {/* ACTIVE BUTTON */}
-      <button
-        onClick={() => setOpen((prev) => !prev)}
-className="
-  h-9 px-5 rounded-full
-  border border-gray-300
-  bg-white text-gray-800 text-sm font-medium
-  hover:bg-gray-100 hover:shadow-sm transition
-  flex items-center justify-center gap-2
-"
-      >
-        <img
-          src={active?.flag}
-          alt="flag"
-          className="w-4 h-4 object-cover rounded-sm"
-        />
-        <span className="font-medium">{active?.label}</span>
-        <ChevronDown
-          size={14}
-          className={`transition-transform duration-200 ${
-            open ? "rotate-180" : ""
-          }`}
-        />
-      </button>
+    <>
+      <style>{`
+        /* matches .hdr-btn sizing exactly */
+        .ls-btn {
+          height: 30px;
+          padding: 0 10px;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 600;
+          border: 1px solid #e5e7eb;
+          background: #fff;
+          color: #374151;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: background 0.15s, box-shadow 0.15s;
+          font-family: inherit;
+          box-sizing: border-box;
+        }
+        .ls-btn:hover {
+          background: #f9f9f9;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.09);
+        }
+        @media (min-width: 768px) {
+          .ls-btn {
+            height: 36px;
+            padding: 0 14px;
+            font-size: 13px;
+          }
+        }
 
-      {/* BUTTER SMOOTH DROPDOWN */}
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.96 }}
-            transition={{ type: "spring", stiffness: 500, damping: 35 }}
-            className="absolute left-0 top-full mt-2 w-40 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-[999]"
-          >
-            {languages.map((lang) => (
-              <button
-                key={lang.code}
-                onClick={() => {
-                  setLanguage(lang.code as "en" | "de");
-                  setOpen(false);
-                }}
-                className="flex items-center gap-2 px-4 py-2 w-full hover:bg-gray-100 transition text-left text-sm"
-              >
-                <img
-                  src={lang.flag}
-                  alt={lang.full}
-                  className="w-4 h-4 object-cover rounded-sm"
-                />
-                <span>{lang.full}</span>
-              </button>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+        .ls-dropdown {
+          position: absolute;
+          left: 0;
+          top: calc(100% + 6px);
+          width: 148px;
+          background: #fff;
+          border: 1px solid #e5e7eb;
+          border-radius: 16px;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.10);
+          overflow: hidden;
+          z-index: 999;
+        }
+        .ls-option {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          width: 100%;
+          padding: 9px 14px;
+          font-size: 13px;
+          font-weight: 500;
+          color: #374151;
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          text-align: left;
+          font-family: inherit;
+          transition: background 0.12s;
+        }
+        .ls-option:hover { background: #f5f5f5; }
+      `}</style>
+
+      <div ref={ref} style={{ position: "relative" }}>
+        <button className="ls-btn" onClick={() => setOpen((prev) => !prev)}>
+          <img
+            src={active?.flag}
+            alt="flag"
+            style={{ width: 14, height: 14, objectFit: "cover", borderRadius: 3 }}
+          />
+          <span>{active?.label}</span>
+          <ChevronDown
+            size={12}
+            style={{
+              transition: "transform 0.2s",
+              transform: open ? "rotate(180deg)" : "rotate(0deg)",
+            }}
+          />
+        </button>
+
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              className="ls-dropdown"
+              initial={{ opacity: 0, y: -6, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -6, scale: 0.97 }}
+              transition={{ type: "spring", stiffness: 500, damping: 35 }}
+            >
+              {languages.map((lang) => (
+                <button
+                  key={lang.code}
+                  className="ls-option"
+                  onClick={() => { setLanguage(lang.code as "en" | "de"); setOpen(false); }}
+                >
+                  <img
+                    src={lang.flag}
+                    alt={lang.full}
+                    style={{ width: 14, height: 14, objectFit: "cover", borderRadius: 3 }}
+                  />
+                  <span>{lang.full}</span>
+                </button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </>
   );
 }

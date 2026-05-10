@@ -8,14 +8,18 @@ export default function FloatingInput({
   onChange,
   type = "text",
   error = false,
+  autoFocus = false,
 }: {
   label: string;
   value: string;
   onChange: (val: string) => void;
   type?: string;
   error?: boolean;
+  autoFocus?: boolean;
 }) {
-  const [focused, setFocused] = useState(false);
+
+  // ✅ immediately active visually if autofocus
+  const [focused, setFocused] = useState(autoFocus);
 
   const isActive = focused || value;
 
@@ -24,18 +28,21 @@ export default function FloatingInput({
       <input
         type={type}
         value={value}
+        autoFocus={autoFocus}
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         className={`w-full px-5 py-3 rounded-full border bg-white outline-none transition-all duration-300
+        ring-2 ring-transparent
         ${error ? "border-red-500" : "border-gray-300"}
-        focus:ring-2 focus:ring-black`}
+        focus:ring-black`}
       />
 
       {/* FLOATING LABEL */}
       <label
         className={`absolute left-4 pointer-events-none transition-all duration-300 bg-white px-1 text-gray-500
-        ${isActive
+        ${
+          isActive
             ? "-top-2 text-xs text-black"
             : "top-1/2 -translate-y-1/2 text-sm"
         }`}

@@ -1,383 +1,813 @@
 "use client";
 
-import { useState } from "react";
-
-import { motion } from "framer-motion";
+import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Shield,
+  Building2,
+  ClipboardList,
+  Settings,
+  Scale,
+  FileText,
+  Database,
+  Link2,
+  UserCheck,
+  Trash2,
+  Lock,
+  Mail,
+  Eye,
+  Pencil,
+  Package,
+  PauseCircle,
+  Ban,
+  Bot,
+  Megaphone,
+  Info,
+  CheckCircle2,
+  Calendar,
+  Clock,
+} from "lucide-react";
 
 type Lang = "en" | "de";
 
-export default function PrivacyPolicyPage() {
-  const [lang, setLang] = useState<Lang>("en");
-
-  const t = translations[lang];
-
-  return (
-    <div className="min-h-screen bg-white">
-
-      {/* HEADER */}
-      <div className="bg-gradient-to-r from-purple-700 to-purple-900 text-center py-24 rounded-b-[80px]">
-
-        <h1 className="text-4xl md:text-5xl font-bold !text-white">
-          {t.title}
-        </h1>
-
-        <p className="mt-4 text-sm !text-white/80">
-          {t.effective}
-        </p>
-
-        {/* 🔥 LANGUAGE SWITCHER */}
-<div className="flex justify-center mt-6">
-  <div className="relative flex bg-white/10 backdrop-blur-md rounded-full p-1 border border-white/20 w-[160px]">
-
-    {/* 🔥 SLIDING PILL */}
-    <motion.div
-      initial={false}
-      animate={{ x: lang === "en" ? 0 : "100%" }}
-      transition={{
-        type: "spring",
-        stiffness: 400,
-        damping: 30
-      }}
-      className="absolute top-1 left-1 w-1/2 h-[calc(100%-8px)] bg-white rounded-full"
-    />
-
-    {/* EN */}
-    <button
-      onClick={() => setLang("en")}
-      className={`relative z-10 flex items-center justify-center gap-2 flex-1 py-2 text-sm font-medium ${
-        lang === "en" ? "text-black" : "text-white/70"
-      }`}
-    >
-      <img
-        src="/us.png"
-        alt="EN"
-        className="w-4 h-4 rounded-sm object-cover"
-        onError={(e) => {
-          e.currentTarget.style.display = "none";
-        }}
-      />
-      EN
-    </button>
-
-    {/* DE */}
-    <button
-      onClick={() => setLang("de")}
-      className={`relative z-10 flex items-center justify-center gap-2 flex-1 py-2 text-sm font-medium ${
-        lang === "de" ? "text-black" : "text-white/70"
-      }`}
-    >
-      <img
-        src="/de.png"
-        alt="DE"
-        className="w-4 h-4 rounded-sm object-cover"
-        onError={(e) => {
-          e.currentTarget.style.display = "none";
-        }}
-      />
-      DE
-    </button>
-
-  </div>
-</div>
-
-      </div>
-
-      {/* CONTENT */}
-      <div className="max-w-5xl mx-auto px-6 py-14 text-gray-800 text-[15px] leading-7">
-
-        {t.sections.map((sec: any, i: number) => (
-          <Section key={i} title={sec.title}>
-            {sec.content}
-          </Section>
-        ))}
-
-      </div>
-    </div>
-  );
-}
-
-// 🔹 SECTION COMPONENT
-function Section({ title, children }: any) {
-  return (
-    <div className="mb-10">
-      <h2 className="font-semibold text-lg mb-3">{title}</h2>
-      <div className="text-justify space-y-3">{children}</div>
-    </div>
-  );
-}
-
-
-// 🌍 TRANSLATIONS (EN + DE)
+const tocItems = [
+  { id: "sec1",  Icon: Shield,        label: { en: "Introduction",        de: "Einführung" } },
+  { id: "sec2",  Icon: Building2,     label: { en: "Data Controller",     de: "Verantwortlicher" } },
+  { id: "sec3",  Icon: ClipboardList, label: { en: "Data We Collect",     de: "Erhobene Daten" } },
+  { id: "sec4",  Icon: Settings,      label: { en: "How We Use Data",     de: "Nutzung der Daten" } },
+  { id: "sec5",  Icon: Scale,         label: { en: "Legal Basis (GDPR)",  de: "Rechtsgrundlage" } },
+  { id: "sec6",  Icon: FileText,      label: { en: "Data Processors",     de: "Datenverarbeitung" } },
+  { id: "sec7",  Icon: Database,      label: { en: "Storage & Retention", de: "Speicherung" } },
+  { id: "sec8",  Icon: Link2,         label: { en: "Data Sharing",        de: "Datenweitergabe" } },
+  { id: "sec9",  Icon: UserCheck,     label: { en: "Your Rights",         de: "Ihre Rechte" } },
+  { id: "sec10", Icon: Trash2,        label: { en: "Right to Erasure",    de: "Recht auf Löschung" } },
+  { id: "sec11", Icon: Lock,          label: { en: "Security",            de: "Sicherheit" } },
+  { id: "sec12", Icon: Mail,          label: { en: "Contact Us",          de: "Kontakt" } },
+];
 
 const translations = {
   en: {
     title: "Privacy Policy",
     effective: "Effective Date: March 20, 2026 (v1.0)",
-
-    sections: [
-      {
+    heroBadge: "Your Privacy Matters",
+    heroSub: "We are committed to protecting your personal data with full transparency and GDPR compliance.",
+    sendEmail: "Send Email",
+    contactUs: "Contact Us",
+    sections: {
+      sec1: {
         title: "1. Introduction",
-        content: (
-          <>
-            <p>
-              AI-Productivity Coach ("we", "our", "us") is committed to protecting your privacy and ensuring that your personal data is handled in a secure, transparent, and lawful manner.
-            </p>
-            <p>
-              This Privacy Policy explains how we collect, use, process, store, and protect your personal data when you use our Service.
-            </p>
-            <p>
-              We fully comply with the General Data Protection Regulation (GDPR).
-            </p>
-          </>
-        ),
+        content: [
+          'AI-Productivity Coach ("we", "our", "us") is committed to protecting your privacy and ensuring that your personal data is handled in a secure, transparent, and lawful manner in accordance with applicable data protection laws.',
+          'This Privacy Policy explains how we collect, use, process, store, and protect your personal data when you use our AI-powered productivity service ("the Service"). By accessing or using the Service, you acknowledge that you have read and understood this policy.',
+          "We fully comply with the General Data Protection Regulation (GDPR) (EU) 2016/679 and all other applicable privacy regulations. We believe in complete transparency about our data practices.",
+        ],
+        infoBox: "If you have any questions about how we handle your data, we encourage you to contact us at any time. Your trust is our top priority.",
       },
-
-      {
+      sec2: {
         title: "2. Data Controller",
-        content: (
-          <>
-            <p><strong>AI-Productivity Coach</strong></p>
-            <p>info@aiproductivitycoach.com</p>
-          </>
-        ),
+        intro: "The data controller responsible for your personal information is:",
       },
-
-      {
+      sec3: {
         title: "3. Personal Data We Collect",
-        content: (
-          <>
-            <ul className="list-disc pl-6">
-              <li>Full Name, Email, Phone, Company</li>
-              <li>AI prompts and responses</li>
-              <li>Device and browser data</li>
-              <li>Usage analytics</li>
-            </ul>
-          </>
-        ),
+        intro: "We collect the following categories of personal data when you register and use our Service:",
+        items: [
+          "Full Name, Email Address, Phone Number, and Company Name (provided during registration)",
+          "AI prompts you submit and the responses generated by our system",
+          "Device type, browser version, operating system, and IP address",
+          "Usage analytics including session duration, feature usage, and interaction history",
+          "Billing and payment information (processed securely via third-party payment providers)",
+          "Communication history if you contact our support team",
+        ],
+        infoBox: "We only collect data that is strictly necessary to provide and improve our Service. We never collect sensitive personal data such as health information, political opinions, or biometric data.",
       },
-
-      {
+      sec4: {
         title: "4. How We Use Your Data",
-        content: (
-          <ul className="list-disc pl-6">
-            <li>Provide and improve the service</li>
-            <li>Generate AI responses</li>
-            <li>Ensure security</li>
-            <li>Legal compliance</li>
-          </ul>
-        ),
+        intro: "We use your personal data for the following purposes:",
+        items: [
+          "To create and manage your account and provide access to the Service",
+          "To generate personalized AI responses based on your prompts and preferences",
+          "To process payments and manage subscription plans",
+          "To monitor and improve system performance, reliability, and security",
+          "To send important service notifications, updates, and policy changes",
+          "To comply with legal and regulatory obligations",
+          "To investigate and resolve disputes, bugs, and technical issues",
+        ],
+        successBox: "We never use your AI prompts or responses to train our models without your explicit consent. You have full control over your data.",
       },
-
-      {
+      sec5: {
         title: "5. Legal Basis (GDPR)",
-        content: (
-          <ul className="list-disc pl-6">
-            <li>Contract</li>
-            <li>Legitimate interest</li>
-            <li>Consent</li>
-            <li>Legal obligation</li>
-          </ul>
-        ),
+        intro: "Under the GDPR, we process your data based on the following legal grounds:",
+        items: [
+          "Contract (Art. 6(1)(b) GDPR) — Processing is necessary to perform the service you signed up for",
+          "Legitimate Interest (Art. 6(1)(f) GDPR) — To improve our services, prevent fraud, and ensure security",
+          "Consent (Art. 6(1)(a) GDPR) — Where you have given explicit consent (e.g., marketing communications)",
+          "Legal Obligation (Art. 6(1)(c) GDPR) — Where required by applicable law or regulation",
+        ],
       },
-
-      {
+      sec6: {
         title: "6. Data Processing Agreement (DPA)",
-        content: (
-          <p>
-            We use Firebase (Google Cloud). All processors are GDPR compliant and bound by DPAs.
-          </p>
-        ),
+        intro: "We use trusted third-party sub-processors to operate our Service. All processors are bound by Data Processing Agreements (DPAs) and are GDPR compliant:",
+        items: [
+          "Firebase / Google Cloud — Authentication, database, and cloud hosting infrastructure",
+          "Stripe — Secure payment processing and subscription management",
+          "Anthropic / OpenAI — AI model inference for generating responses",
+          "Vercel — Application hosting and delivery network",
+          "Postmark — Transactional email delivery",
+        ],
+        infoBox: "All our processors operate under strict data protection agreements and are certified under EU-US Data Privacy Framework where applicable.",
       },
-
-      {
+      sec7: {
         title: "7. Data Storage & Retention",
-        content: (
-          <p>
-            Data is stored securely and retained only as long as necessary.
-          </p>
-        ),
+        intro: "Your data is stored on secure servers located within the European Economic Area (EEA) or in countries with an adequate level of data protection. Specific retention periods:",
+        items: [
+          "Account data: retained for the duration of your subscription + 30 days post-deletion",
+          "AI conversation history: retained for 90 days by default, configurable in settings",
+          "Billing records: retained for 7 years as required by tax law",
+          "Security logs: retained for 12 months",
+        ],
       },
-
-      {
+      sec8: {
         title: "8. Data Sharing",
-        content: (
-          <p>
-            We do not sell your data. Data is only shared with trusted providers and legal authorities if required.
-          </p>
-        ),
+        intro: "We do not sell, rent, or trade your personal data. We may share your data only in the following limited situations:",
+        items: [
+          "With trusted service providers (listed in Section 6) who assist in operating our platform",
+          "With legal authorities if required by law, court order, or regulatory requirement",
+          "In the event of a merger or acquisition, subject to the same privacy protections",
+          "With your explicit consent for specific purposes you have approved",
+        ],
+        successBox: "Your data is never sold to advertisers, data brokers, or marketing companies. Period.",
       },
-
-      {
-        title: "9. Your Rights",
-        content: (
-          <ul className="list-disc pl-6">
-            <li>Access</li>
-            <li>Correction</li>
-            <li>Deletion</li>
-            <li>Portability</li>
-          </ul>
-        ),
+      sec9: {
+        title: "9. Your Rights Under GDPR",
+        intro: "As a data subject, you have the following rights regarding your personal data:",
+        rights: [
+          { label: "Right to Access", desc: "Request a copy of your data" },
+          { label: "Right to Rectification", desc: "Correct inaccurate data" },
+          { label: "Right to Erasure", desc: "Request deletion of your data" },
+          { label: "Right to Restrict", desc: "Limit how we use your data" },
+          { label: "Data Portability", desc: "Export your data in a readable format" },
+          { label: "Right to Object", desc: "Object to certain processing" },
+          { label: "Automated Decisions", desc: "Not to be subject to automated decisions" },
+          { label: "Right to Complain", desc: "Lodge a complaint with a supervisory authority" },
+        ],
+        infoBox: "To exercise any of these rights, please contact us at info@aiproductivitycoach.com. We will respond within 30 days as required by GDPR.",
       },
-
-      {
+      sec10: {
         title: "10. Right to Erasure",
-        content: (
-          <p>
-            You can delete your data anytime via your account settings or by contacting us.
-          </p>
-        ),
+        content: [
+          "You have the right to request deletion of your personal data at any time. Upon receiving a valid request, we will erase your data within 30 days, except where retention is required by law.",
+          "You may request account deletion in the following ways:",
+        ],
+        items: [
+          "Directly through your account settings under \"Delete Account\"",
+          "By emailing us at info@aiproductivitycoach.com with the subject \"Data Deletion Request\"",
+          "By submitting a request through our in-app support chat",
+        ],
+        footer: "Upon deletion, all your personal data, AI conversation history, and account information will be permanently removed from our active systems. Backups are purged within 90 days.",
       },
-
-      {
-        title: "11. Security",
-        content: (
-          <p>
-            We use encryption, authentication, and monitoring systems.
-          </p>
-        ),
+      sec11: {
+        title: "11. Security Measures",
+        intro: "We implement industry-standard security measures to protect your personal data:",
+        items: [
+          "TLS/SSL encryption for all data in transit between your browser and our servers",
+          "AES-256 encryption for all data stored at rest in our databases",
+          "Multi-factor authentication (MFA) options for account security",
+          "Continuous security monitoring and automated threat detection",
+          "Regular third-party security audits and penetration testing",
+          "Role-based access controls — only authorized personnel can access user data",
+        ],
+        successBox: "In the unlikely event of a data breach, we will notify you and the relevant supervisory authority within 72 hours as required by GDPR.",
       },
-
-      {
-        title: "12. Contact",
-        content: (
-          <p>info@aiproductivitycoach.com</p>
-        ),
+      sec12: {
+        title: "12. Contact Us",
+        intro: "If you have any questions, concerns, or requests regarding this Privacy Policy, please reach out:",
+        infoBox: "We aim to respond to all privacy-related inquiries within 2 business days. For GDPR requests, we will respond within the legally required 30 days.",
       },
-    ],
+    },
   },
-
-
   de: {
     title: "Datenschutzerklärung",
     effective: "Gültig ab: 20. März 2026 (v1.0)",
-
-    sections: [
-      {
+    heroBadge: "Ihre Privatsphäre ist uns wichtig",
+    heroSub: "Wir verpflichten uns zum Schutz Ihrer personenbezogenen Daten mit vollständiger Transparenz und DSGVO-Konformität.",
+    sendEmail: "E-Mail senden",
+    contactUs: "Kontaktieren",
+    sections: {
+      sec1: {
         title: "1. Einführung",
-        content: (
-          <>
-            <p>
-              AI-Productivity Coach ("wir", "uns", "unser") verpflichtet sich zum Schutz Ihrer personenbezogenen Daten.
-            </p>
-            <p>
-              Diese Datenschutzerklärung erklärt, wie wir Ihre Daten verarbeiten.
-            </p>
-            <p>
-              Wir erfüllen vollständig die DSGVO (GDPR).
-            </p>
-          </>
-        ),
+        content: [
+          "AI-Productivity Coach verpflichtet sich zum Schutz Ihrer Privatsphäre und stellt sicher, dass Ihre personenbezogenen Daten sicher, transparent und rechtmäßig verarbeitet werden.",
+          "Diese Datenschutzerklärung erläutert, wie wir Ihre Daten erheben, verwenden, verarbeiten, speichern und schützen, wenn Sie unseren Dienst nutzen.",
+          "Wir erfüllen vollständig die DSGVO (EU) 2016/679 und alle anderen anwendbaren Datenschutzvorschriften.",
+        ],
+        infoBox: "Bei Fragen zur Verarbeitung Ihrer Daten stehen wir Ihnen jederzeit zur Verfügung.",
       },
-
-      {
+      sec2: {
         title: "2. Verantwortlicher",
-        content: (
-          <>
-            <p><strong>AI-Productivity Coach</strong></p>
-            <p>info@aiproductivitycoach.com</p>
-          </>
-        ),
+        intro: "Der für Ihre personenbezogenen Daten verantwortliche Verantwortliche ist:",
       },
-
-      {
-        title: "3. Erhobene Daten",
-        content: (
-          <ul className="list-disc pl-6">
-            <li>Name, E-Mail, Telefon, Firma</li>
-            <li>AI-Eingaben und Antworten</li>
-            <li>Geräte- und Browserdaten</li>
-            <li>Nutzungsanalysen</li>
-          </ul>
-        ),
+      sec3: {
+        title: "3. Erhobene personenbezogene Daten",
+        intro: "Wir erheben folgende Kategorien personenbezogener Daten:",
+        items: [
+          "Vollständiger Name, E-Mail-Adresse, Telefonnummer und Unternehmensname",
+          "KI-Eingaben und generierte Antworten",
+          "Gerätetyp, Browserversion, Betriebssystem und IP-Adresse",
+          "Nutzungsanalysen einschließlich Sitzungsdauer und Funktionsnutzung",
+          "Abrechnungs- und Zahlungsinformationen",
+          "Kommunikationsverlauf mit unserem Support-Team",
+        ],
+        infoBox: "Wir erheben nur Daten, die für die Bereitstellung und Verbesserung unseres Dienstes unbedingt erforderlich sind.",
       },
-
-      {
-        title: "4. Nutzung der Daten",
-        content: (
-          <ul className="list-disc pl-6">
-            <li>Bereitstellung des Dienstes</li>
-            <li>Verbesserung des Systems</li>
-            <li>Sicherheit</li>
-            <li>Rechtliche Verpflichtungen</li>
-          </ul>
-        ),
+      sec4: {
+        title: "4. Nutzung Ihrer Daten",
+        intro: "Wir verwenden Ihre personenbezogenen Daten für folgende Zwecke:",
+        items: [
+          "Erstellung und Verwaltung Ihres Kontos",
+          "Generierung personalisierter KI-Antworten",
+          "Zahlungsabwicklung und Abonnementverwaltung",
+          "Überwachung und Verbesserung der Systemleistung",
+          "Versand wichtiger Dienstbenachrichtigungen",
+          "Erfüllung gesetzlicher Verpflichtungen",
+          "Untersuchung und Lösung von Problemen",
+        ],
+        successBox: "Wir nutzen Ihre KI-Eingaben nicht zum Training unserer Modelle ohne Ihre ausdrückliche Einwilligung.",
       },
-
-      {
-        title: "5. Rechtsgrundlage",
-        content: (
-          <ul className="list-disc pl-6">
-            <li>Vertrag</li>
-            <li>Berechtigtes Interesse</li>
-            <li>Einwilligung</li>
-            <li>Gesetzliche Pflicht</li>
-          </ul>
-        ),
+      sec5: {
+        title: "5. Rechtsgrundlage (DSGVO)",
+        intro: "Gemäß DSGVO verarbeiten wir Ihre Daten auf folgenden Rechtsgrundlagen:",
+        items: [
+          "Vertrag (Art. 6(1)(b) DSGVO) — Verarbeitung zur Vertragserfüllung",
+          "Berechtigtes Interesse (Art. 6(1)(f) DSGVO) — Verbesserung des Dienstes und Sicherheit",
+          "Einwilligung (Art. 6(1)(a) DSGVO) — Bei ausdrücklicher Zustimmung",
+          "Gesetzliche Pflicht (Art. 6(1)(c) DSGVO) — Bei gesetzlicher Anforderung",
+        ],
       },
-
-      {
-        title: "6. Datenverarbeitung (DPA)",
-        content: (
-          <p>
-            Wir nutzen Firebase (Google Cloud). Alle Anbieter sind DSGVO-konform.
-          </p>
-        ),
+      sec6: {
+        title: "6. Datenverarbeitungsvertrag (DPA)",
+        intro: "Wir nutzen vertrauenswürdige Unterauftragsverarbeiter. Alle sind durch Verträge (DPAs) gebunden und DSGVO-konform:",
+        items: [
+          "Firebase / Google Cloud — Authentifizierung, Datenbank und Cloud-Hosting",
+          "Stripe — Sichere Zahlungsabwicklung",
+          "Anthropic / OpenAI — KI-Modellinferenz",
+          "Vercel — Anwendungshosting",
+          "Postmark — Transaktions-E-Mail-Zustellung",
+        ],
+        infoBox: "Alle Verarbeiter operieren unter strengen Datenschutzvereinbarungen.",
       },
-
-      {
-        title: "7. Speicherung",
-        content: (
-          <p>
-            Daten werden sicher gespeichert und nur so lange wie nötig aufbewahrt.
-          </p>
-        ),
+      sec7: {
+        title: "7. Datenspeicherung & Aufbewahrung",
+        intro: "Ihre Daten werden auf sicheren Servern im Europäischen Wirtschaftsraum (EWR) gespeichert. Spezifische Aufbewahrungsfristen:",
+        items: [
+          "Kontodaten: für die Dauer des Abonnements + 30 Tage nach Löschung",
+          "KI-Konversationsverlauf: standardmäßig 90 Tage",
+          "Abrechnungsunterlagen: 7 Jahre gemäß Steuerrecht",
+          "Sicherheitsprotokolle: 12 Monate",
+        ],
       },
-
-      {
-        title: "8. Weitergabe",
-        content: (
-          <p>
-            Wir verkaufen keine Daten. Weitergabe nur an vertrauenswürdige Partner oder Behörden.
-          </p>
-        ),
+      sec8: {
+        title: "8. Datenweitergabe",
+        intro: "Wir verkaufen Ihre Daten unter keinen Umständen. Weitergabe nur in folgenden Fällen:",
+        items: [
+          "An vertrauenswürdige Dienstleister (Abschnitt 6)",
+          "An Behörden bei gesetzlicher Verpflichtung",
+          "Bei Fusion oder Übernahme",
+          "Mit Ihrer ausdrücklichen Einwilligung",
+        ],
+        successBox: "Ihre Daten werden niemals an Werbetreibende oder Datenmakler verkauft.",
       },
-
-      {
-        title: "9. Ihre Rechte",
-        content: (
-          <ul className="list-disc pl-6">
-            <li>Zugriff</li>
-            <li>Berichtigung</li>
-            <li>Löschung</li>
-            <li>Datenübertragbarkeit</li>
-          </ul>
-        ),
+      sec9: {
+        title: "9. Ihre Rechte gemäß DSGVO",
+        intro: "Als betroffene Person haben Sie folgende Rechte:",
+        rights: [
+          { label: "Auskunftsrecht", desc: "Kopie Ihrer Daten anfordern" },
+          { label: "Berichtigungsrecht", desc: "Fehlerhafte Daten korrigieren" },
+          { label: "Löschungsrecht", desc: "Datenlöschung beantragen" },
+          { label: "Einschränkung", desc: "Verarbeitungseinschränkung" },
+          { label: "Datenübertragbarkeit", desc: "Daten exportieren" },
+          { label: "Widerspruchsrecht", desc: "Gegen bestimmte Verarbeitungen" },
+          { label: "Automatisierte Entscheidungen", desc: "Keine vollautomatisierten Entscheidungen" },
+          { label: "Beschwerderecht", desc: "Beschwerde bei Aufsichtsbehörde" },
+        ],
+        infoBox: "Um diese Rechte auszuüben, kontaktieren Sie uns bitte. Wir antworten innerhalb von 30 Tagen.",
       },
-
-      {
+      sec10: {
         title: "10. Recht auf Löschung",
-        content: (
-          <p>
-            Sie können Ihre Daten jederzeit löschen oder löschen lassen.
-          </p>
-        ),
+        content: [
+          "Sie können die Löschung Ihrer Daten jederzeit beantragen. Wir löschen Ihre Daten innerhalb von 30 Tagen.",
+          "Löschungsantrag stellen über:",
+        ],
+        items: [
+          "Über die Kontoeinstellungen unter \"Konto löschen\"",
+          "Per E-Mail an info@aiproductivitycoach.com",
+          "Über den In-App-Support-Chat",
+        ],
+        footer: "Nach der Löschung werden alle personenbezogenen Daten dauerhaft entfernt. Backups werden innerhalb von 90 Tagen bereinigt.",
       },
-
-      {
-        title: "11. Sicherheit",
-        content: (
-          <p>
-            Wir nutzen Verschlüsselung und sichere Authentifizierung.
-          </p>
-        ),
+      sec11: {
+        title: "11. Sicherheitsmaßnahmen",
+        intro: "Wir implementieren branchenübliche Sicherheitsmaßnahmen:",
+        items: [
+          "TLS/SSL-Verschlüsselung für alle übertragenen Daten",
+          "AES-256-Verschlüsselung für gespeicherte Daten",
+          "Mehrstufige Authentifizierung (MFA)",
+          "Kontinuierliches Sicherheitsmonitoring",
+          "Regelmäßige Sicherheitsaudits",
+          "Rollenbasierte Zugriffskontrollen",
+        ],
+        successBox: "Im unwahrscheinlichen Fall einer Datenpanne benachrichtigen wir Sie und die zuständige Aufsichtsbehörde innerhalb von 72 Stunden.",
       },
-
-      {
+      sec12: {
         title: "12. Kontakt",
-        content: (
-          <p>info@aiproductivitycoach.com</p>
-        ),
+        intro: "Wenn Sie Fragen, Bedenken oder Anfragen zu dieser Datenschutzerklärung haben, wenden Sie sich bitte an uns:",
+        infoBox: "Wir bemühen uns, alle datenschutzbezogenen Anfragen innerhalb von 2 Werktagen zu beantworten.",
       },
-    ],
+    },
   },
 };
+
+const rightsIcons = [Eye, Pencil, Trash2, PauseCircle, Package, Ban, Bot, Megaphone];
+
+export default function PrivacyPolicyPage() {
+  const [lang, setLang] = useState<Lang>("en");
+  const [activeSection, setActiveSection] = useState("sec1");
+  const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
+
+  // translations[lang] is always defined — both "en" and "de" keys exist above
+  const t = translations[lang];
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) setActiveSection(entry.target.id);
+        });
+      },
+      { rootMargin: "-20% 0px -70% 0px" }
+    );
+    Object.values(sectionRefs.current).forEach((ref) => {
+      if (ref) observer.observe(ref);
+    });
+    return () => observer.disconnect();
+  }, [lang]);
+
+  const scrollTo = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const sec = t.sections;
+
+  return (
+    <div style={{ background: "#f4f6f9", minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+        * { box-sizing: border-box; }
+
+        .hero {
+          background: linear-gradient(135deg, #3b0088 0%, #6a00c8 40%, #7c3aed 70%, #5b21b6 100%);
+          padding: 72px 24px 100px;
+          position: relative; overflow: hidden; text-align: center;
+        }
+        .hero::before {
+          content: ""; position: absolute; inset: 0;
+          background: radial-gradient(ellipse 700px 450px at 30% 40%, rgba(255,255,255,0.06) 0%, transparent 70%);
+          pointer-events: none;
+        }
+        .dots-grid {
+          position: absolute; inset: 0;
+          background-image: radial-gradient(circle, rgba(255,255,255,0.12) 1px, transparent 1px);
+          background-size: 30px 30px;
+          animation: driftGrid 20s linear infinite; pointer-events: none;
+        }
+        @keyframes driftGrid { 0% { background-position: 0 0; } 100% { background-position: 30px 30px; } }
+        .hero::after {
+          content: ""; position: absolute; bottom: -2px; left: 0; right: 0; height: 64px;
+          background: #f4f6f9; clip-path: ellipse(55% 100% at 50% 100%);
+        }
+        .hero-inner { position: relative; z-index: 1; max-width: 640px; margin: 0 auto; }
+        .hero-badge {
+          display: inline-flex; align-items: center; gap: 8px; padding: 6px 18px;
+          background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22);
+          border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+          text-transform: uppercase; color: rgba(255,255,255,0.9); margin-bottom: 20px;
+        }
+        .hero h1 {
+          font-size: clamp(32px, 5vw, 52px); font-weight: 800; color: #fff;
+          line-height: 1.1; letter-spacing: -0.03em; margin-bottom: 14px;
+        }
+        .hero h1 .hl { color: #c4b5fd; }
+        .hero-sub { font-size: 15px; color: rgba(255,255,255,0.68); line-height: 1.7; margin-bottom: 20px; }
+        .hero-date-pill {
+          display: inline-flex; align-items: center; gap: 8px; padding: 6px 18px;
+          background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.18);
+          border-radius: 999px; font-size: 13px; color: rgba(255,255,255,0.72); margin-bottom: 24px;
+        }
+        .lang-switcher { display: flex; justify-content: center; margin-top: 8px; }
+        .lang-track {
+          position: relative; display: flex; background: rgba(255,255,255,0.10);
+          backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.20);
+          border-radius: 999px; padding: 4px; width: 164px;
+        }
+        .lang-btn {
+          position: relative; z-index: 10; flex: 1; display: flex; align-items: center;
+          justify-content: center; gap: 6px; padding: 8px 0; font-size: 13px; font-weight: 600;
+          border: none; background: transparent; cursor: pointer; border-radius: 999px;
+          transition: color 0.2s; font-family: inherit;
+        }
+        .doc-layout {
+          max-width: 1060px; margin: 0 auto; padding: 56px 24px 96px;
+          display: grid; grid-template-columns: 252px 1fr; gap: 36px; align-items: start;
+        }
+        .toc {
+          position: sticky; top: 28px; background: #fff; border: 1.5px solid #e5e7eb;
+          border-radius: 20px; padding: 24px 20px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+        }
+        .toc-label {
+          font-size: 11px; font-weight: 800; text-transform: uppercase;
+          letter-spacing: 0.08em; color: #9ca3af; margin-bottom: 14px;
+        }
+        .toc ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 2px; }
+        .toc-link {
+          display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 12px;
+          font-size: 13px; font-weight: 500; color: #6b7280; cursor: pointer; border: none;
+          background: transparent; width: 100%; text-align: left;
+          transition: color 0.18s, background 0.18s; font-family: inherit;
+        }
+        .toc-link:hover { color: #7c3aed; background: rgba(124,58,237,0.07); }
+        .toc-link.active { color: #7c3aed; background: rgba(124,58,237,0.09); font-weight: 700; }
+        .doc-section {
+          background: #fff; border: 1.5px solid #e5e7eb; border-radius: 20px;
+          padding: 32px; margin-bottom: 16px; scroll-margin-top: 28px;
+          transition: border-color 0.22s, box-shadow 0.22s;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .doc-section:hover { border-color: rgba(124,58,237,0.28); box-shadow: 0 4px 20px rgba(124,58,237,0.06); }
+        .sec-header { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+        .sec-num {
+          width: 42px; height: 42px; border-radius: 12px; background: rgba(124,58,237,0.09);
+          color: #7c3aed; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .sec-header h2 { font-size: 18px; font-weight: 800; letter-spacing: -0.015em; color: #0d1117; margin: 0; }
+        .sec-body p { font-size: 15px; color: #4b5563; line-height: 1.8; margin-bottom: 10px; }
+        .sec-body p:last-child { margin-bottom: 0; }
+        .sec-body ul { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-direction: column; gap: 8px; }
+        .sec-body ul li { display: flex; align-items: flex-start; gap: 10px; font-size: 15px; color: #4b5563; line-height: 1.7; }
+        .sec-body ul li::before {
+          content: ""; width: 6px; height: 6px; border-radius: 50%;
+          background: #7c3aed; flex-shrink: 0; margin-top: 9px;
+        }
+        .info-box {
+          background: rgba(124,58,237,0.06); border: 1.5px solid rgba(124,58,237,0.15);
+          border-radius: 12px; padding: 14px 18px; display: flex; align-items: flex-start;
+          gap: 12px; margin-top: 16px;
+        }
+        .info-box p { font-size: 14px; color: #4b5563; margin: 0 !important; line-height: 1.7; }
+        .success-box {
+          background: rgba(16,185,129,0.07); border: 1.5px solid rgba(16,185,129,0.2);
+          border-radius: 12px; padding: 14px 18px; display: flex; align-items: flex-start;
+          gap: 12px; margin-top: 16px;
+        }
+        .success-box p { font-size: 14px; color: #4b5563; margin: 0 !important; line-height: 1.7; }
+        .rights-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+        .right-pill {
+          background: #f4f6f9; border: 1.5px solid #e5e7eb; border-radius: 12px;
+          padding: 14px 16px; display: flex; align-items: center; gap: 12px;
+          transition: border-color 0.18s, background 0.18s;
+        }
+        .right-pill:hover { border-color: rgba(124,58,237,0.3); background: rgba(124,58,237,0.04); }
+        .right-pill span { font-size: 14px; font-weight: 600; color: #374151; display: block; }
+        .right-pill p { font-size: 12px; color: #9ca3af; margin: 2px 0 0 !important; }
+        .contact-card {
+          background: linear-gradient(135deg, rgba(124,58,237,0.06), rgba(91,33,182,0.04));
+          border: 1.5px solid rgba(124,58,237,0.16); border-radius: 14px;
+          padding: 20px 24px; display: flex; align-items: center; justify-content: space-between;
+          flex-wrap: wrap; gap: 12px; margin-top: 12px;
+        }
+        .contact-card-left { display: flex; align-items: center; gap: 14px; }
+        .contact-avatar {
+          width: 46px; height: 46px;
+          background: linear-gradient(135deg, #7c3aed, #5b21b6);
+          border-radius: 12px; display: flex; align-items: center; justify-content: center;
+          color: white; flex-shrink: 0;
+        }
+        .contact-card strong { display: block; font-size: 14px; font-weight: 700; color: #0d1117; }
+        .contact-card a { font-size: 13px; color: #7c3aed; text-decoration: none; font-weight: 500; }
+        .contact-card a:hover { text-decoration: underline; }
+        .contact-btn {
+          display: inline-flex; align-items: center; gap: 8px; padding: 9px 20px;
+          background: #7c3aed; color: #fff; font-size: 13px; font-weight: 600; border-radius: 999px;
+          text-decoration: none; border: none; cursor: pointer; font-family: inherit;
+          transition: background 0.18s, transform 0.18s;
+        }
+        .contact-btn:hover { background: #5b21b6; transform: translateY(-1px); }
+        strong { color: #0d1117; }
+        @media (max-width: 900px) { .doc-layout { grid-template-columns: 1fr; } .toc { display: none; } }
+        @media (max-width: 640px) {
+          .rights-grid { grid-template-columns: 1fr; }
+          .doc-layout { padding: 40px 16px 60px; }
+          .doc-section { padding: 24px 20px; }
+        }
+      `}</style>
+
+      {/* ── HERO ── */}
+      <div className="hero">
+        <div className="dots-grid" />
+        <div className="hero-inner">
+          <div className="hero-badge">
+            <Shield size={13} />
+            {t.heroBadge}
+          </div>
+          <h1>
+            {lang === "en"
+              ? <> Privacy <span className="hl">Policy</span></>
+              : <>Datenschutz<span className="hl">erklärung</span></>
+            }
+          </h1>
+          <p className="hero-sub">{t.heroSub}</p>
+          <div className="hero-date-pill">
+            <Calendar size={13} />
+            {t.effective}
+          </div>
+
+          {/* Language Switcher */}
+          <div className="lang-switcher">
+            <div className="lang-track">
+              <motion.div
+                initial={false}
+                animate={{ x: lang === "en" ? 0 : "100%" }}
+                transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                style={{
+                  position: "absolute", top: 4, left: 4,
+                  width: "calc(50% - 4px)", height: "calc(100% - 8px)",
+                  background: "#fff", borderRadius: 999,
+                }}
+              />
+              {(["en", "de"] as Lang[]).map((l) => (
+                <button
+                  key={l}
+                  onClick={() => setLang(l)}
+                  className="lang-btn"
+                  style={{ color: lang === l ? "#0d1117" : "rgba(255,255,255,0.7)" }}
+                >
+                  <img
+                    src={`/${l === "en" ? "us" : "de"}.png`}
+                    alt={l.toUpperCase()}
+                    style={{ width: 16, height: 16, borderRadius: 3, objectFit: "cover" }}
+                    onError={(e) => { e.currentTarget.style.display = "none"; }}
+                  />
+                  {l.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── LAYOUT ── */}
+      <div className="doc-layout">
+
+        {/* TOC */}
+        <nav className="toc">
+          <div className="toc-label">Table of Contents</div>
+          <ul>
+            {tocItems.map(({ id, Icon, label }) => (
+              <li key={id}>
+                <button
+                  className={`toc-link${activeSection === id ? " active" : ""}`}
+                  onClick={() => scrollTo(id)}
+                >
+                  <Icon size={14} style={{ flexShrink: 0 }} />
+                  {label[lang]}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        {/* CONTENT */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={lang}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.25 }}
+          >
+            {/* 1 – Introduction */}
+            <div id="sec1" className="doc-section" ref={(el) => { sectionRefs.current["sec1"] = el; }}>
+              <div className="sec-header">
+                <div className="sec-num"><Shield size={20} /></div>
+                <h2>{sec.sec1.title}</h2>
+              </div>
+              <div className="sec-body">
+                {sec.sec1.content.map((p, i) => <p key={i}>{p}</p>)}
+                <div className="info-box">
+                  <Info size={16} style={{ color: "#7c3aed", flexShrink: 0, marginTop: 2 }} />
+                  <p>{sec.sec1.infoBox}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 2 – Data Controller */}
+            <div id="sec2" className="doc-section" ref={(el) => { sectionRefs.current["sec2"] = el; }}>
+              <div className="sec-header">
+                <div className="sec-num"><Building2 size={20} /></div>
+                <h2>{sec.sec2.title}</h2>
+              </div>
+              <div className="sec-body">
+                <p>{sec.sec2.intro}</p>
+                <div className="contact-card">
+                  <div className="contact-card-left">
+                    <div className="contact-avatar"><Bot size={22} /></div>
+                    <div>
+                      <strong>AI-Productivity Coach</strong>
+                      <a href="mailto:info@aiproductivitycoach.com">info@aiproductivitycoach.com</a>
+                    </div>
+                  </div>
+                  <a href="mailto:info@aiproductivitycoach.com" className="contact-btn">
+                    <Mail size={14} />{t.sendEmail}
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* 3 – Data We Collect */}
+            <div id="sec3" className="doc-section" ref={(el) => { sectionRefs.current["sec3"] = el; }}>
+              <div className="sec-header">
+                <div className="sec-num"><ClipboardList size={20} /></div>
+                <h2>{sec.sec3.title}</h2>
+              </div>
+              <div className="sec-body">
+                <p>{sec.sec3.intro}</p>
+                <ul>{sec.sec3.items.map((item, i) => <li key={i}>{item}</li>)}</ul>
+                <div className="info-box">
+                  <Info size={16} style={{ color: "#7c3aed", flexShrink: 0, marginTop: 2 }} />
+                  <p>{sec.sec3.infoBox}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 4 – How We Use Data */}
+            <div id="sec4" className="doc-section" ref={(el) => { sectionRefs.current["sec4"] = el; }}>
+              <div className="sec-header">
+                <div className="sec-num"><Settings size={20} /></div>
+                <h2>{sec.sec4.title}</h2>
+              </div>
+              <div className="sec-body">
+                <p>{sec.sec4.intro}</p>
+                <ul>{sec.sec4.items.map((item, i) => <li key={i}>{item}</li>)}</ul>
+                <div className="success-box">
+                  <CheckCircle2 size={16} style={{ color: "#059669", flexShrink: 0, marginTop: 2 }} />
+                  <p>{sec.sec4.successBox}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 5 – Legal Basis */}
+            <div id="sec5" className="doc-section" ref={(el) => { sectionRefs.current["sec5"] = el; }}>
+              <div className="sec-header">
+                <div className="sec-num"><Scale size={20} /></div>
+                <h2>{sec.sec5.title}</h2>
+              </div>
+              <div className="sec-body">
+                <p>{sec.sec5.intro}</p>
+                <ul>{sec.sec5.items.map((item, i) => <li key={i}>{item}</li>)}</ul>
+              </div>
+            </div>
+
+            {/* 6 – Data Processors */}
+            <div id="sec6" className="doc-section" ref={(el) => { sectionRefs.current["sec6"] = el; }}>
+              <div className="sec-header">
+                <div className="sec-num"><FileText size={20} /></div>
+                <h2>{sec.sec6.title}</h2>
+              </div>
+              <div className="sec-body">
+                <p>{sec.sec6.intro}</p>
+                <ul>{sec.sec6.items.map((item, i) => <li key={i}>{item}</li>)}</ul>
+                <div className="info-box">
+                  <Lock size={16} style={{ color: "#7c3aed", flexShrink: 0, marginTop: 2 }} />
+                  <p>{sec.sec6.infoBox}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 7 – Storage & Retention */}
+            <div id="sec7" className="doc-section" ref={(el) => { sectionRefs.current["sec7"] = el; }}>
+              <div className="sec-header">
+                <div className="sec-num"><Database size={20} /></div>
+                <h2>{sec.sec7.title}</h2>
+              </div>
+              <div className="sec-body">
+                <p>{sec.sec7.intro}</p>
+                <ul>{sec.sec7.items.map((item, i) => <li key={i}>{item}</li>)}</ul>
+              </div>
+            </div>
+
+            {/* 8 – Data Sharing */}
+            <div id="sec8" className="doc-section" ref={(el) => { sectionRefs.current["sec8"] = el; }}>
+              <div className="sec-header">
+                <div className="sec-num"><Link2 size={20} /></div>
+                <h2>{sec.sec8.title}</h2>
+              </div>
+              <div className="sec-body">
+                <p>{sec.sec8.intro}</p>
+                <ul>{sec.sec8.items.map((item, i) => <li key={i}>{item}</li>)}</ul>
+                <div className="success-box">
+                  <CheckCircle2 size={16} style={{ color: "#059669", flexShrink: 0, marginTop: 2 }} />
+                  <p>{sec.sec8.successBox}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 9 – Your Rights */}
+            <div id="sec9" className="doc-section" ref={(el) => { sectionRefs.current["sec9"] = el; }}>
+              <div className="sec-header">
+                <div className="sec-num"><UserCheck size={20} /></div>
+                <h2>{sec.sec9.title}</h2>
+              </div>
+              <div className="sec-body">
+                <p>{sec.sec9.intro}</p>
+                <div className="rights-grid">
+                  {sec.sec9.rights.map((right, i) => {
+                    const RightIcon = rightsIcons[i];
+                    return (
+                      <div key={i} className="right-pill">
+                        <RightIcon size={18} style={{ color: "#7c3aed", flexShrink: 0 }} />
+                        <div>
+                          <span>{right.label}</span>
+                          <p>{right.desc}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="info-box" style={{ marginTop: 16 }}>
+                  <Info size={16} style={{ color: "#7c3aed", flexShrink: 0, marginTop: 2 }} />
+                  <p>{sec.sec9.infoBox}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 10 – Right to Erasure */}
+            <div id="sec10" className="doc-section" ref={(el) => { sectionRefs.current["sec10"] = el; }}>
+              <div className="sec-header">
+                <div className="sec-num"><Trash2 size={20} /></div>
+                <h2>{sec.sec10.title}</h2>
+              </div>
+              <div className="sec-body">
+                {sec.sec10.content.map((p, i) => <p key={i}>{p}</p>)}
+                <ul>{sec.sec10.items.map((item, i) => <li key={i}>{item}</li>)}</ul>
+                <p style={{ marginTop: 12 }}>{sec.sec10.footer}</p>
+              </div>
+            </div>
+
+            {/* 11 – Security */}
+            <div id="sec11" className="doc-section" ref={(el) => { sectionRefs.current["sec11"] = el; }}>
+              <div className="sec-header">
+                <div className="sec-num"><Lock size={20} /></div>
+                <h2>{sec.sec11.title}</h2>
+              </div>
+              <div className="sec-body">
+                <p>{sec.sec11.intro}</p>
+                <ul>{sec.sec11.items.map((item, i) => <li key={i}>{item}</li>)}</ul>
+                <div className="success-box">
+                  <CheckCircle2 size={16} style={{ color: "#059669", flexShrink: 0, marginTop: 2 }} />
+                  <p>{sec.sec11.successBox}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 12 – Contact */}
+            <div id="sec12" className="doc-section" ref={(el) => { sectionRefs.current["sec12"] = el; }}>
+              <div className="sec-header">
+                <div className="sec-num"><Mail size={20} /></div>
+                <h2>{sec.sec12.title}</h2>
+              </div>
+              <div className="sec-body">
+                <p>{sec.sec12.intro}</p>
+                <div className="contact-card">
+                  <div className="contact-card-left">
+                    <div className="contact-avatar"><Bot size={22} /></div>
+                    <div>
+                      <strong>AI-Productivity Coach — Privacy Team</strong>
+                      <a href="mailto:info@aiproductivitycoach.com">info@aiproductivitycoach.com</a>
+                    </div>
+                  </div>
+                  <a href="mailto:info@aiproductivitycoach.com" className="contact-btn">
+                    <Mail size={14} />{t.contactUs}
+                  </a>
+                </div>
+                <div className="info-box" style={{ marginTop: 16 }}>
+                  <Clock size={16} style={{ color: "#7c3aed", flexShrink: 0, marginTop: 2 }} />
+                  <p>{sec.sec12.infoBox}</p>
+                </div>
+              </div>
+            </div>
+
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}

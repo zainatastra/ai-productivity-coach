@@ -68,8 +68,10 @@ next-env.d.ts
 # publish output
 publish/
 
-# 🔥 LOCAL CONFIG (VERY IMPORTANT)
+# 🔥 LOCAL CONFIG — contains real API keys, never commit
 appsettings.Development.json
+appsettings.Production.json
+appsettings.Staging.json
 
 
 # ==========================================

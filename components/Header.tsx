@@ -17,77 +17,210 @@ export default function Header({
 }: HeaderProps) {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const { language } = useLanguage(); // ✅ USE language (not t)
+  const { language } = useLanguage();
 
   return (
-    <div className="relative w-full flex items-center justify-between px-4 md:px-8 py-1 md:py-1.3 bg-[#f9f9f9] border-b border-gray-200">
+    <>
+      <style>{`
+        .hdr-root {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0 16px;
+          height: 52px;
+          background: #fafafa;
+          border-bottom: 1px solid #ebebeb;
+          box-shadow: 0 1px 8px rgba(0, 0, 0, 0.04);
+          position: relative;
+          flex-shrink: 0;
+          gap: 8px;
+          box-sizing: border-box;
+        }
 
-      {/* LEFT SECTION */}
-      <div className="flex items-center gap-3">
+        /* LEFT */
+        .hdr-left {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex: 1;
+          min-width: 0;
+          overflow: hidden;
+        }
 
-        {/* HAMBURGER */}
-        {!loading && user && (
-          <button
-            onClick={() => setMobileSidebarOpen?.(true)}
-            className="md:hidden"
-          >
-            <Menu size={20} />
-          </button>
-        )}
+        .hdr-hamburger {
+          width: 32px;
+          height: 32px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          border: 1px solid #e5e7eb;
+          background: #fff;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+          cursor: pointer;
+          color: #374151;
+          flex-shrink: 0;
+          transition: background 0.15s;
+        }
+        .hdr-hamburger:hover { background: #f3f4f6; }
 
-        {/* TITLE */}
-        <h1
-          onClick={() => router.push("/")}
-          className="
-            !text-[13px] sm:!text-sm md:!text-lg
-            font-semibold
-            text-gray-900
-            cursor-pointer
-            tracking-tight
-            whitespace-nowrap
-            md:absolute md:left-1/2 md:-translate-x-1/2
-          "
-        >
-          {language === "de"
-            ? "Hey Eric! Mach mich produktiv!"
-            : "Ey Eric! Make me Productive!"}
-        </h1>
-      </div>
+        /* CENTER TITLE */
+        .hdr-title {
+          font-size: 11px;
+          font-weight: 600;
+          color: #111;
+          cursor: pointer;
+          white-space: nowrap;
+          letter-spacing: -0.01em;
+          transition: color 0.15s;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          min-width: 0;
+          flex-shrink: 1;
+        }
+        .hdr-title:hover { color: #374151; }
 
-      {/* RIGHT SECTION */}
-      <div className="flex items-center gap-2">
+        @media (min-width: 768px) {
+          .hdr-title {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 15px;
+            flex-shrink: 0;
+          }
+        }
 
-        <LanguageSwitcher />
+        /* RIGHT */
+        .hdr-right {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          flex-shrink: 0;
+        }
 
-        {/* AUTH BUTTONS */}
-        {!loading && !user && (
-          <>
+        /* SHARED BUTTON BASE — identical dimensions for all buttons */
+        .hdr-btn {
+          height: 30px;
+          min-width: 62px;
+          padding: 0 10px;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 600;
+          cursor: pointer;
+          white-space: nowrap;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          transition: background 0.15s, box-shadow 0.15s;
+          line-height: 1;
+          font-family: inherit;
+          box-sizing: border-box;
+        }
+
+        @media (min-width: 768px) {
+          .hdr-btn {
+            height: 36px;
+            min-width: 76px;
+            padding: 0 18px;
+            font-size: 13px;
+          }
+        }
+
+        /* LOGIN */
+        .hdr-btn-outline {
+          border: 1px solid #e5e7eb;
+          background: #fff;
+          color: #374151;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        }
+        .hdr-btn-outline:hover {
+          background: #f9f9f9;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.09);
+        }
+
+        /* SIGN UP */
+        .hdr-btn-solid {
+          border: none;
+          background: #111;
+          color: #fff;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+        }
+        .hdr-btn-solid:hover {
+          background: #222;
+          box-shadow: 0 3px 10px rgba(0,0,0,0.22);
+        }
+
+        /* CLEAR */
+        .hdr-btn-clear {
+          border: 1px solid #fecaca;
+          background: #fff;
+          color: #dc2626;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .hdr-btn-clear:hover {
+          background: #fef2f2;
+          box-shadow: 0 2px 6px rgba(220,38,38,0.10);
+        }
+      `}</style>
+
+      <header className="hdr-root">
+
+        {/* LEFT — hamburger + title */}
+        <div className="hdr-left">
+          {!loading && user && (
             <button
-              onClick={() => router.push("/auth?mode=login")}
-              className="h-9 px-5 rounded-full border border-gray-300 text-sm font-medium bg-white text-gray-800 hover:bg-gray-100 hover:shadow-sm transition"
+              className="hdr-hamburger md:hidden"
+              onClick={() => setMobileSidebarOpen?.(true)}
+              aria-label="Open menu"
             >
-              {language === "de" ? "Anmelden" : "Login"}
+              <Menu size={16} />
             </button>
+          )}
 
-            <button
-              onClick={() => router.push("/auth?mode=signup")}
-              className="h-9 px-5 rounded-full bg-black text-white text-sm font-medium hover:bg-gray-900 transition shadow-sm"
-            >
-              {language === "de" ? "Registrieren" : "Sign Up"}
-            </button>
-          </>
-        )}
-
-        {/* CLEAR BUTTON */}
-        {!loading && user && (
-          <button
-            onClick={() => setShowClearModal?.(true)}
-            className="h-9 px-5 rounded-full border border-gray-300 text-sm font-medium bg-white text-red-600 hover:bg-red-50 hover:shadow-sm transition"
+          <span
+            className="hdr-title"
+            onClick={() => router.push("/")}
           >
-            {language === "de" ? "Löschen" : "Clear"}
-          </button>
-        )}
-      </div>
-    </div>
+            {language === "de"
+              ? "Hey Eric! Mach mich produktiv!"
+              : "Ey Eric! Make me Productive!"}
+          </span>
+        </div>
+
+        {/* RIGHT — language + auth buttons */}
+        <div className="hdr-right">
+          <LanguageSwitcher />
+
+          {!loading && !user && (
+            <>
+              <button
+                className="hdr-btn hdr-btn-outline"
+                onClick={() => router.push("/auth?mode=login")}
+              >
+                {language === "de" ? "Anmelden" : "Login"}
+              </button>
+
+              <button
+                className="hdr-btn hdr-btn-solid"
+                onClick={() => router.push("/auth?mode=signup")}
+              >
+                {language === "de" ? "Registrieren" : "Sign Up"}
+              </button>
+            </>
+          )}
+
+          {!loading && user && (
+            <button
+              className="hdr-btn hdr-btn-clear"
+              onClick={() => setShowClearModal?.(true)}
+            >
+              {language === "de" ? "Löschen" : "Clear"}
+            </button>
+          )}
+        </div>
+
+      </header>
+    </>
   );
 }

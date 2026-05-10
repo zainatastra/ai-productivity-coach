@@ -29,7 +29,7 @@ export default function Home() {
 });
 
 const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-
+const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
 const [isHydrated, setIsHydrated] = useState(false);
 
 /* ================= RESTORE RESPONSE (LOAD + LOGIN) ================= */
@@ -134,6 +134,7 @@ if (!isHydrated) return null;
                 industryData={industryData}
                 descriptionData={descriptionData}
                 response={response}
+                refreshKey={sidebarRefreshKey}
               />
             </motion.div>
           </>
@@ -149,6 +150,7 @@ if (!isHydrated) return null;
       industryData={industryData}
       descriptionData={descriptionData}
       response={response}
+      refreshKey={sidebarRefreshKey}
     />
   </div>
 )}
@@ -184,6 +186,7 @@ if (!isHydrated) return null;
               setShowAuthModal={setShowAuthModal}
               language={language}
               isHydrated={isHydrated}
+              onConversationSaved={() => setSidebarRefreshKey(k => k + 1)}
             />
 
           </div>

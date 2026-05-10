@@ -26,50 +26,51 @@ namespace AiProductivityCoach.Api.Controllers
         public async Task<IActionResult> SendOtp([FromBody] EmailRequest request)
         {
             if (string.IsNullOrEmpty(request.Email))
-                return BadRequest("Email is required");
+                return BadRequest("Email is required.");
 
             var email = request.Email.ToLower().Trim();
 
             // ================= RATE LIMIT (5 PER HOUR) =================
-            var attemptsRef = _firestore.Collection("otp_attempts").Document(email);
+            var attemptsRef      = _firestore.Collection("otp_attempts").Document(email);
             var attemptsSnapshot = await attemptsRef.GetSnapshotAsync();
 
-            int count = 0;
+            int count            = 0;
             DateTime windowStart = DateTime.UtcNow;
 
             if (attemptsSnapshot.Exists)
             {
-                count = attemptsSnapshot.GetValue<int>("count");
+                count       = attemptsSnapshot.GetValue<int>("count");
                 windowStart = attemptsSnapshot.GetValue<Timestamp>("windowStart").ToDateTime();
 
+                // reset window after 1 hour
                 if ((DateTime.UtcNow - windowStart).TotalHours >= 1)
                 {
-                    count = 0;
+                    count       = 0;
                     windowStart = DateTime.UtcNow;
                 }
             }
 
             if (count >= 5)
             {
-                return StatusCode(429, "OTP Resend Limit Exhausted, Please try again after 60 minutes");
+                // ✅ Clear 429 message the frontend can detect
+                return StatusCode(429, "OTP limit exhausted. Please wait 60 minutes before requesting a new code.");
             }
 
             await attemptsRef.SetAsync(new
             {
-                count = count + 1,
-                windowStart = windowStart
+                count       = count + 1,
+                windowStart = windowStart,
             });
 
             // ================= GENERATE OTP =================
-            var otp = new Random().Next(100000, 999999).ToString();
-
+            var otp    = new Random().Next(100000, 999999).ToString();
             var otpRef = _firestore.Collection("email_otps").Document(email);
 
             await otpRef.SetAsync(new
             {
-                email = email,
-                code = otp,
-                expiresAt = Timestamp.FromDateTime(DateTime.UtcNow.AddMinutes(5))
+                email     = email,
+                code      = otp,
+                expiresAt = Timestamp.FromDateTime(DateTime.UtcNow.AddMinutes(5)),
             });
 
             // ================= SEND EMAIL =================
@@ -78,64 +79,76 @@ namespace AiProductivityCoach.Api.Controllers
             if (string.IsNullOrEmpty(apiKey))
             {
                 Console.WriteLine("❌ RESEND API KEY MISSING");
-                return StatusCode(500, "Resend API key not configured");
+                return StatusCode(500, "Email service is not configured. Please contact support.");
             }
 
             using var http = new HttpClient();
             http.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
 
-var emailHtml = $@"
+            var emailHtml = $@"
 <div style='font-family: Arial, sans-serif; background-color: #f9fafb; padding: 40px 0;'>
-  <div style='max-width: 480px; margin: auto; background: #ffffff; border-radius: 12px; padding: 32px; border: 1px solid #e5e7eb;'>
-
-    <h2 style='text-align: center; margin-bottom: 12px;'>AI Productivity Coach</h2>
+  <div style='max-width: 480px; margin: auto; background: #ffffff; border-radius: 16px; padding: 40px 32px; border: 1px solid #e5e7eb;'>
 
     <!-- LOGO -->
-    <div style='text-align: center; margin-bottom: 12px;'>
-      <img 
-        src='https://astrasoftdigital.com/wp-content/uploads/2026/03/logo-scaled.png' 
-        alt='Logo' 
-        style='height: 40px; object-fit: contain;' 
+    <div style='text-align: center; margin-bottom: 24px;'>
+      <img
+        src='https://ai-productivity-coach-zeta.vercel.app/logo.png'
+        alt='AI-Productivity Coach'
+        style='height: 48px; object-fit: contain;'
       />
     </div>
 
-    <p style='text-align: center; color: #6b7280; font-size: 14px; margin-bottom: 24px;'>
-      Verify your email address
+    <hr style='margin: 0 0 28px; border: none; border-top: 1px solid #f0f0f0;' />
+
+    <p style='text-align: center; color: #6b7280; font-size: 14px; margin-bottom: 8px;'>
+      Your verification code
     </p>
 
-    <div style='text-align: center; margin: 30px 0;'>
-      <div style='display: inline-block; font-size: 32px; font-weight: bold; letter-spacing: 6px; padding: 16px 24px; border-radius: 10px; background: #f3f4f6;'>
+    <p style='text-align: center; color: #374151; font-size: 13px; margin-bottom: 28px;'>
+      Use the code below to verify your email address. It expires in <strong>5 minutes</strong>.
+    </p>
+
+    <!-- OTP CODE -->
+    <div style='text-align: center; margin: 0 0 28px;'>
+      <div style='
+        display: inline-block;
+        font-size: 36px;
+        font-weight: 800;
+        letter-spacing: 10px;
+        padding: 18px 28px;
+        border-radius: 14px;
+        background: #f4f3ff;
+        color: #3b1fa8;
+        border: 1.5px solid #ddd6fe;
+        font-family: monospace;
+      '>
         {otp}
       </div>
     </div>
 
-    <p style='text-align: center; font-size: 14px; color: #374151;'>
-      This code will expire in <strong>5 minutes</strong>.
+    <p style='text-align: center; font-size: 13px; color: #6b7280; margin-bottom: 28px;'>
+      If you did not request this code, you can safely ignore this email.
     </p>
 
-    <hr style='margin: 24px 0; border: none; border-top: 1px solid #e5e7eb;' />
+    <hr style='margin: 0 0 20px; border: none; border-top: 1px solid #f0f0f0;' />
 
-    <p style='font-size: 12px; color: #9ca3af; text-align: center;'>
-      If you didn’t request this, you can safely ignore this email.
+    <p style='font-size: 11px; color: #9ca3af; text-align: center; margin: 0;'>
+      © {DateTime.UtcNow.Year} AI-Productivity Coach · All rights reserved
     </p>
 
   </div>
-
-  <p style='text-align: center; font-size: 12px; color: #9ca3af; margin-top: 20px;'>
-    © {DateTime.UtcNow.Year} AI Productivity Coach
-  </p>
 </div>
 ";
 
             var emailData = new
             {
-                from = "AI Productivity Coach <auth@astrasoftdigital.com>", // 🔥 improved sender
-                to = new[] { email },
-                subject = "Your AI Productivity Coach verification code",
-                html = emailHtml
+                from    = "AI-Productivity Coach <auth@astrasoftdigital.com>",
+                to      = new[] { email },
+                subject = "Your AI-Productivity Coach verification code",
+                html    = emailHtml,
             };
 
-            var response = await http.PostAsJsonAsync("https://api.resend.com/emails", emailData);
+            var response     = await http.PostAsJsonAsync("https://api.resend.com/emails", emailData);
             var responseBody = await response.Content.ReadAsStringAsync();
 
             Console.WriteLine("====== RESEND RESPONSE ======");
@@ -143,11 +156,11 @@ var emailHtml = $@"
 
             if (!response.IsSuccessStatusCode)
             {
-                Console.WriteLine("❌ EMAIL FAILED");
-                return StatusCode(500, responseBody);
+                Console.WriteLine("❌ EMAIL SEND FAILED");
+                return StatusCode(500, "Failed to send verification email. Please try again.");
             }
 
-            return Ok(new { message = "OTP sent" });
+            return Ok(new { message = "Verification code sent." });
         }
 
         // ================= VERIFY OTP =================
@@ -155,39 +168,43 @@ var emailHtml = $@"
         public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequest request)
         {
             if (string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Code))
-                return BadRequest("Email and code required");
+                return BadRequest("Email and code are required.");
 
-            var email = request.Email.ToLower().Trim();
-
+            var email  = request.Email.ToLower().Trim();
             var otpRef = _firestore.Collection("email_otps").Document(email);
+
             var snapshot = await otpRef.GetSnapshotAsync();
 
             if (!snapshot.Exists)
-                return BadRequest("OTP not found");
+                return BadRequest("No verification code found. Please request a new one.");
 
             var storedCode = snapshot.GetValue<string>("code");
-            var expiresAt = snapshot.GetValue<Timestamp>("expiresAt").ToDateTime();
+            var expiresAt  = snapshot.GetValue<Timestamp>("expiresAt").ToDateTime();
 
             if (DateTime.UtcNow > expiresAt)
-                return BadRequest("OTP expired");
+            {
+                await otpRef.DeleteAsync();
+                return BadRequest("OTP expired. Please request a new code.");
+            }
 
             if (storedCode != request.Code)
-                return BadRequest("Invalid OTP");
+                return BadRequest("Invalid OTP. Please check the code and try again.");
 
+            // ✅ OTP verified — delete it so it can't be reused
             await otpRef.DeleteAsync();
 
-            return Ok(new { message = "OTP verified" });
+            return Ok(new { message = "Email verified successfully." });
         }
     }
 
     public class EmailRequest
     {
-        public string Email { get; set; }
+        public string Email { get; set; } = string.Empty;
     }
 
     public class VerifyOtpRequest
     {
-        public string Email { get; set; }
-        public string Code { get; set; }
+        public string Email { get; set; } = string.Empty;
+        public string Code  { get; set; } = string.Empty;
     }
 }
