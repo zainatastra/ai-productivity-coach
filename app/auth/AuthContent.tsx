@@ -1,63 +1,91 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
+
 import {
   getAuth,
   signInWithEmailAndPassword,
   updateProfile,
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
 } from "firebase/auth";
+
 import { app } from "@/services/firebase";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 import Image from "next/image";
+
 import ConfirmModal from "@/components/ConfirmModal";
-
-import PhoneInput from "@/components/PhoneInput";
-
-import { createUserWithEmailAndPassword } from "firebase/auth";
-
 import FloatingInput from "@/components/FloatingInput";
 
 import { API_BASE_URL } from "@/services/api";
 
-import { onAuthStateChanged } from "firebase/auth";
+// ✅ FIX HYDRATION ERROR
+const PhoneInput = dynamic(
+  () => import("@/components/PhoneInput"),
+  {
+    ssr: false,
+  }
+);
 
 export default function AuthContent() {
   const auth = getAuth(app);
+
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const initialMode =
-    searchParams.get("mode") === "signup" ? "signup" : "login";
+    searchParams.get("mode") === "signup"
+      ? "signup"
+      : "login";
 
-  const [mode, setMode] = useState<"login" | "signup">(initialMode);
-  const [showPassword, setShowPassword] = useState(false);
+  const [mode, setMode] =
+    useState<"login" | "signup">(initialMode);
+
+  const [showPassword, setShowPassword] =
+    useState(false);
 
   const [name, setName] = useState("");
   const [surname, setSurname] = useState("");
   const [company, setCompany] = useState("");
-  
-  const [termsAccepted, setTermsAccepted] = useState(false);
-  const [newsletter, setNewsletter] = useState(false);
-  
+
+  const [termsAccepted, setTermsAccepted] =
+    useState(false);
+
+  const [newsletter, setNewsletter] =
+    useState(false);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  const [fieldError, setFieldError] = useState("");
-  const [topError, setTopError] = useState("");
+  const [loading, setLoading] =
+    useState(false);
 
-  const [lang, setLang] = useState<"en" | "de">("en");
+  const [fieldError, setFieldError] =
+    useState("");
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalMessage, setModalMessage] = useState("");
+  const [topError, setTopError] =
+    useState("");
+
+  const [lang, setLang] =
+    useState<"en" | "de">("en");
+
+  const [modalOpen, setModalOpen] =
+    useState(false);
+
+  const [modalMessage, setModalMessage] =
+    useState("");
 
   const [phone, setPhone] = useState("");
 
   useEffect(() => {
     const urlMode =
-      searchParams.get("mode") === "signup" ? "signup" : "login";
+      searchParams.get("mode") === "signup"
+        ? "signup"
+        : "login";
+
     setMode(urlMode);
   }, [searchParams]);
 
@@ -66,65 +94,88 @@ export default function AuthContent() {
     setModalOpen(true);
   };
 
-useEffect(() => {
-  const unsubscribe = onAuthStateChanged(auth, (user) => {
-    if (!user) return;
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (user) => {
+        if (!user) return;
 
-    // prevent redirect during verification flow
-    if (typeof window !== "undefined") {
-      const pendingVerification = sessionStorage.getItem("pendingVerification");
+        // prevent redirect during verification flow
+        if (typeof window !== "undefined") {
+          const pendingVerification =
+            sessionStorage.getItem(
+              "pendingVerification"
+            );
 
-      if (!pendingVerification) {
-        router.replace("/");
+          if (!pendingVerification) {
+            router.replace("/");
+          }
+        }
       }
-    }
-  });
+    );
 
-  return () => unsubscribe();
-}, [auth, router]);
+    return () => unsubscribe();
+  }, [auth, router]);
 
   /* ================= LOGIN ================= */
-const handleLogin = async () => {
-  setFieldError("");
-  setTopError("");
+  const handleLogin = async () => {
+    setFieldError("");
+    setTopError("");
 
-  if (!email || !password) {
-    openModal("Please fill in both Email and Password.");
-    return;
-  }
-
-  try {
-    setLoading(true);
-
-    const result = await signInWithEmailAndPassword(auth, email, password);
-
-    const token = await result.user.getIdToken(true);
-
-await fetch(`${API_BASE_URL}/api/User/sync`, {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json",  // ✅ added
-  },
-  body: JSON.stringify({
-  name,
-  surname,
-  company,
-  telephone: phone,
-}),// ✅ added
-});
-
-    router.replace("/");
-  } catch (error: any) {
-    if (error.code === "auth/user-not-found") {
-      setFieldError("No account found with this email. Please sign up.");
-    } else {
-      setTopError("Invalid Credential, Please try again");
+    if (!email || !password) {
+      openModal(
+        "Please fill in both Email and Password."
+      );
+      return;
     }
-  } finally {
-    setLoading(false);
-  }
-};
+
+    try {
+      setLoading(true);
+
+      const result =
+        await signInWithEmailAndPassword(
+          auth,
+          email,
+          password
+        );
+
+      const token =
+        await result.user.getIdToken(true);
+
+      await fetch(
+        `${API_BASE_URL}/api/User/sync`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name,
+            surname,
+            company,
+            telephone: phone,
+          }),
+        }
+      );
+
+      router.replace("/");
+    } catch (error: any) {
+      if (
+        error.code === "auth/user-not-found"
+      ) {
+        setFieldError(
+          "No account found with this email. Please sign up."
+        );
+      } else {
+        setTopError(
+          "Invalid Credential, Please try again"
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   /* ================= SIGNUP ================= */
 
@@ -336,89 +387,105 @@ return (
 
         <AnimatePresence mode="wait">
 
-          {/* ================= LOGIN ================= */}
-          {mode === "login" ? (
-            <motion.div
-              key="login"
-              initial={{ opacity: 0, x: -40 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 40 }}
-              transition={{ duration: 0.35 }}
-            >
+{/* ================= LOGIN ================= */}
+{mode === "login" ? (
+  <motion.div
+    key="login"
+    initial={{ opacity: 0, x: -40 }}
+    animate={{ opacity: 1, x: 0 }}
+    exit={{ opacity: 0, x: 40 }}
+    transition={{ duration: 0.35 }}
+  >
 
-              <FloatingInput
-                label={t.email}
-                value={email}
-                onChange={setEmail}
-                type="email"
-                error={!!fieldError}
-              />
+    <FloatingInput
+      label={t.email}
+      value={email}
+      onChange={setEmail}
+      type="email"
+      error={!!fieldError}
+      autoFocus
+    />
 
-              <div className="relative mb-4">
-                <FloatingInput
-                  label={t.password}
-                  value={password}
-                  onChange={setPassword}
-                  type={showPassword ? "text" : "password"}
-                />
+    <div className="relative mb-4">
+      <FloatingInput
+        label={t.password}
+        value={password}
+        onChange={setPassword}
+        type={showPassword ? "text" : "password"}
+      />
 
-                <div
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-5 top-1/2 -translate-y-1/2 cursor-pointer text-gray-600"
-                >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </div>
-              </div>
+      <div
+        onClick={() => setShowPassword(!showPassword)}
+        className="absolute right-5 top-1/2 -translate-y-1/2 cursor-pointer text-gray-600"
+      >
+        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+      </div>
+    </div>
 
-              <div
-                onClick={() => router.push("/forgot-password")}
-                className="text-sm text-black mb-6 cursor-pointer"
-              >
-                {t.forgot}
-              </div>
+    <div
+      onClick={() => router.push("/forgot-password")}
+      className="text-sm text-black mb-6 cursor-pointer"
+    >
+      {t.forgot}
+    </div>
 
-              <button
-                onClick={handleLogin}
-                disabled={loading}
-                className="w-full py-3 bg-black text-white rounded-full text-sm font-medium"
-              >
-                {loading ? t.loggingIn : t.login}
-              </button>
+    <button
+      onClick={handleLogin}
+      disabled={loading}
+      className="w-full py-3 bg-black text-white rounded-full text-sm font-medium"
+    >
+      {loading ? t.loggingIn : t.login}
+    </button>
 
-            </motion.div>
-          ) : (
+  </motion.div>
+) : (
 
-          /* ================= SIGNUP ================= */
-          <motion.div
-            key="signup"
-            initial={{ opacity: 0, x: 40 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -40 }}
-            transition={{ duration: 0.35 }}
-          >
+  /* ================= SIGNUP ================= */
+  <motion.div
+    key="signup"
+    initial={{ opacity: 0, x: 40 }}
+    animate={{ opacity: 1, x: 0 }}
+    exit={{ opacity: 0, x: -40 }}
+    transition={{ duration: 0.35 }}
+  >
 
-            <FloatingInput label={t.name} value={name} onChange={setName} />
-            <FloatingInput label={t.surname} value={surname} onChange={setSurname} />
-            <FloatingInput label={t.company} value={company} onChange={setCompany} />
+    <FloatingInput
+      label={t.name}
+      value={name}
+      onChange={setName}
+      autoFocus
+    />
 
-            <div className="mb-4">
-              <PhoneInput value={phone} onChange={setPhone} />
-            </div>
+    <FloatingInput
+      label={t.surname}
+      value={surname}
+      onChange={setSurname}
+    />
 
-            <FloatingInput
-              label={t.email}
-              value={email}
-              onChange={setEmail}
-              type="email"
-            />
+    <FloatingInput
+      label={t.company}
+      value={company}
+      onChange={setCompany}
+    />
 
-            <div className="relative mb-4">
-              <FloatingInput
-                label={t.password}
-                value={password}
-                onChange={setPassword}
-                type={showPassword ? "text" : "password"}
-              />
+    <div className="mb-4">
+      <PhoneInput value={phone} onChange={setPhone} />
+    </div>
+
+    <FloatingInput
+      label={t.email}
+      value={email}
+      onChange={setEmail}
+      type="email"
+    />
+
+    <div className="relative mb-4">
+      <FloatingInput
+        label={t.password}
+        value={password}
+        onChange={setPassword}
+        type={showPassword ? "text" : "password"}
+      />
 
               <div
                 onClick={() => setShowPassword(!showPassword)}

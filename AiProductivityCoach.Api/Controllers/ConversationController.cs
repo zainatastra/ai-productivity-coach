@@ -12,7 +12,6 @@ namespace AiProductivityCoach.Api.Controllers
     {
         private readonly FirestoreDb _firestore;
 
-        // 🔥 Firestore injected via DI
         public ConversationController(FirestoreDb firestore)
         {
             _firestore = firestore;
@@ -42,42 +41,25 @@ namespace AiProductivityCoach.Api.Controllers
                     .Document(uid)
                     .Collection("conversations");
 
-                string title = model.Industry;
-
-                try
-                {
-                    var parsed = JsonDocument.Parse(model.Response);
-
-                    if (parsed.RootElement.TryGetProperty("summary", out var summary))
-                    {
-                        var summaryText = summary.GetString();
-                        if (!string.IsNullOrWhiteSpace(summaryText))
-                        {
-                            var firstSentence = summaryText
-                                .Split('.', StringSplitOptions.RemoveEmptyEntries)
-                                .FirstOrDefault();
-
-                            if (!string.IsNullOrWhiteSpace(firstSentence))
-                                title = firstSentence.Trim();
-                        }
-                    }
-                }
-                catch { }
+                // ✅ Use title from frontend (AI-generated), fallback to industry
+                string title = !string.IsNullOrWhiteSpace(model.Title)
+                    ? model.Title.Trim()
+                    : model.Industry;
 
                 var newConversation = new Dictionary<string, object>
                 {
-                    { "title", title },
-                    { "industry", model.Industry },
+                    { "title",       title },
+                    { "industry",    model.Industry },
                     { "description", model.Description },
-                    { "response", model.Response },
-                    { "language", model.Language ?? "en" },
-                    { "isPinned", false },
-                    { "createdAt", Timestamp.GetCurrentTimestamp() }
+                    { "response",    model.Response },
+                    { "language",    model.Language ?? "en" },
+                    { "isPinned",    false },
+                    { "createdAt",   Timestamp.GetCurrentTimestamp() }
                 };
 
-                await conversationsRef.AddAsync(newConversation);
+                var docRef = await conversationsRef.AddAsync(newConversation);
 
-                return Ok(new { message = "Conversation saved successfully" });
+                return Ok(new { message = "Conversation saved successfully", id = docRef.Id });
             }
             catch (Exception ex)
             {
@@ -109,14 +91,14 @@ namespace AiProductivityCoach.Api.Controllers
 
                     return new
                     {
-                        id = doc.Id,
-                        title = data.ContainsKey("title") ? data["title"]?.ToString() : "",
-                        industry = data.ContainsKey("industry") ? data["industry"]?.ToString() : "",
+                        id          = doc.Id,
+                        title       = data.ContainsKey("title")       ? data["title"]?.ToString()       : "",
+                        industry    = data.ContainsKey("industry")    ? data["industry"]?.ToString()    : "",
                         description = data.ContainsKey("description") ? data["description"]?.ToString() : "",
-                        response = data.ContainsKey("response") ? data["response"]?.ToString() : "",
-                        language = data.ContainsKey("language") ? data["language"]?.ToString() : "en",
-                        isPinned = data.ContainsKey("isPinned") && (bool)data["isPinned"],
-                        createdAt = data.ContainsKey("createdAt")
+                        response    = data.ContainsKey("response")    ? data["response"]?.ToString()    : "",
+                        language    = data.ContainsKey("language")    ? data["language"]?.ToString()    : "en",
+                        isPinned    = data.ContainsKey("isPinned") && (bool)data["isPinned"],
+                        createdAt   = data.ContainsKey("createdAt")
                             ? ((Timestamp)data["createdAt"]).ToDateTime().ToString("o")
                             : null
                     };
@@ -210,15 +192,16 @@ namespace AiProductivityCoach.Api.Controllers
 
     public class ConversationDto
     {
-        public string Industry { get; set; } = "";
-        public string Description { get; set; } = "";
-        public string Response { get; set; } = "";
-        public string? Language { get; set; } = "en";
+        public string  Industry    { get; set; } = "";
+        public string  Description { get; set; } = "";
+        public string  Response    { get; set; } = "";
+        public string? Language    { get; set; } = "en";
+        public string? Title       { get; set; }          // ✅ AI-generated title from frontend
     }
 
     public class UpdateConversationDto
     {
-        public string? Title { get; set; }
-        public bool? IsPinned { get; set; }
+        public string? Title    { get; set; }
+        public bool?   IsPinned { get; set; }
     }
 }

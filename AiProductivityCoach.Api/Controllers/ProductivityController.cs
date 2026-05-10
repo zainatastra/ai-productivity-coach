@@ -6,10 +6,10 @@ namespace AiProductivityCoach.Api.Controllers
 {
     public class ProductivityRequest
     {
-        public string Industry { get; set; }
-        public string Description { get; set; }
-        public string Mode { get; set; }
-        public string Language { get; set; }
+        public string Industry    { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string Mode        { get; set; } = "generate";
+        public string Language    { get; set; } = "en";
     }
 
     [ApiController]
@@ -26,18 +26,16 @@ namespace AiProductivityCoach.Api.Controllers
         [HttpPost]
         public async Task<IActionResult> HandleProductivity([FromBody] ProductivityRequest request)
         {
-            if (request == null || string.IsNullOrWhiteSpace(request.Industry) || string.IsNullOrWhiteSpace(request.Description))
+            if (request == null ||
+                string.IsNullOrWhiteSpace(request.Industry) ||
+                string.IsNullOrWhiteSpace(request.Description))
             {
-                return BadRequest(new
-                {
-                    success = false,
-                    message = "Industry and Description are required."
-                });
+                return BadRequest(new { success = false, message = "Industry and Description are required." });
             }
 
             try
             {
-                // ✅ GET API KEY (ENV FIRST, THEN CONFIG)
+                // ✅ API KEY — env first, then config
                 var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY")
                              ?? _config["OpenAI:ApiKey"];
 
@@ -46,24 +44,48 @@ namespace AiProductivityCoach.Api.Controllers
                     return Ok(new
                     {
                         success = true,
-                        data = new
-                        {
-                            message = "⚠️ OpenAI API key missing. Please configure backend."
-                        }
+                        data    = new { message = "⚠️ OpenAI API key missing. Please configure backend." }
                     });
                 }
 
-                // ✅ LANGUAGE CONTROL (NEW)
+                // ✅ LANGUAGE INSTRUCTION
                 string langInstruction = request.Language == "de"
                     ? "Respond ONLY in German language using professional, native-level fluency (C1/C2 level). Keep structure exactly the same."
                     : "Respond ONLY in English language. Keep structure exactly the same.";
 
-                // ✅ BRANCH BY MODE
+                // ✅ BUILD PROMPT BY MODE
                 string prompt;
 
-                if (request.Mode == "compare")
+                switch (request.Mode)
                 {
-                    prompt = $@"
+                    // ─────────────────────────────────────────
+                    // TITLE MODE  — short AI-generated title
+                    // ─────────────────────────────────────────
+                    case "title":
+                        prompt = $@"
+You are a concise labeling assistant.
+
+Generate a SHORT, descriptive conversation title for the following user context.
+
+RULES:
+- Maximum 5 words
+- No punctuation at the end
+- No quotes around the title
+- Capture the essence of the profession/industry
+- Return ONLY the title, nothing else
+
+Industry: {request.Industry}
+Description: {request.Description}
+Language: {(request.Language == "de" ? "German" : "English")}
+
+Title:";
+                        break;
+
+                    // ─────────────────────────────────────────
+                    // COMPARE MODE
+                    // ─────────────────────────────────────────
+                    case "compare":
+                        prompt = $@"
 You are an expert workforce analyst.
 
 {langInstruction}
@@ -95,10 +117,13 @@ DO NOT include explanations.
 DO NOT repeat previous output.
 ONLY return the activity breakdown.
 ";
-                }
-                else
-                {
-                    prompt = $@"
+                        break;
+
+                    // ─────────────────────────────────────────
+                    // GENERATE MODE (default)
+                    // ─────────────────────────────────────────
+                    default:
+                        prompt = $@"
 You are an expert labor market analyst specializing in workforce classification and job role analysis in Germany.
 
 {langInstruction}
@@ -144,21 +169,20 @@ Include:
 **Next**
 Would you like to see what activities they spend their working week doing?
 ";
+                        break;
                 }
 
+                // ✅ CALL OPENAI
                 using var httpClient = new HttpClient();
-
                 httpClient.DefaultRequestHeaders.Clear();
                 httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
 
                 var requestBody = new
                 {
-                    model = "gpt-4o-mini",
-                    messages = new[]
-                    {
-                        new { role = "user", content = prompt }
-                    },
-                    temperature = 0.7
+                    model    = "gpt-4o-mini",
+                    messages = new[] { new { role = "user", content = prompt } },
+                    temperature = request.Mode == "title" ? 0.4 : 0.7,  // lower temp for titles = more consistent
+                    max_tokens  = request.Mode == "title" ? 20 : 1000,   // titles need very few tokens
                 };
 
                 var content = new StringContent(
@@ -167,14 +191,9 @@ Would you like to see what activities they spend their working week doing?
                     "application/json"
                 );
 
-                var response = await httpClient.PostAsync(
-                    "https://api.openai.com/v1/chat/completions",
-                    content
-                );
-
+                var response       = await httpClient.PostAsync("https://api.openai.com/v1/chat/completions", content);
                 var responseString = await response.Content.ReadAsStringAsync();
 
-                // ✅ HANDLE OPENAI ERROR PROPERLY
                 if (!response.IsSuccessStatusCode)
                 {
                     return StatusCode((int)response.StatusCode, new
@@ -194,22 +213,11 @@ Would you like to see what activities they spend their working week doing?
                     .GetProperty("content")
                     .GetString();
 
-                return Ok(new
-                {
-                    success = true,
-                    data = new
-                    {
-                        message = aiText
-                    }
-                });
+                return Ok(new { success = true, data = new { message = aiText } });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
-                {
-                    success = false,
-                    message = ex.Message
-                });
+                return StatusCode(500, new { success = false, message = ex.Message });
             }
         }
     }
