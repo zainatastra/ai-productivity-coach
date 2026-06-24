@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { generateProductivity, compareIndustry, generateTitle, saveConversation } from "@/services/api";
+import { generateProductivity, compareIndustry, generateTitle, saveConversation, analyzeActivityWorkflow } from "@/services/api";
 import { useLanguage } from "@/services/LanguageContext";
 
 interface Props {
@@ -22,6 +22,285 @@ interface Props {
   isHydrated: boolean;
   onConversationSaved?: () => void;   // ✅ triggers sidebar refresh
 }
+
+type ActivityContext = {
+  title: string;
+  hours: string;
+  description: string;
+  tools: string[];
+  toolOptions?: string[];
+  analysis?: {
+    analysis?: string;
+    recommendedTools?: string[];
+    timeSaving?: string;
+    automationGaps?: string[];
+  };
+};
+
+const MIN_TOOL_OPTIONS = 8;
+const MAX_TOOL_OPTIONS = 20;
+
+const uniqueTools = (tools: string[]) =>
+  tools.filter((tool, index, arr) =>
+    Boolean(tool?.trim()) && arr.findIndex((x) => x.toLowerCase() === tool.toLowerCase()) === index
+  );
+
+const takeToolOptions = (primary: string[], secondary: string[] = []) =>
+  uniqueTools([...primary, ...secondary]).slice(0, MAX_TOOL_OPTIONS);
+
+const getIndustryKey = (text: string) => {
+  const value = text.toLowerCase();
+
+  if (/(digital marketing|marketing|advertising|campaign|seo|social media|performance marketing|paid ads|content marketing|email marketing|google ads|meta ads)/.test(value)) return "marketing";
+  if (/(software|technology|information technology|developer|software engineering|\bit\b|web development|api|backend|frontend|full-stack|fullstack|programming)/.test(value)) return "technology";
+  if (/(healthcare|health care|hospital|clinic|medical|patient|doctor|nurse|clinical)/.test(value)) return "healthcare";
+  if (/(ecommerce|e-commerce|online store|retail|shopify|marketplace|orders|inventory|product listing)/.test(value)) return "ecommerce";
+  if (/(education|university|school|admission|student|learning|teacher|enrollment)/.test(value)) return "education";
+
+  return "general";
+};
+
+type ToolRule = {
+  industries?: string[];
+  keywords: string[];
+  tools: string[];
+};
+
+const FALLBACK_TOOLS_BY_INDUSTRY: Record<string, string[]> = {
+  technology: [
+    "VS Code", "Visual Studio", "GitHub", "GitLab", "Postman", "Swagger", "Docker", "Jira", "Confluence", "Sentry", "SonarQube", "GitHub Copilot"
+  ],
+  marketing: [
+    "Meta Ads Manager", "Google Ads", "Google Analytics 4", "Looker Studio", "Google Tag Manager", "HubSpot", "Canva", "Figma", "Notion", "Airtable", "Semrush", "ChatGPT"
+  ],
+  healthcare: [
+    "Epic", "Cerner", "Athenahealth", "Patient Portal", "Practice Management System", "Calendly", "Microsoft Teams", "Power BI", "Excel", "DocuSign", "Zendesk", "Google Forms"
+  ],
+  ecommerce: [
+    "Shopify", "WooCommerce", "Amazon Seller Central", "eBay Seller Hub", "Google Merchant Center", "Klaviyo", "Gorgias", "Zendesk", "ShipStation", "AfterShip", "Inventory Planner", "Google Analytics 4"
+  ],
+  education: [
+    "Google Classroom", "Moodle", "Canvas LMS", "Blackboard", "Google Forms", "Typeform", "Airtable", "Calendly", "HubSpot CRM", "Mailchimp", "Power BI", "Excel"
+  ],
+  general: [
+    "Notion", "Trello", "Asana", "ClickUp", "Airtable", "Google Workspace", "Microsoft Teams", "Slack", "Excel", "ChatGPT", "Loom", "Miro"
+  ],
+};
+
+const ACTIVITY_TOOL_RULES: ToolRule[] = [
+  // Digital marketing, selected by exact activity intent instead of broad industry dumping
+  {
+    industries: ["marketing"],
+    keywords: ["campaign planning", "campaign strategy", "strategy development", "campaign planning and strategy"],
+    tools: ["Meta Ads Manager", "Google Ads", "Google Trends", "Meta Ad Library", "TikTok Creative Center", "Semrush", "Ahrefs", "Notion", "Airtable", "Miro", "ChatGPT", "Canva"],
+  },
+  {
+    industries: ["marketing"],
+    keywords: ["content creation", "copywriting", "ad copywriting", "design coordination", "creative", "collaboration with designers", "designers"],
+    tools: ["Canva", "Figma", "Adobe Express", "CapCut", "Grammarly", "ChatGPT", "Google Docs", "Notion", "Loom", "Slack", "Frame.io", "Miro"],
+  },
+  {
+    industries: ["marketing"],
+    keywords: ["performance analysis", "performance analysis and reporting", "reporting", "ad performance", "review and optimization", "optimization"],
+    tools: ["Google Analytics 4", "Looker Studio", "Google Ads", "Meta Ads Manager", "Google Tag Manager", "Supermetrics", "Excel", "Google Sheets", "Power BI", "Hotjar", "HubSpot", "ChatGPT"],
+  },
+  {
+    industries: ["marketing"],
+    keywords: ["social media", "social media management", "community", "posting", "publishing"],
+    tools: ["Meta Business Suite", "Hootsuite", "Buffer", "Sprout Social", "Later", "Metricool", "Canva", "CapCut", "Notion", "Google Drive", "ChatGPT", "Grammarly"],
+  },
+  {
+    industries: ["marketing"],
+    keywords: ["email marketing", "email campaign", "newsletter", "email marketing campaign creation"],
+    tools: ["Mailchimp", "Klaviyo", "HubSpot", "Brevo", "ActiveCampaign", "Google Analytics 4", "Canva", "Grammarly", "ChatGPT", "Google Sheets", "Zapier", "Notion"],
+  },
+  {
+    industries: ["marketing"],
+    keywords: ["client", "stakeholder", "client meeting", "client meetings", "presentations", "presentation", "communication"],
+    tools: ["Google Meet", "Zoom", "Microsoft Teams", "Calendly", "Google Slides", "Canva", "Looker Studio", "HubSpot", "Notion", "Loom", "Fireflies.ai", "Slack"],
+  },
+  {
+    industries: ["marketing"],
+    keywords: ["ad management", "ads management", "paid ads", "budget", "budget management", "bid", "spend"],
+    tools: ["Google Ads", "Meta Ads Manager", "TikTok Ads Manager", "LinkedIn Campaign Manager", "Google Tag Manager", "Looker Studio", "Google Analytics 4", "Optmyzr", "Revealbot", "Google Sheets", "Excel", "ChatGPT"],
+  },
+  {
+    industries: ["marketing"],
+    keywords: ["audience", "targeting", "segmentation", "audience targeting", "market research", "trend analysis", "trend research"],
+    tools: ["Google Trends", "Semrush", "Ahrefs", "Meta Audience Insights", "Meta Ad Library", "TikTok Creative Center", "AnswerThePublic", "Exploding Topics", "Google Analytics 4", "Typeform", "ChatGPT", "Notion"],
+  },
+
+  // Software and IT
+  {
+    industries: ["technology"],
+    keywords: ["development", "full-stack", "backend", "frontend", "api", "feature"],
+    tools: ["VS Code", "Visual Studio", "GitHub", "GitLab", "Postman", "Swagger", "Docker", "Jira", "Confluence", "Sentry", "SonarQube", "GitHub Copilot"],
+  },
+  {
+    industries: ["technology"],
+    keywords: ["debugging", "bug", "troubleshooting", "error", "logs"],
+    tools: ["Sentry", "LogRocket", "Postman", "Swagger", "Chrome DevTools", "Datadog", "New Relic", "Docker", "Visual Studio Debugger", "GitHub Issues", "Raygun", "Azure Application Insights"],
+  },
+  {
+    industries: ["technology"],
+    keywords: ["code review", "review", "pull request", "merge request"],
+    tools: ["GitHub Pull Requests", "GitLab Merge Requests", "Bitbucket", "SonarQube", "CodeClimate", "Reviewable", "Jira", "Confluence", "GitHub Copilot", "Slack"],
+  },
+  {
+    industries: ["technology"],
+    keywords: ["testing", "qa", "quality assurance", "test"],
+    tools: ["Postman", "Swagger", "Playwright", "Cypress", "Selenium", "Jest", "xUnit", "NUnit", "BrowserStack", "TestRail", "SonarQube", "GitHub Actions"],
+  },
+  {
+    industries: ["technology"],
+    keywords: ["deployment", "deploy", "release", "production", "ci/cd"],
+    tools: ["GitHub Actions", "Azure DevOps", "Docker", "Kubernetes", "Vercel", "Netlify", "Render", "AWS", "Azure", "Terraform", "Sentry", "Postman"],
+  },
+
+  // Generic activity rules only apply when no stronger industry activity rule is found
+  {
+    keywords: ["documentation", "docs", "knowledge base", "sop"],
+    tools: ["Notion", "Confluence", "Google Docs", "Microsoft Word", "Loom", "Scribe", "Miro", "Canva", "ChatGPT", "Grammarly"],
+  },
+  {
+    keywords: ["meeting", "meetings", "presentation", "presentations", "coordination", "standup"],
+    tools: ["Google Meet", "Zoom", "Microsoft Teams", "Slack", "Calendly", "Notion", "Loom", "Fireflies.ai", "Otter.ai", "Miro"],
+  },
+
+  // Other industries
+  {
+    industries: ["healthcare"],
+    keywords: ["patient", "patients", "appointment", "clinical", "operations", "scheduling"],
+    tools: ["Epic", "Cerner", "Athenahealth", "Patient Portal", "Practice Management System", "Calendly", "Microsoft Teams", "Power BI", "Excel", "DocuSign", "Zendesk", "Google Forms"],
+  },
+  {
+    industries: ["ecommerce"],
+    keywords: ["orders", "order", "inventory", "product", "returns", "customer"],
+    tools: ["Shopify", "WooCommerce", "Amazon Seller Central", "eBay Seller Hub", "Gorgias", "Zendesk", "ShipStation", "AfterShip", "Inventory Planner", "Google Sheets", "Klaviyo", "Google Analytics 4"],
+  },
+  {
+    industries: ["education"],
+    keywords: ["admission", "admissions", "student", "application", "counseling", "enrollment"],
+    tools: ["HubSpot CRM", "Salesforce Education Cloud", "Google Forms", "Typeform", "Airtable", "Calendly", "Google Workspace", "Mailchimp", "Power BI", "Excel", "Zoom", "Microsoft Teams"],
+  },
+];
+
+const keywordMatches = (text: string, keyword: string) => {
+  const normalizedText = text.toLowerCase();
+  const normalizedKeyword = keyword.toLowerCase();
+  if (normalizedKeyword.includes(" ")) return normalizedText.includes(normalizedKeyword);
+  return normalizedText.split(/[^a-z0-9+.#]+/i).includes(normalizedKeyword);
+};
+
+const getRelevantToolOptions = (
+  activityTitle: string,
+  industry = "",
+  workField = "",
+  jobDescription = ""
+) => {
+  const activityText = activityTitle.toLowerCase();
+  const broadContext = `${industry} ${workField} ${jobDescription}`.toLowerCase();
+  const detectedIndustry = getIndustryKey(broadContext);
+  const industryKey = detectedIndustry !== "general" ? detectedIndustry : getIndustryKey(activityTitle);
+  const fallback = FALLBACK_TOOLS_BY_INDUSTRY[industryKey] || FALLBACK_TOOLS_BY_INDUSTRY.general;
+
+  const industrySpecificMatches = ACTIVITY_TOOL_RULES.filter((rule) => {
+    if (!rule.industries || !rule.industries.includes(industryKey)) return false;
+    return rule.keywords.some((keyword) => keywordMatches(activityText, keyword));
+  });
+
+  if (industrySpecificMatches.length > 0) {
+    const matchedTools = industrySpecificMatches.flatMap((rule) => rule.tools);
+    const selected = takeToolOptions(matchedTools);
+    return selected.length >= MIN_TOOL_OPTIONS ? selected : takeToolOptions(selected, fallback);
+  }
+
+  const genericMatches = ACTIVITY_TOOL_RULES.filter((rule) => {
+    if (rule.industries) return false;
+    return rule.keywords.some((keyword) => keywordMatches(activityText, keyword));
+  });
+
+  if (genericMatches.length > 0) {
+    const matchedTools = genericMatches.flatMap((rule) => rule.tools);
+    const selected = takeToolOptions(matchedTools);
+    return selected.length >= MIN_TOOL_OPTIONS ? selected : takeToolOptions(selected, FALLBACK_TOOLS_BY_INDUSTRY.general);
+  }
+
+  return takeToolOptions(fallback, FALLBACK_TOOLS_BY_INDUSTRY.general);
+};
+
+const normalizeToolOptions = (tools: any): string[] => {
+  if (!Array.isArray(tools)) return [];
+
+  return uniqueTools(
+    tools
+      .map((tool) => String(tool || "").trim())
+      .filter(Boolean)
+  ).slice(0, MAX_TOOL_OPTIONS);
+};
+
+const parseCompareActivities = (compareText: any): ActivityContext[] => {
+  if (typeof compareText !== "string") return [];
+
+  const clean = compareText.trim();
+
+  // New AI-driven format: the backend returns activity-specific tool options
+  // generated by AI during Compare. These chips are not fixed in the frontend.
+  const jsonMatch = clean.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      const activities = Array.isArray(parsed?.activities) ? parsed.activities : [];
+
+      if (activities.length > 0) {
+        return activities
+          .map((item: any) => ({
+            title: String(item?.title || "").trim(),
+            hours: String(item?.hours || "").trim(),
+            description: "",
+            tools: [],
+            toolOptions: normalizeToolOptions(item?.toolOptions || item?.tools || item?.recommendedTools),
+          }))
+          .filter((item: ActivityContext) => item.title && item.hours);
+      }
+    } catch {
+      // Fall back to legacy line parsing below.
+    }
+  }
+
+  // Legacy fallback for older saved conversations. New comparisons should use JSON.
+  return clean
+    .split("\n")
+    .map((line: string) => line.trim())
+    .filter(Boolean)
+    .map((line: string) => {
+      const match = line.match(/^(.+?)\s*[—-]\s*(\d{1,2}\s*[–-]\s*\d{1,2}.*)$/);
+      if (!match) return null;
+
+      return {
+        title: match[1].trim(),
+        hours: match[2].trim(),
+        description: "",
+        tools: [],
+        toolOptions: [],
+      };
+    })
+    .filter(Boolean) as ActivityContext[];
+};
+
+const parseWorkflowAnalysis = (text: any) => {
+  if (typeof text !== "string") return null;
+
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return null;
+
+  try {
+    return JSON.parse(jsonMatch[0]);
+  } catch {
+    return null;
+  }
+};
+
 
 const parseAIResponse = (text: any) => {
   if (typeof text !== "string") return { industry: "", work_field: "", reasoning: "", benchmark: "" };
@@ -51,8 +330,14 @@ export default function ProductivitySection({
   const [isSubmitting, setIsSubmitting]   = useState(false);
   const [typedContent, setTypedContent]   = useState("");
   const [isFlipping,   setIsFlipping]     = useState(false);
+  const [expandedActivity, setExpandedActivity] = useState<number | null>(0);
+  const [workflowLoading, setWorkflowLoading] = useState(false);
+  const [activityContexts, setActivityContexts] = useState<ActivityContext[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const industryRef  = useRef<HTMLInputElement>(null);
+  const activityTextareaRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
+  const activityInsightRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [highlightedActivityIndex, setHighlightedActivityIndex] = useState<number | null>(null);
   const hasRestoredRef = useRef(false);
 
   /* ── auto-focus on mount ── */
@@ -60,6 +345,24 @@ export default function ProductivitySection({
     const t = setTimeout(() => industryRef.current?.focus(), 80);
     return () => clearTimeout(t);
   }, []);
+
+
+
+  /* ── auto-focus activity textarea when a card expands ── */
+  useEffect(() => {
+    if (expandedActivity === null) return;
+
+    const t = setTimeout(() => {
+      const textarea = activityTextareaRefs.current[expandedActivity];
+      if (!textarea) return;
+
+      textarea.focus();
+      const end = textarea.value.length;
+      textarea.setSelectionRange(end, end);
+    }, 180);
+
+    return () => clearTimeout(t);
+  }, [expandedActivity, response?.compare]);
 
   /* ── restore from localStorage ── */
   useEffect(() => {
@@ -118,6 +421,22 @@ export default function ProductivitySection({
     if (!fullText) return;
     setTypedContent(fullText);
   }, [response]);
+
+  /* ── keep activity form data local so sidebar summary does not re-type on every keystroke ── */
+  useEffect(() => {
+    if (!response) {
+      setActivityContexts([]);
+      return;
+    }
+
+    if (Array.isArray(response.activityContexts) && response.activityContexts.length > 0) {
+      setActivityContexts(response.activityContexts);
+      return;
+    }
+
+    const parsedActivities = parseCompareActivities(response.compare);
+    setActivityContexts(parsedActivities);
+  }, [response?.compare, response?._ts]);
 
   /* ── generate ── */
   const handleGenerate = async () => {
@@ -199,6 +518,153 @@ export default function ProductivitySection({
     }
   };
 
+
+  const enrichActivityTools = (items: ActivityContext[]) =>
+    items.map((activity) => ({
+      ...activity,
+      // Tool chips should come from the AI-generated Compare payload.
+      // Do not replace them with fixed frontend mappings.
+      toolOptions: normalizeToolOptions(activity.toolOptions),
+    }));
+
+  const getActivityContexts = (): ActivityContext[] => {
+    if (activityContexts.length > 0) return enrichActivityTools(activityContexts);
+
+    if (Array.isArray(response?.activityContexts) && response.activityContexts.length > 0) {
+      return enrichActivityTools(response.activityContexts);
+    }
+
+    return enrichActivityTools(parseCompareActivities(response?.compare));
+  };
+
+  const updateActivityDescription = (index: number, value: string) => {
+    setActivityContexts((items) =>
+      items.map((item, i) =>
+        i === index ? { ...item, description: value } : item
+      )
+    );
+  };
+
+  const toggleActivityTool = (index: number, tool: string) => {
+    setActivityContexts((items) =>
+      items.map((item, i) => {
+        if (i !== index) return item;
+
+        const alreadySelected = item.tools.includes(tool);
+
+        return {
+          ...item,
+          tools: alreadySelected
+            ? item.tools.filter((t) => t !== tool)
+            : [...item.tools, tool],
+        };
+      })
+    );
+  };
+
+  const focusGeneratedActivityInsight = (index: number) => {
+    setExpandedActivity(index);
+    setHighlightedActivityIndex(index);
+
+    window.setTimeout(() => {
+      activityInsightRefs.current[index]?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 260);
+
+    window.setTimeout(() => {
+      setHighlightedActivityIndex((current) => (current === index ? null : current));
+    }, 2200);
+  };
+
+  const handleWorkflowAnalysis = async () => {
+    const activityContexts = getActivityContexts();
+
+    if (!activityContexts.length) return;
+
+    const hasAnyContext = activityContexts.some(
+      (item) => item.description.trim().length > 0 || item.tools.length > 0
+    );
+
+    if (!hasAnyContext) {
+      alert(
+        language === "de"
+          ? "Bitte beschreiben Sie mindestens eine Aktivität oder wählen Sie Tools aus."
+          : "Please describe at least one activity or select some tools first."
+      );
+      return;
+    }
+
+    try {
+      setWorkflowLoading(true);
+
+      const result = await analyzeActivityWorkflow(
+        industryData,
+        descriptionData,
+        activityContexts,
+        language
+      );
+
+      const text = typeof result === "string" ? result : "";
+      const parsed = parseWorkflowAnalysis(text);
+
+      const aiActivities = Array.isArray(parsed?.activities) ? parsed.activities : [];
+
+      const updatedContexts = activityContexts.map((item, index) => {
+        const aiItem =
+          aiActivities.find((a: any) =>
+            String(a?.title || "").toLowerCase().trim() === item.title.toLowerCase().trim()
+          ) || aiActivities[index];
+
+        return {
+          ...item,
+          analysis: aiItem
+            ? {
+                analysis: aiItem.analysis || aiItem.summary || "",
+                recommendedTools: Array.isArray(aiItem.recommendedTools) ? aiItem.recommendedTools : [],
+                timeSaving: aiItem.timeSaving || "",
+                automationGaps: Array.isArray(aiItem.automationGaps) ? aiItem.automationGaps : [],
+              }
+            : item.analysis,
+        };
+      });
+
+      setActivityContexts(updatedContexts);
+
+      setResponse((prev: any) => {
+        if (!prev) return prev;
+
+        const updated = {
+          ...prev,
+          activityContexts: updatedContexts,
+          workflowAnalysis: parsed || { raw: text },
+        };
+
+        localStorage.setItem("ai_response", JSON.stringify(updated));
+        return updated;
+      });
+
+      const preferredIndex =
+        expandedActivity !== null && updatedContexts[expandedActivity]?.analysis?.analysis
+          ? expandedActivity
+          : updatedContexts.findIndex((item) => Boolean(item.analysis?.analysis));
+
+      if (preferredIndex >= 0) {
+        focusGeneratedActivityInsight(preferredIndex);
+      }
+    } catch (err) {
+      console.error("❌ Workflow analysis error:", err);
+      alert(
+        language === "de"
+          ? "Die Workflow-Analyse konnte nicht erstellt werden."
+          : "Unable to generate workflow analysis right now."
+      );
+    } finally {
+      setWorkflowLoading(false);
+    }
+  };
+
   /* ── bold parser ── */
   const renderWithBold = (text: string) =>
     text.split(/(\*\*.*?\*\*)/g).map((part, index) =>
@@ -265,6 +731,13 @@ export default function ProductivitySection({
           100% { box-shadow: 0 0 0 0 rgba(120,210,245,0); }
         }
         @keyframes ps-bar-in { from { width:0; } to { width:var(--w); } }
+        @keyframes ps-insight-border-glow {
+          0% { border-color: #bae6fd; box-shadow: 0 0 0 rgba(14,165,233,0); }
+          18% { border-color: #38bdf8; box-shadow: 0 0 0 4px rgba(14,165,233,0.16), 0 0 18px rgba(14,165,233,0.32); }
+          45% { border-color: #7dd3fc; box-shadow: 0 0 0 2px rgba(14,165,233,0.10), 0 0 12px rgba(14,165,233,0.20); }
+          72% { border-color: #38bdf8; box-shadow: 0 0 0 4px rgba(14,165,233,0.14), 0 0 16px rgba(14,165,233,0.28); }
+          100% { border-color: #bae6fd; box-shadow: 0 0 0 rgba(14,165,233,0); }
+        }
 
         .ps-fadein  { animation: ps-fadein 0.4s ease both; }
 
@@ -313,6 +786,88 @@ export default function ProductivitySection({
           animation: ps-fadein 0.35s ease both;
         }
         .ps-activity:hover { background: #f0f4f8; }
+
+        .ps-activity-card {
+          border: 1px solid #e5e7eb;
+          border-radius: 18px;
+          background: #fff;
+          overflow: hidden;
+          animation: ps-fadein 0.35s ease both;
+        }
+        .ps-activity-header {
+          width: 100%;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 16px;
+          background: #f7f8fa;
+          border: none;
+          cursor: pointer;
+          font-family: inherit;
+          text-align: left;
+        }
+
+        .ps-activity-arrow {
+          color: #0ea5e9;
+          font-weight: 800;
+          font-size: 13px;
+          display: inline-flex;
+          transition: transform 0.22s ease;
+        }
+        .ps-activity-arrow.open { transform: rotate(90deg); }
+
+        .ps-activity-body {
+          overflow: hidden;
+          max-height: 0;
+          opacity: 0;
+          transform: translateY(-6px);
+          transition: max-height 0.32s ease, opacity 0.22s ease, transform 0.28s ease;
+        }
+        .ps-activity-body.open {
+          max-height: 1100px;
+          opacity: 1;
+          transform: translateY(0);
+        }
+        .ps-activity-body-inner {
+          padding: 14px 16px 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+        }
+
+        .ps-tool-chip {
+          border: 1px solid #e5e7eb;
+          background: #f8fafc;
+          border-radius: 999px;
+          padding: 8px 13px;
+          font-size: 12px;
+          font-weight: 650;
+          color: #374151;
+          cursor: pointer;
+          transition: all 0.15s ease;
+          font-family: inherit;
+        }
+        .ps-tool-chip:hover {
+          border-color: #78d2f5;
+          background: #effaff;
+        }
+        .ps-tool-chip.active {
+          border-color: #78d2f5;
+          background: #e0f7ff;
+          color: #0369a1;
+          box-shadow: 0 0 0 2px rgba(120,210,245,0.16);
+        }
+        .ps-insight-box {
+          border: 1px solid #bae6fd;
+          border-radius: 16px;
+          background: linear-gradient(135deg, #f0f9ff, #ffffff);
+          padding: 13px 14px;
+          transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .ps-insight-box.glow-once {
+          animation: ps-insight-border-glow 2s ease-in-out both;
+        }
 
         /* section label */
         .ps-label {
@@ -482,34 +1037,167 @@ export default function ProductivitySection({
                           : "See what activities they spend their working week doing:"}
                       </p>
 
-                      {/* ACTIVITY ROWS */}
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {response.compare
-                          .split("\n")
-                          .map((line: string, i: number) => {
-                            if (!line || !line.trim()) return null;
-                            const match = line.match(/^(.+?)\s*[—-]\s*(\d{1,2}\s*[–-]\s*\d{1,2}.*)$/);
-                            if (!match) return null;
-                            return (
-                              <div
-                                key={i}
-                                className="ps-activity"
-                                style={{ animationDelay: `${i * 0.04}s` }}
+                      {/* ACTIVITY BREAKDOWN + CONTEXT LAYERS */}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {getActivityContexts().map((activity: ActivityContext, i: number) => {
+                          const isOpen = expandedActivity === i;
+                          const activityToolOptions = normalizeToolOptions(activity.toolOptions);
+
+                          return (
+                            <div
+                              key={`${activity.title}-${i}`}
+                              className="ps-activity-card"
+                              style={{ animationDelay: `${i * 0.04}s` }}
+                            >
+                              <button
+                                type="button"
+                                className="ps-activity-header"
+                                onClick={() => setExpandedActivity(isOpen ? null : i)}
                               >
-                                <span style={{ fontSize: 13, color: "#374151", fontWeight: 500 }}>
-                                  {match[1].trim()}
+                                <span style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                                  <span className={`ps-activity-arrow ${isOpen ? "open" : ""}`}>▶</span>
+                                  <span style={{ fontSize: 13, color: "#374151", fontWeight: 700 }}>
+                                    {activity.title}
+                                  </span>
                                 </span>
+
                                 <span style={{
-                                  fontSize: 12, fontWeight: 700, color: "#0ea5e9",
-                                  background: "#e0f2fe", padding: "3px 10px",
+                                  fontSize: 12, fontWeight: 800, color: "#0ea5e9",
+                                  background: "#e0f2fe", padding: "4px 10px",
                                   borderRadius: 999, whiteSpace: "nowrap",
                                 }}>
-                                  {match[2].trim()}
+                                  {activity.hours}
                                 </span>
+                              </button>
+
+
+                              <div className={`ps-activity-body ${isOpen ? "open" : ""}`} aria-hidden={!isOpen}>
+                                <div className="ps-activity-body-inner">
+                                  <div>
+                                    <p style={{ fontSize: 12, fontWeight: 800, color: "#111827", margin: "0 0 8px" }}>
+                                      {language === "de"
+                                        ? `Beschreiben Sie, was Sie in ${activity.title} tatsächlich tun.`
+                                        : `Tell us what you actually do in ${activity.title}.`}
+                                    </p>
+
+                                    <textarea
+                                      ref={(el) => { activityTextareaRefs.current[i] = el; }}
+                                      className="ps-textarea"
+                                      placeholder={
+                                        language === "de"
+                                          ? "Beispiel: Ich plane Aufgaben, prüfe Anforderungen, löse Probleme und arbeite mit dem Team an der Umsetzung..."
+                                          : "Example: I build APIs, fix bugs, review PRs, debug issues and connect frontend integrations..."
+                                      }
+                                      value={activity.description}
+                                      onChange={(e) => updateActivityDescription(i, e.target.value)}
+                                      style={{
+                                        width: "100%",
+                                        padding: "12px 14px",
+                                        border: "1.5px solid #e5e7eb",
+                                        borderRadius: 14,
+                                        background: "#fff",
+                                        fontSize: 13,
+                                        color: "#111",
+                                        fontFamily: "inherit",
+                                        resize: "vertical",
+                                        minHeight: 92,
+                                        boxSizing: "border-box",
+                                      }}
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <p style={{
+                                      fontSize: 12,
+                                      fontWeight: 800,
+                                      margin: "0 0 9px",
+                                      background: "linear-gradient(90deg, #59ba45, #8bd879)",
+                                      WebkitBackgroundClip: "text",
+                                      WebkitTextFillColor: "transparent",
+                                    }}>
+                                      {language === "de"
+                                        ? "Wählen Sie die Tools, Software oder Technologien aus, die Sie in dieser Aktivität nutzen."
+                                        : "Select the tools, software or technologies you use in this activity."}
+                                    </p>
+
+                                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                                      {activityToolOptions.length > 0 ? activityToolOptions.map((tool) => (
+                                        <button
+                                          type="button"
+                                          key={tool}
+                                          className={`ps-tool-chip ${activity.tools.includes(tool) ? "active" : ""}`}
+                                          onClick={() => toggleActivityTool(i, tool)}
+                                        >
+                                          {tool}
+                                        </button>
+                                      )) : (
+                                        <span style={{ fontSize: 12, color: "#9ca3af", fontStyle: "italic" }}>
+                                          {language === "de"
+                                            ? "Tools werden beim nächsten Vergleich automatisch von der KI generiert."
+                                            : "Tools will be generated by AI when you run Compare again."}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {activity.analysis?.analysis && (
+                                    <div
+                                      ref={(el) => { activityInsightRefs.current[i] = el; }}
+                                      className={`ps-insight-box ${highlightedActivityIndex === i ? "glow-once" : ""}`}
+                                    >
+                                      <p style={{ fontSize: 12, fontWeight: 800, color: "#0369a1", margin: "0 0 6px" }}>
+                                        {language === "de" ? "AI-Empfehlung" : "AI Recommendation"}
+                                      </p>
+
+                                      <p style={{ fontSize: 13, color: "#374151", lineHeight: 1.65, margin: "0 0 10px" }}>
+                                        {activity.analysis.analysis}
+                                      </p>
+
+                                      {activity.analysis.recommendedTools && activity.analysis.recommendedTools.length > 0 && (
+                                        <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 8 }}>
+                                          {activity.analysis.recommendedTools.map((tool) => (
+                                            <span
+                                              key={tool}
+                                              style={{
+                                                fontSize: 11,
+                                                fontWeight: 800,
+                                                color: "#0369a1",
+                                                background: "#e0f2fe",
+                                                borderRadius: 999,
+                                                padding: "5px 9px",
+                                              }}
+                                            >
+                                              {tool}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+
+                                      {activity.analysis.timeSaving && (
+                                        <p style={{ fontSize: 12, fontWeight: 800, color: "#059669", margin: 0 }}>
+                                          {language === "de" ? "Mögliche Zeitersparnis: " : "Potential time saving: "}
+                                          {activity.analysis.timeSaving}
+                                        </p>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                            );
-                          })}
+                            </div>
+                          );
+                        })}
                       </div>
+
+                      {response?.workflowAnalysis?.overview && (
+                        <div className="ps-insight-box" style={{ marginTop: 12 }}>
+                          <p style={{ fontSize: 12, fontWeight: 800, color: "#0369a1", margin: "0 0 6px" }}>
+                            {language === "de" ? "Gesamtanalyse" : "Overall Analysis"}
+                          </p>
+                          <p style={{ fontSize: 13, color: "#374151", lineHeight: 1.65, margin: 0 }}>
+                            {response.workflowAnalysis.overview}
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                   ) : (
@@ -571,15 +1259,27 @@ export default function ProductivitySection({
                 </div>
               </div>
 
-              {/* ── COMPARE BUTTON ── */}
+              {/* ── COMPARE / ANALYZE BUTTON ── */}
               <div style={{ paddingTop: 14, flexShrink: 0 }}>
-                <button
-                  className="ps-btn"
-                  onClick={handleCompare}
-                  disabled={!!(loading && mode === "compare")}
-                >
-                  {language === "de" ? "Vergleichen" : "Compare"}
-                </button>
+                {response?.compare ? (
+                  <button
+                    className="ps-btn"
+                    onClick={handleWorkflowAnalysis}
+                    disabled={workflowLoading}
+                  >
+                    {workflowLoading
+                      ? (language === "de" ? "Analysiere…" : "Analyzing…")
+                      : (language === "de" ? "Workflow analysieren" : "Analyze Workflow")}
+                  </button>
+                ) : (
+                  <button
+                    className="ps-btn"
+                    onClick={handleCompare}
+                    disabled={!!(loading && mode === "compare")}
+                  >
+                    {language === "de" ? "Vergleichen" : "Compare"}
+                  </button>
+                )}
               </div>
             </div>
           )}
