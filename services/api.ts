@@ -78,6 +78,46 @@ export async function compareIndustry(
   }
 }
 
+
+/* =====================================================
+   ANALYZE ACTIVITY WORKFLOW
+===================================================== */
+export async function analyzeActivityWorkflow(
+  industry: string,
+  description: string,
+  activities: Array<{
+    title: string;
+    hours: string;
+    description: string;
+    tools: string[];
+  }>,
+  language: Language
+) {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/Productivity`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        industry,
+        description,
+        mode: "activity-analysis",
+        language,
+        activities,
+      }),
+    });
+
+    const data: ApiResponse<any> = await res.json();
+    console.log("🔥 ACTIVITY ANALYSIS FULL API RESPONSE:", data);
+
+    if (!res.ok) throw new Error(data?.message || "Failed to analyze workflow.");
+
+    return normalizeResponse(data);
+  } catch (error: any) {
+    console.error("❌ Activity Analysis API Error:", error);
+    return "Unable to generate workflow analysis at the moment.";
+  }
+}
+
 /* =====================================================
    SAVE CONVERSATION  (fires right after generate)
 ===================================================== */
