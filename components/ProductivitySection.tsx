@@ -21,6 +21,7 @@ interface Props {
   language: "en" | "de";
   isHydrated: boolean;
   onConversationSaved?: () => void;   // ✅ triggers sidebar refresh
+  isEmbedMode?: boolean;
 }
 
 type ActivityContext = {
@@ -326,6 +327,7 @@ export default function ProductivitySection({
   isLoggedIn, setShowAuthModal,
   language, isHydrated,
   onConversationSaved,
+  isEmbedMode = false,
 }: Props) {
   const [isSubmitting, setIsSubmitting]   = useState(false);
   const [typedContent, setTypedContent]   = useState("");
@@ -498,7 +500,7 @@ export default function ProductivitySection({
   /* ── compare ── */
   const handleCompare = async () => {
     if (response?.compare) return;
-    if (!isLoggedIn) { setShowAuthModal({ type: "compare", open: true }); return; }
+    if (!isLoggedIn && !isEmbedMode) { setShowAuthModal({ type: "compare", open: true }); return; }
     try {
       setIsSubmitting(true);
       setMode("compare");
