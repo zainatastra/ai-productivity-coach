@@ -21,22 +21,22 @@ export default function EmbedPage() {
   };
 
   return (
-    <main className="min-h-screen bg-white text-slate-900">
+    <main className="apc-embed min-h-screen bg-white text-slate-900 md:h-screen md:overflow-hidden">
       <div className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <div className="font-semibold tracking-tight">Ey Eric! Make me Productive!</div>
-          <div className="flex items-center gap-2">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+          <div className="min-w-0 text-sm font-semibold tracking-tight sm:text-base">Ey Eric! Make me Productive!</div>
+          <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
               onClick={() => redirectToMainApp("login")}
-              className="rounded-full border border-slate-200 px-5 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              className="inline-flex h-11 min-w-[96px] items-center justify-center whitespace-nowrap rounded-full border border-slate-200 px-5 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
             >
               Login
             </button>
             <button
               type="button"
               onClick={() => redirectToMainApp("signup")}
-              className="rounded-full bg-black px-5 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+              className="inline-flex h-11 min-w-[96px] items-center justify-center whitespace-nowrap rounded-full bg-black px-5 text-sm font-medium text-white transition hover:bg-slate-800"
             >
               Sign Up
             </button>
@@ -44,7 +44,7 @@ export default function EmbedPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-6xl px-4 py-6">
+      <div className="mx-auto max-w-6xl px-3 py-4 sm:px-4 sm:py-6 md:h-[calc(100vh-68px)] md:box-border md:overflow-hidden">
         <ProductivitySection
           response={response}
           setResponse={setResponse}

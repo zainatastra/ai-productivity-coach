@@ -879,12 +879,82 @@ export default function ProductivitySection({
 
         /* scrollbar */
         .ps-scroll::-webkit-scrollbar { width: 0; }
+
+        /* WordPress embed-only mobile polish. Normal live app is untouched. */
+        .ps-embed-shell { height: calc(100vh - 80px); }
+        .apc-embed .ps-embed-shell { height: 100%; }
+
+        @media (max-width: 640px) {
+          .apc-embed .ps-embed-shell {
+            height: 980px !important;
+            min-height: 980px;
+            padding: 18px 14px !important;
+            border-radius: 18px !important;
+          }
+
+          .apc-embed .ps-initial-state {
+            justify-content: flex-start !important;
+            gap: 18px !important;
+          }
+
+          .apc-embed .ps-intro-banner {
+            padding: 18px 16px !important;
+            border-radius: 22px !important;
+            gap: 14px !important;
+          }
+
+          .apc-embed .ps-intro-icon {
+            width: 40px !important;
+            height: 40px !important;
+            border-radius: 14px !important;
+          }
+
+          .apc-embed .ps-intro-title {
+            font-size: 20px !important;
+            line-height: 1.12 !important;
+            margin-bottom: 10px !important;
+            letter-spacing: -0.04em !important;
+          }
+
+          .apc-embed .ps-intro-text {
+            font-size: 16px !important;
+            line-height: 1.46 !important;
+          }
+
+          .apc-embed .ps-initial-form {
+            margin-top: 0 !important;
+            gap: 10px !important;
+          }
+
+          .apc-embed .ps-initial-form .ps-input {
+            min-height: 48px !important;
+            padding: 12px 16px !important;
+            font-size: 15px !important;
+          }
+
+          .apc-embed .ps-initial-form .ps-textarea {
+            min-height: 138px !important;
+            padding: 14px 16px !important;
+            font-size: 15px !important;
+            line-height: 1.45 !important;
+          }
+
+          .apc-embed .ps-initial-form .ps-btn {
+            min-height: 58px !important;
+            font-size: 16px !important;
+          }
+
+          .apc-embed .ps-label { font-size: 11px !important; }
+          .apc-embed .ps-activity-header { padding: 12px 14px !important; }
+          .apc-embed .ps-activity-body-inner { padding: 13px 14px 15px !important; }
+          .apc-embed .ps-tool-chip { font-size: 11px !important; padding: 7px 10px !important; }
+        }
       `}</style>
 
       <div
-        className="w-full bg-white rounded-2xl shadow-md border border-gray-200 px-5 md:px-10 py-5 md:py-8 flex flex-col overflow-hidden transition-all duration-700"
+        className="ps-embed-shell w-full bg-white rounded-2xl shadow-md border border-gray-200 px-5 md:px-10 py-5 md:py-8 flex flex-col overflow-hidden transition-all duration-700"
         style={{
-          height: "calc(100vh - 80px)",
+          height: isEmbedMode ? "100%" : "calc(100vh - 80px)",
           transformStyle: "preserve-3d",
           transform: isFlipping ? "rotateY(180deg)" : "rotateY(0deg)",
         }}
@@ -897,10 +967,10 @@ export default function ProductivitySection({
 
           {/* ══════════ INITIAL STATE ══════════ */}
           {!response && !loading && (
-            <div className="flex flex-col h-full justify-between gap-5">
+            <div className="ps-initial-state flex flex-col h-full justify-between gap-5">
 
               {/* ── BANNER ── */}
-              <div style={{
+              <div className="ps-intro-banner" style={{
                 background: "linear-gradient(135deg, #fafafa 0%, #f3f4f6 100%)",
                 border: "1px solid #e5e7eb",
                 borderRadius: 24,
@@ -910,7 +980,7 @@ export default function ProductivitySection({
                 gap: 16,
               }}>
                 {/* icon */}
-                <div style={{
+                <div className="ps-intro-icon" style={{
                   width: 42, height: 42, borderRadius: 14, flexShrink: 0,
                   background: "#fff", border: "1px solid #e5e7eb",
                   boxShadow: "0 2px 8px rgba(0,0,0,0.07)",
@@ -921,10 +991,10 @@ export default function ProductivitySection({
 
                 {/* text */}
                 <div style={{ flex: 1 }}>
-                  <h2 style={{ fontSize: 15, fontWeight: 800, color: "#0d1117", letterSpacing: "-0.02em", marginBottom: 6, lineHeight: 1.3 }}>
+                  <h2 className="ps-intro-title" style={{ fontSize: 15, fontWeight: 800, color: "#0d1117", letterSpacing: "-0.02em", marginBottom: 6, lineHeight: 1.3 }}>
                     {language === "de" ? "Ey Eric! Mach mich produktiv!" : "Hey Eric! Make me productive!"}
                   </h2>
-                  <p style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.7, margin: 0 }}>
+                  <p className="ps-intro-text" style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.7, margin: 0 }}>
                     {language === "de"
                       ? "Die Welt dreht sich super schnell. Wer kann schon sagen, ob er die aktuell besten Tools und Methoden nutzt? Ey Eric analysiert Deine Arbeitsweise und schlägt gezielte Verbesserungen vor."
                       : "The world is moving fast. Who can confidently say they are using the best tools and methods? Ey Eric analyzes your workflow and suggests smarter ways to improve it."}
@@ -933,7 +1003,7 @@ export default function ProductivitySection({
               </div>
 
               {/* ── FORM ── */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div className="ps-initial-form" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <input
                   ref={industryRef}
                   type="text"
