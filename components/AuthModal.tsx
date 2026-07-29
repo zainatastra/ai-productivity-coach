@@ -41,7 +41,8 @@ export default function AuthModal({
   const auth = getAuth(app);
   const router = useRouter();
   const { language } = useLanguage();
-  const lang = language === "de" ? "de" : "en";
+  const [modalLang, setModalLang] = useState<"en" | "de">(language === "de" ? "de" : "en");
+  const lang = modalLang;
 
   const [step, setStep] = useState<AuthStep>("auth");
   const [mode, setMode] = useState<AuthMode>(initialMode);
@@ -77,6 +78,7 @@ export default function AuthModal({
     if (!open) return;
     setStep("auth");
     setMode(initialMode);
+    setModalLang(language === "de" ? "de" : "en");
     setShowPassword(false);
     setFieldError("");
     setTopError("");
@@ -87,7 +89,7 @@ export default function AuthModal({
     setToastMsg("");
     setShake(false);
     setClosingSuccess(false);
-  }, [open, initialMode]);
+  }, [open, initialMode, language]);
 
   useEffect(() => {
     if (!open || step !== "verify") return;
@@ -803,6 +805,7 @@ export default function AuthModal({
           onClick={(e) => e.stopPropagation()}
         >
           <button
+            type="button"
             className="auth-modal-close"
             onClick={() => !loading && onClose()}
             aria-label="Close authentication modal"
@@ -823,6 +826,47 @@ export default function AuthModal({
                   AI-Productivity Coach
                 </h1>
 
+                <div className="auth-lang-wrap">
+                  <div className="auth-lang-inner">
+                    <motion.div
+                      className="auth-lang-slider"
+                      initial={false}
+                      animate={{ x: modalLang === "en" ? "0%" : "100%" }}
+                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    />
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setModalLang("en");
+                      }}
+                      className={`relative z-10 flex flex-1 items-center justify-center gap-2 py-1.5 text-sm font-medium ${
+                        modalLang === "en" ? "text-black" : "text-gray-500"
+                      }`}
+                    >
+                      <img src="/us.png" alt="EN" className="h-4 w-4 rounded-sm object-cover" />
+                      EN
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setModalLang("de");
+                      }}
+                      className={`relative z-10 flex flex-1 items-center justify-center gap-2 py-1.5 text-sm font-medium ${
+                        modalLang === "de" ? "text-black" : "text-gray-500"
+                      }`}
+                    >
+                      <img src="/de.png" alt="DE" className="h-4 w-4 rounded-sm object-cover" />
+                      DE
+                    </button>
+                  </div>
+                </div>
+
                 <h2 className="text-2xl font-semibold text-center my-4">
                   {t.welcome}
                 </h2>
@@ -836,6 +880,7 @@ export default function AuthModal({
                   />
 
                   <button
+                    type="button"
                     onClick={() => setMode("login")}
                     className="relative z-10 flex-1 py-2 text-sm font-medium"
                   >
@@ -843,6 +888,7 @@ export default function AuthModal({
                   </button>
 
                   <button
+                    type="button"
                     onClick={() => setMode("signup")}
                     className="relative z-10 flex-1 py-2 text-sm font-medium"
                   >
@@ -904,6 +950,7 @@ export default function AuthModal({
                       </div>
 
                       <button
+                        type="button"
                         onClick={handleLogin}
                         disabled={loading}
                         className="w-full py-3 bg-black text-white rounded-full text-sm font-medium"
@@ -977,17 +1024,30 @@ export default function AuthModal({
 
                         <span>
                           {t.agree}{" "}
-                          <a href="/terms" className="underline">
+                          <a
+                            href="/terms"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             {t.terms}
                           </a>{" "}
                           {t.and}{" "}
-                          <a href="/privacy-policy" className="underline">
+                          <a
+                            href="/privacy-policy"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             {t.privacy}
                           </a>
                         </span>
                       </label>
 
                       <button
+                        type="button"
                         onClick={handleSignup}
                         disabled={loading}
                         className="w-full py-3 bg-black text-white rounded-full text-sm font-medium"
@@ -1081,6 +1141,7 @@ export default function AuthModal({
                   </AnimatePresence>
 
                   <button
+                    type="button"
                     className="vp-btn"
                     onClick={() => handleVerify()}
                     disabled={loading || filled < 6}
@@ -1096,13 +1157,13 @@ export default function AuthModal({
                       <strong style={{ color: "#374151" }}>{timer}s</strong>
                     </span>
                   ) : (
-                    <button className="vp-resend-link" onClick={resendCode}>
+                    <button type="button" className="vp-resend-link" onClick={resendCode}>
                       {t.resend}
                     </button>
                   )}
                 </div>
 
-                <button className="vp-back" onClick={() => setStep("auth")}>
+                <button type="button" className="vp-back" onClick={() => setStep("auth")}>
                   <ArrowLeft size={13} />
                   {t.backSignup}
                 </button>
