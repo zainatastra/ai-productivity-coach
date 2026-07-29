@@ -11,38 +11,30 @@ interface ApiResponse<T> {
   message?: string;
 }
 
-/* =====================================================
-   BASE URL — LOCAL + PRODUCTION + WORDPRESS EMBED SAFE
-===================================================== */
+// ✅ BACKEND URLS
+const LOCAL_API_URL = "http://localhost:5048";
+const PRODUCTION_API_URL = "https://ai-productivity-coach-mlnn.onrender.com";
+
+/*
+  ✅ BASE URL RULES
+
+  1. Local development:
+     - Uses http://localhost:5048
+
+  2. Production / Vercel / WordPress embed:
+     - Uses Render backend directly
+
+  3. If NEXT_PUBLIC_API_URL is configured on Vercel:
+     - It takes priority
+*/
 const isBrowser = typeof window !== "undefined";
+const isLocalhost =
+  isBrowser &&
+  ["localhost", "127.0.0.1"].includes(window.location.hostname);
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ||
-  (isBrowser && window.location.hostname.includes("localhost")
-    ? "http://localhost:5048"
-    : "https://ai-productivity-coach-mlnn.onrender.com");
-
-/* =====================================================
-   FETCH WITH TIMEOUT — PREVENTS INFINITE LOADING
-===================================================== */
-const FETCH_TIMEOUT_MS = 45000;
-
-async function fetchWithTimeout(url: string, options: RequestInit) {
-  const controller = new AbortController();
-
-  const timeout = setTimeout(() => {
-    controller.abort();
-  }, FETCH_TIMEOUT_MS);
-
-  try {
-    return await fetch(url, {
-      ...options,
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
-}
+  (isLocalhost ? LOCAL_API_URL : PRODUCTION_API_URL);
 
 /* =====================================================
    HELPER: NORMALIZE RESPONSE (ROBUST)
@@ -53,11 +45,36 @@ function normalizeResponse(res: ApiResponse<any>) {
   return res;
 }
 
+/* =====================================================
+   HELPER: SAFE FETCH
+
+   IMPORTANT:
+   Do NOT use AbortController here.
+
+   Reason:
+   In WordPress iframe embed + Render cold start + OpenAI response time,
+   forced abort can stop the request before the backend responds.
+   This caused:
+   "AbortError: signal is aborted without reason"
+
+   Browser/native fetch will now wait normally.
+===================================================== */
+async function safeFetch(url: string, options: RequestInit) {
+  return fetch(url, {
+    ...options,
+    cache: "no-store",
+  });
+}
+
 function fallbackMessage(language: Language, type: "generate" | "compare" | "activity") {
   if (language === "de") {
-    if (type === "compare") return "Der Vergleich konnte im Moment nicht erstellt werden. Bitte versuchen Sie es erneut.";
-    if (type === "activity") return "Die Workflow-Analyse konnte im Moment nicht erstellt werden. Bitte versuchen Sie es erneut.";
-    return "Die Antwort konnte nicht erstellt werden. Bitte versuchen Sie es erneut.";
+    if (type === "compare") {
+      return "Der Vergleich konnte im Moment nicht erstellt werden. Bitte versuchen Sie es erneut.";
+    }
+    if (type === "activity") {
+      return "Die Workflow-Analyse konnte im Moment nicht erstellt werden. Bitte versuchen Sie es erneut.";
+    }
+    return "Die Antwort konnte im Moment nicht erstellt werden. Bitte versuchen Sie es erneut.";
   }
 
   if (type === "compare") return "Unable to generate comparison at the moment.";
@@ -74,7 +91,9 @@ export async function generateProductivity(
   language: Language
 ) {
   try {
-    const res = await fetchWithTimeout(`${API_BASE_URL}/api/Productivity`, {
+    console.log("🌍 API_BASE_URL:", API_BASE_URL);
+
+    const res = await safeFetch(`${API_BASE_URL}/api/Productivity`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ industry, description, mode: "generate", language }),
@@ -83,7 +102,9 @@ export async function generateProductivity(
     const data: ApiResponse<any> = await res.json();
     console.log("🔥 GENERATE FULL API RESPONSE:", data);
 
-    if (!res.ok) throw new Error(data?.message || "Failed to generate response.");
+    if (!res.ok) {
+      throw new Error(data?.message || "Failed to generate response.");
+    }
 
     return normalizeResponse(data);
   } catch (error: any) {
@@ -101,7 +122,9 @@ export async function compareIndustry(
   language: Language
 ) {
   try {
-    const res = await fetchWithTimeout(`${API_BASE_URL}/api/Productivity`, {
+    console.log("🌍 API_BASE_URL:", API_BASE_URL);
+
+    const res = await safeFetch(`${API_BASE_URL}/api/Productivity`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ industry, description, mode: "compare", language }),
@@ -110,7 +133,9 @@ export async function compareIndustry(
     const data: ApiResponse<any> = await res.json();
     console.log("🔥 COMPARE FULL API RESPONSE:", data);
 
-    if (!res.ok) throw new Error(data?.message || "Failed to compare.");
+    if (!res.ok) {
+      throw new Error(data?.message || "Failed to compare.");
+    }
 
     return normalizeResponse(data);
   } catch (error: any) {
@@ -134,7 +159,9 @@ export async function analyzeActivityWorkflow(
   language: Language
 ) {
   try {
-    const res = await fetchWithTimeout(`${API_BASE_URL}/api/Productivity`, {
+    console.log("🌍 API_BASE_URL:", API_BASE_URL);
+
+    const res = await safeFetch(`${API_BASE_URL}/api/Productivity`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -149,7 +176,9 @@ export async function analyzeActivityWorkflow(
     const data: ApiResponse<any> = await res.json();
     console.log("🔥 ACTIVITY ANALYSIS FULL API RESPONSE:", data);
 
-    if (!res.ok) throw new Error(data?.message || "Failed to analyze workflow.");
+    if (!res.ok) {
+      throw new Error(data?.message || "Failed to analyze workflow.");
+    }
 
     return normalizeResponse(data);
   } catch (error: any) {
@@ -175,7 +204,7 @@ export async function saveConversation(
 
     const token = await currentUser.getIdToken();
 
-    const res = await fetchWithTimeout(`${API_BASE_URL}/api/Conversation/save`, {
+    const res = await safeFetch(`${API_BASE_URL}/api/Conversation/save`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -186,7 +215,7 @@ export async function saveConversation(
         description,
         response: JSON.stringify(response),
         language,
-        title, // ✅ pass AI-generated title
+        title,
       }),
     });
 
@@ -213,7 +242,7 @@ export async function generateTitle(
   language: Language
 ): Promise<string> {
   try {
-    const res = await fetchWithTimeout(`${API_BASE_URL}/api/Productivity`, {
+    const res = await safeFetch(`${API_BASE_URL}/api/Productivity`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ industry, description, mode: "title", language }),
@@ -228,6 +257,6 @@ export async function generateTitle(
 
     return title || industry;
   } catch {
-    return industry; // fallback to industry name
+    return industry;
   }
 }
