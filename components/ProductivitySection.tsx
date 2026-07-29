@@ -715,7 +715,7 @@ export default function ProductivitySection({
             WebkitTextFillColor: "transparent",
             letterSpacing: "0.01em",
           }}>
-            {language === "de" ? "AI denkt nach…" : "AI is thinking…"}
+            {language === "de" ? "Eric denkt nach …" : "Eric thinks …"}
           </span>
         </div>
       </div>
