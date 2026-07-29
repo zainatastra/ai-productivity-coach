@@ -19,42 +19,51 @@ const PRODUCTION_API_URL = "https://ai-productivity-coach-mlnn.onrender.com";
   ✅ API ROUTING RULES
 
   1. Local development:
-     Productivity requests use the local .NET backend directly:
-     http://localhost:5048/api/Productivity
+     - Productivity requests use the local .NET backend directly.
 
-  2. Production / Vercel / WordPress embed:
-     Productivity requests use the Vercel same-origin proxy:
-     /api/productivity
+  2. Main production app:
+     - Productivity requests keep using the Render .NET backend directly.
+     - This keeps the live Vercel app working exactly like before.
 
-     This prevents iframe browsers from suspending direct cross-origin
-     requests from the embedded WordPress iframe to Render.
+  3. WordPress embed only:
+     - Productivity requests use the same-origin Vercel route:
+       /api/productivity
 
-  3. Authenticated conversation saving still uses the .NET backend directly,
-     because it needs Firebase Authorization headers and backend conversation APIs.
+     This avoids browser/iframe suspension errors from direct WordPress iframe
+     requests to Render:
+       net::ERR_NETWORK_IO_SUSPENDED
+
+  4. Conversation saving:
+     - Always uses the .NET backend directly because it needs Firebase auth headers
+       and backend conversation APIs.
 */
+
 const isBrowser = typeof window !== "undefined";
+
 const isLocalhost =
   isBrowser &&
   (window.location.hostname === "localhost" ||
     window.location.hostname === "127.0.0.1");
 
+const isEmbedPage =
+  isBrowser && window.location.pathname.startsWith("/embed");
+
 const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
 
 export const API_BASE_URL = isLocalhost
   ? configuredApiUrl || LOCAL_API_URL
-  : "";
-
-const DIRECT_BACKEND_URL =
-  configuredApiUrl && !isLocalhost ? configuredApiUrl : PRODUCTION_API_URL;
+  : configuredApiUrl || PRODUCTION_API_URL;
 
 function productivityEndpoint() {
-  return API_BASE_URL ? `${API_BASE_URL}/api/Productivity` : "/api/productivity";
+  if (isEmbedPage && !isLocalhost) {
+    return "/api/productivity";
+  }
+
+  return `${API_BASE_URL}/api/Productivity`;
 }
 
 function conversationSaveEndpoint() {
-  return API_BASE_URL
-    ? `${API_BASE_URL}/api/Conversation/save`
-    : `${DIRECT_BACKEND_URL}/api/Conversation/save`;
+  return `${API_BASE_URL}/api/Conversation/save`;
 }
 
 /* =====================================================
@@ -80,14 +89,19 @@ async function safeFetch(url: string, options: RequestInit) {
   });
 }
 
-function fallbackMessage(language: Language, type: "generate" | "compare" | "activity") {
+function fallbackMessage(
+  language: Language,
+  type: "generate" | "compare" | "activity"
+) {
   if (language === "de") {
     if (type === "compare") {
       return "Der Vergleich konnte im Moment nicht erstellt werden. Bitte versuchen Sie es erneut.";
     }
+
     if (type === "activity") {
       return "Die Workflow-Analyse konnte im Moment nicht erstellt werden. Bitte versuchen Sie es erneut.";
     }
+
     return "Die Antwort konnte im Moment nicht erstellt werden. Bitte versuchen Sie es erneut.";
   }
 
