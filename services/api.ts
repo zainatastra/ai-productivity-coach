@@ -11,17 +11,58 @@ interface ApiResponse<T> {
   message?: string;
 }
 
-// ✅ BASE URL (LOCAL + PRODUCTION SAFE)
+/* =====================================================
+   BASE URL — LOCAL + PRODUCTION + WORDPRESS EMBED SAFE
+===================================================== */
+const isBrowser = typeof window !== "undefined";
+
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5048";
+  process.env.NEXT_PUBLIC_API_URL ||
+  (isBrowser && window.location.hostname.includes("localhost")
+    ? "http://localhost:5048"
+    : "https://ai-productivity-coach-mlnn.onrender.com");
+
+/* =====================================================
+   FETCH WITH TIMEOUT — PREVENTS INFINITE LOADING
+===================================================== */
+const FETCH_TIMEOUT_MS = 45000;
+
+async function fetchWithTimeout(url: string, options: RequestInit) {
+  const controller = new AbortController();
+
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, FETCH_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 /* =====================================================
    HELPER: NORMALIZE RESPONSE (ROBUST)
 ===================================================== */
 function normalizeResponse(res: ApiResponse<any>) {
   if (res?.data?.message) return res.data.message;
-  if (res?.message)       return res.message;
+  if (res?.message) return res.message;
   return res;
+}
+
+function fallbackMessage(language: Language, type: "generate" | "compare" | "activity") {
+  if (language === "de") {
+    if (type === "compare") return "Der Vergleich konnte im Moment nicht erstellt werden. Bitte versuchen Sie es erneut.";
+    if (type === "activity") return "Die Workflow-Analyse konnte im Moment nicht erstellt werden. Bitte versuchen Sie es erneut.";
+    return "Die Antwort konnte nicht erstellt werden. Bitte versuchen Sie es erneut.";
+  }
+
+  if (type === "compare") return "Unable to generate comparison at the moment.";
+  if (type === "activity") return "Unable to generate workflow analysis at the moment.";
+  return "Error generating response. Please try again.";
 }
 
 /* =====================================================
@@ -33,10 +74,10 @@ export async function generateProductivity(
   language: Language
 ) {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/Productivity`, {
-      method:  "POST",
+    const res = await fetchWithTimeout(`${API_BASE_URL}/api/Productivity`, {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ industry, description, mode: "generate", language }),
+      body: JSON.stringify({ industry, description, mode: "generate", language }),
     });
 
     const data: ApiResponse<any> = await res.json();
@@ -47,7 +88,7 @@ export async function generateProductivity(
     return normalizeResponse(data);
   } catch (error: any) {
     console.error("❌ Generate API Error:", error);
-    return "Error generating response. Please try again.";
+    return fallbackMessage(language, "generate");
   }
 }
 
@@ -60,10 +101,10 @@ export async function compareIndustry(
   language: Language
 ) {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/Productivity`, {
-      method:  "POST",
+    const res = await fetchWithTimeout(`${API_BASE_URL}/api/Productivity`, {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ industry, description, mode: "compare", language }),
+      body: JSON.stringify({ industry, description, mode: "compare", language }),
     });
 
     const data: ApiResponse<any> = await res.json();
@@ -74,10 +115,9 @@ export async function compareIndustry(
     return normalizeResponse(data);
   } catch (error: any) {
     console.error("❌ Compare API Error:", error);
-    return "Unable to generate comparison at the moment.";
+    return fallbackMessage(language, "compare");
   }
 }
-
 
 /* =====================================================
    ANALYZE ACTIVITY WORKFLOW
@@ -94,8 +134,8 @@ export async function analyzeActivityWorkflow(
   language: Language
 ) {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/Productivity`, {
-      method:  "POST",
+    const res = await fetchWithTimeout(`${API_BASE_URL}/api/Productivity`, {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         industry,
@@ -114,7 +154,7 @@ export async function analyzeActivityWorkflow(
     return normalizeResponse(data);
   } catch (error: any) {
     console.error("❌ Activity Analysis API Error:", error);
-    return "Unable to generate workflow analysis at the moment.";
+    return fallbackMessage(language, "activity");
   }
 }
 
@@ -129,24 +169,24 @@ export async function saveConversation(
   title: string
 ): Promise<string | null> {
   try {
-    const auth        = getAuth(app);
+    const auth = getAuth(app);
     const currentUser = auth.currentUser;
-    if (!currentUser) return null;                     // not logged in — skip silently
+    if (!currentUser) return null; // not logged in — skip silently
 
     const token = await currentUser.getIdToken();
 
-    const res = await fetch(`${API_BASE_URL}/api/Conversation/save`, {
-      method:  "POST",
+    const res = await fetchWithTimeout(`${API_BASE_URL}/api/Conversation/save`, {
+      method: "POST",
       headers: {
-        "Content-Type":  "application/json",
-        Authorization:   `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
         industry,
         description,
         response: JSON.stringify(response),
         language,
-        title,                                          // ✅ pass AI-generated title
+        title, // ✅ pass AI-generated title
       }),
     });
 
@@ -173,17 +213,21 @@ export async function generateTitle(
   language: Language
 ): Promise<string> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/Productivity`, {
-      method:  "POST",
+    const res = await fetchWithTimeout(`${API_BASE_URL}/api/Productivity`, {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ industry, description, mode: "title", language }),
+      body: JSON.stringify({ industry, description, mode: "title", language }),
     });
 
     const data: ApiResponse<any> = await res.json();
     const raw = normalizeResponse(data);
-    const title = (typeof raw === "string" ? raw : "").trim().replace(/^"|"$/g, "").slice(0, 60);
+    const title = (typeof raw === "string" ? raw : "")
+      .trim()
+      .replace(/^"|"$/g, "")
+      .slice(0, 60);
+
     return title || industry;
   } catch {
-    return industry;                                    // fallback to industry name
+    return industry; // fallback to industry name
   }
 }
