@@ -500,7 +500,7 @@ export default function ProductivitySection({
   /* ── compare ── */
   const handleCompare = async () => {
     if (response?.compare) return;
-    if (!isLoggedIn && !isEmbedMode) { setShowAuthModal({ type: "compare", open: true }); return; }
+    if (!isLoggedIn) { setShowAuthModal({ type: "signup", open: true }); return; }
     try {
       setIsSubmitting(true);
       setMode("compare");
