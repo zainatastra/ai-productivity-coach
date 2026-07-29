@@ -5,6 +5,8 @@ import { API_BASE_URL } from "@/services/api";
 
 type Language = "en" | "de";
 
+const DEFAULT_LANGUAGE: Language = "de";
+
 interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
@@ -54,7 +56,7 @@ const DEFAULT_UI_TEXTS: Record<string, { en: string; de: string }> = {
 const LanguageContext = createContext<LanguageContextType | null>(null);
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [language, setLanguageState] = useState<Language>("en");
+  const [language, setLanguageState] = useState<Language>(DEFAULT_LANGUAGE);
   const [uiTexts, setUiTexts] = useState<any>(DEFAULT_UI_TEXTS);
 
   // =========================
@@ -62,12 +64,19 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   // =========================
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("appLanguage") as Language;
+      const saved = localStorage.getItem("appLanguage") as Language | null;
+
       if (saved === "en" || saved === "de") {
         setLanguageState(saved);
+        return;
       }
+
+      // German is the system default for first-time visitors.
+      localStorage.setItem("appLanguage", DEFAULT_LANGUAGE);
+      setLanguageState(DEFAULT_LANGUAGE);
     } catch {
       // localStorage not available (SSR guard)
+      setLanguageState(DEFAULT_LANGUAGE);
     }
   }, []);
 

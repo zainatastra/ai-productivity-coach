@@ -4,17 +4,15 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/services/AuthContext";
 import { useLanguage } from "@/services/LanguageContext";
-import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import ProductivitySection from "@/components/ProductivitySection";
 import ConfirmModal from "@/components/ConfirmModal";
+import AuthModal from "@/components/AuthModal";
 
 export default function Home() {
   const { user, loading: authLoading } = useAuth();
   const { language } = useLanguage();
-  const router = useRouter();
-
   const [response, setResponse] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<"generate" | "compare" | null>(null);
@@ -25,8 +23,9 @@ export default function Home() {
   const [isRestored, setIsRestored] = useState(false);
   const [showClearModal, setShowClearModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState<{ open: boolean; type?: string }>({
-  open: false,
-});
+    open: false,
+    type: "login",
+  });
 
 const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
@@ -163,6 +162,7 @@ if (!isHydrated) return null;
           <Header
             setShowClearModal={setShowClearModal}
             setMobileSidebarOpen={setMobileSidebarOpen}
+            onOpenAuthModal={(type) => setShowAuthModal({ open: true, type })}
           />
         </div>
 
@@ -219,73 +219,14 @@ if (!isHydrated) return null;
 </AnimatePresence>
 
 {/* ================= AUTH MODAL ================= */}
-<AnimatePresence>
-  {showAuthModal.open && (
-    <motion.div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-    >
-      <motion.div
-        className="relative bg-white rounded-2xl p-6 w-[400px] text-center shadow-xl"
-        initial={{ scale: 0.9 }}
-        animate={{ scale: 1 }}
-        exit={{ scale: 0.9 }}
-      >
-
-        {/* ❌ CLOSE BUTTON */}
-        <button
-          onClick={() => setShowAuthModal({ open: false })}
-          className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 transition"
-        >
-          ✕
-        </button>
-
-        {/* TITLE */}
-        <h3 className="text-lg font-semibold mb-2">
-          {language === "de"
-            ? "Anmelden oder Registrieren, um fortzufahren"
-            : "Login or Register to Continue"}
-        </h3>
-
-        {/* DESCRIPTION */}
-        <p className="text-sm text-gray-500 mb-6 leading-relaxed">
-          {language === "de"
-            ? "Um die Vergleichsfunktion zu nutzen und personalisierte Einblicke zu erhalten, melden Sie sich bitte an oder erstellen Sie ein kostenloses Konto."
-            : "To access the compare feature and unlock personalized insights, please log in or create a free account."}
-        </p>
-
-        {/* ACTION BUTTONS */}
-        <div className="flex justify-center gap-3">
-          
-          {/* LOGIN */}
-          <button
-            onClick={() => {
-              setShowAuthModal({ open: false });
-              router.push("/auth?mode=login");
-            }}
-            className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-100 transition"
-          >
-            {language === "de" ? "Anmelden" : "Login"}
-          </button>
-
-          {/* REGISTER */}
-          <button
-            onClick={() => {
-              setShowAuthModal({ open: false });
-              router.push("/auth?mode=signup");
-            }}
-            className="px-4 py-2 bg-black text-white rounded-lg text-sm hover:bg-gray-900 transition"
-          >
-            {language === "de" ? "Registrieren" : "Register"}
-          </button>
-
-        </div>
-      </motion.div>
-    </motion.div>
-  )}
-</AnimatePresence>
+<AuthModal
+  open={showAuthModal.open}
+  initialMode={showAuthModal.type === "signup" ? "signup" : "login"}
+  onClose={() => setShowAuthModal({ open: false, type: showAuthModal.type })}
+  onSuccess={() => {
+    setSidebarRefreshKey((k) => k + 1);
+  }}
+/>
 
       </div>
     </div>

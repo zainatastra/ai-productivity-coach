@@ -9,11 +9,13 @@ import { useLanguage } from "@/services/LanguageContext";
 interface HeaderProps {
   setShowClearModal?: (value: boolean) => void;
   setMobileSidebarOpen?: (value: boolean) => void;
+  onOpenAuthModal?: (mode: "login" | "signup") => void;
 }
 
 export default function Header({
   setShowClearModal,
   setMobileSidebarOpen,
+  onOpenAuthModal,
 }: HeaderProps) {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -183,7 +185,7 @@ export default function Header({
             onClick={() => router.push("/")}
           >
             {language === "de"
-              ? "Hey Eric! Mach mich produktiv!"
+              ? "Ey Eric! Mach mich produktiv!"
               : "Ey Eric! Make me Productive!"}
           </span>
         </div>
@@ -196,14 +198,14 @@ export default function Header({
             <>
               <button
                 className="hdr-btn hdr-btn-outline"
-                onClick={() => router.push("/auth?mode=login")}
+                onClick={() => onOpenAuthModal ? onOpenAuthModal("login") : router.push("/auth?mode=login")}
               >
                 {language === "de" ? "Anmelden" : "Login"}
               </button>
 
               <button
                 className="hdr-btn hdr-btn-solid"
-                onClick={() => router.push("/auth?mode=signup")}
+                onClick={() => onOpenAuthModal ? onOpenAuthModal("signup") : router.push("/auth?mode=signup")}
               >
                 {language === "de" ? "Registrieren" : "Sign Up"}
               </button>

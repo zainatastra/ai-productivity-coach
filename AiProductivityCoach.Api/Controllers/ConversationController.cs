@@ -196,7 +196,7 @@ namespace AiProductivityCoach.Api.Controllers
         public string  Description { get; set; } = "";
         public string  Response    { get; set; } = "";
         public string? Language    { get; set; } = "en";
-        public string? Title       { get; set; }          // ✅ AI-generated title from frontend
+        public string? Title       { get; set; }
     }
 
     public class UpdateConversationDto
