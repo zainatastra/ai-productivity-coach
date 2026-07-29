@@ -329,7 +329,7 @@ const translations = {
 const rightsIcons = [Eye, Pencil, Trash2, PauseCircle, Package, Ban, Bot, Megaphone];
 
 export default function PrivacyPolicyPage() {
-  const [lang, setLang] = useState<Lang>("en");
+  const [lang, setLang] = useState<Lang>("de");
   const [activeSection, setActiveSection] = useState("sec1");
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
 
@@ -569,7 +569,7 @@ export default function PrivacyPolicyPage() {
 
         {/* TOC */}
         <nav className="toc">
-          <div className="toc-label">Table of Contents</div>
+          <div className="toc-label">{lang === "de" ? "Inhaltsverzeichnis" : "Table of Contents"}</div>
           <ul>
             {tocItems.map(({ id, Icon, label }) => (
               <li key={id}>

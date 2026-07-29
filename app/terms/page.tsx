@@ -290,7 +290,7 @@ const translations = {
 };
 
 export default function TermsPage() {
-  const [lang, setLang] = useState<Lang>("en");
+  const [lang, setLang] = useState<Lang>("de");
   const [activeSection, setActiveSection] = useState("sec1");
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
 
@@ -512,7 +512,7 @@ export default function TermsPage() {
 
         {/* TOC */}
         <nav className="toc">
-          <div className="toc-label">Table of Contents</div>
+          <div className="toc-label">{lang === "de" ? "Inhaltsverzeichnis" : "Table of Contents"}</div>
           <ul>
             {tocItems.map(({ id, Icon, label }) => (
               <li key={id}>

@@ -17,7 +17,7 @@ namespace AiProductivityCoach.Api.Controllers
         public string Industry    { get; set; } = "";
         public string Description { get; set; } = "";
         public string Mode        { get; set; } = "generate";
-        public string Language    { get; set; } = "en";
+        public string Language    { get; set; } = "de";
         public List<ActivityWorkflowItem> Activities { get; set; } = new();
     }
 
@@ -58,7 +58,8 @@ namespace AiProductivityCoach.Api.Controllers
                 }
 
                 // ✅ LANGUAGE INSTRUCTION
-                string langInstruction = request.Language == "de"
+                var requestedLanguage = string.IsNullOrWhiteSpace(request.Language) ? "de" : request.Language.Trim().ToLowerInvariant();
+                string langInstruction = requestedLanguage == "de"
                     ? "Respond ONLY in German language using professional, native-level fluency (C1/C2 level). Keep structure exactly the same."
                     : "Respond ONLY in English language. Keep structure exactly the same.";
 
@@ -85,7 +86,7 @@ RULES:
 
 Industry: {request.Industry}
 Description: {request.Description}
-Language: {(request.Language == "de" ? "German" : "English")}
+Language: {(requestedLanguage == "de" ? "German" : "English")}
 
 Title:";
                         break;

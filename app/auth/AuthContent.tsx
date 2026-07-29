@@ -70,7 +70,7 @@ export default function AuthContent() {
     useState("");
 
   const [lang, setLang] =
-    useState<"en" | "de">("en");
+    useState<"en" | "de">("de");
 
   const [modalOpen, setModalOpen] =
     useState(false);
@@ -124,7 +124,9 @@ export default function AuthContent() {
 
     if (!email || !password) {
       openModal(
-        "Please fill in both Email and Password."
+        lang === "de"
+          ? "Bitte geben Sie E-Mail und Passwort ein."
+          : "Please fill in both Email and Password."
       );
       return;
     }
@@ -165,11 +167,15 @@ export default function AuthContent() {
         error.code === "auth/user-not-found"
       ) {
         setFieldError(
-          "No account found with this email. Please sign up."
+          lang === "de"
+            ? "Für diese E-Mail wurde kein Konto gefunden. Bitte registrieren Sie sich."
+            : "No account found with this email. Please sign up."
         );
       } else {
         setTopError(
-          "Invalid Credential, Please try again"
+          lang === "de"
+            ? "Ungültige Anmeldedaten. Bitte versuchen Sie es erneut."
+            : "Invalid Credential, Please try again"
         );
       }
     } finally {
@@ -184,17 +190,17 @@ const handleSignup = async () => {
   setTopError("");
 
 if (!name || !surname || !company || !phone || !email || !password) {
-  openModal("Please fill in all required fields.");
+  openModal(lang === "de" ? "Bitte füllen Sie alle Pflichtfelder aus." : "Please fill in all required fields.");
   return;
 }
 
 if (!termsAccepted) {
-  openModal("You must accept the Terms of Use and Privacy Policy.");
+  openModal(lang === "de" ? "Sie müssen den Nutzungsbedingungen und der Datenschutzerklärung zustimmen." : "You must accept the Terms of Use and Privacy Policy.");
   return;
 }
 
 if (!phone || !phone.startsWith("+")) {
-  openModal("Please enter a valid phone number.");
+  openModal(lang === "de" ? "Bitte geben Sie eine gültige Telefonnummer ein." : "Please enter a valid phone number.");
   return;
 }
 
@@ -229,7 +235,7 @@ if (!phone || !phone.startsWith("+")) {
     router.push("/verify");
 
   } catch (error) {
-    setTopError("Failed to send verification code. Please try again.");
+    setTopError(lang === "de" ? "Der Bestätigungscode konnte nicht gesendet werden. Bitte versuchen Sie es erneut." : "Failed to send verification code. Please try again.");
   } finally {
     setLoading(false);
   }
@@ -517,7 +523,7 @@ return (
               <span>
                 {t.agree}{" "}
                 <a href="/terms" className="underline">{t.terms}</a>{" "}
-                and{" "}
+                {lang === "de" ? "und" : "and"}{" "}
                 <a href="/privacy-policy" className="underline">{t.privacy}</a>
               </span>
 
@@ -543,7 +549,7 @@ return (
       open={modalOpen}
       title={t.missing}
       description={modalMessage}
-      confirmText="OK"
+      confirmText={lang === "de" ? "OK" : "OK"}
       onCancel={() => setModalOpen(false)}
       onConfirm={() => setModalOpen(false)}
     />

@@ -11,8 +11,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Ey Eric! Make me Productive!",
-  description: "Optimize your professional life with AI insights.",
+  title: "Ey Eric! Mach mich produktiv!",
+  description: "Optimieren Sie Ihren Arbeitsalltag mit KI-gestützten Einblicken.",
 };
 
 export default function RootLayout({
@@ -21,7 +21,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="de">
       <body className={`${inter.className} bg-gray-50 text-gray-800`}>
         <AuthProvider>
           <LanguageProvider>

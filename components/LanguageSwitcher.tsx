@@ -15,7 +15,19 @@ export default function LanguageSwitcher() {
     { code: "de", label: "DE", full: "Deutsch", flag: "/de.png" },
   ];
 
-  const active = languages.find((l) => l.code === language);
+  // ✅ German should be the default selected language in the switcher.
+  // This runs once on mount and sets the global app language to German.
+  // Users can still manually switch to English afterward from the dropdown.
+  useEffect(() => {
+    setLanguage("de");
+    try {
+      localStorage.setItem("appLanguage", "de");
+    } catch {
+      // localStorage may be unavailable during restricted browser contexts
+    }
+  }, [setLanguage]);
+
+  const active = languages.find((l) => l.code === language) || languages[1];
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
