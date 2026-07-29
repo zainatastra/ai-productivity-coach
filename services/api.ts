@@ -16,25 +16,46 @@ const LOCAL_API_URL = "http://localhost:5048";
 const PRODUCTION_API_URL = "https://ai-productivity-coach-mlnn.onrender.com";
 
 /*
-  ✅ BASE URL RULES
+  ✅ API ROUTING RULES
 
   1. Local development:
-     - Uses http://localhost:5048
+     Productivity requests use the local .NET backend directly:
+     http://localhost:5048/api/Productivity
 
   2. Production / Vercel / WordPress embed:
-     - Uses Render backend directly
+     Productivity requests use the Vercel same-origin proxy:
+     /api/productivity
 
-  3. If NEXT_PUBLIC_API_URL is configured on Vercel:
-     - It takes priority
+     This prevents iframe browsers from suspending direct cross-origin
+     requests from the embedded WordPress iframe to Render.
+
+  3. Authenticated conversation saving still uses the .NET backend directly,
+     because it needs Firebase Authorization headers and backend conversation APIs.
 */
 const isBrowser = typeof window !== "undefined";
 const isLocalhost =
   isBrowser &&
-  ["localhost", "127.0.0.1"].includes(window.location.hostname);
+  (window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1");
 
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  (isLocalhost ? LOCAL_API_URL : PRODUCTION_API_URL);
+const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
+
+export const API_BASE_URL = isLocalhost
+  ? configuredApiUrl || LOCAL_API_URL
+  : "";
+
+const DIRECT_BACKEND_URL =
+  configuredApiUrl && !isLocalhost ? configuredApiUrl : PRODUCTION_API_URL;
+
+function productivityEndpoint() {
+  return API_BASE_URL ? `${API_BASE_URL}/api/Productivity` : "/api/productivity";
+}
+
+function conversationSaveEndpoint() {
+  return API_BASE_URL
+    ? `${API_BASE_URL}/api/Conversation/save`
+    : `${DIRECT_BACKEND_URL}/api/Conversation/save`;
+}
 
 /* =====================================================
    HELPER: NORMALIZE RESPONSE (ROBUST)
@@ -42,22 +63,15 @@ export const API_BASE_URL =
 function normalizeResponse(res: ApiResponse<any>) {
   if (res?.data?.message) return res.data.message;
   if (res?.message) return res.message;
+  if (res?.data) return res.data;
   return res;
 }
 
 /* =====================================================
    HELPER: SAFE FETCH
 
-   IMPORTANT:
-   Do NOT use AbortController here.
-
-   Reason:
-   In WordPress iframe embed + Render cold start + OpenAI response time,
-   forced abort can stop the request before the backend responds.
-   This caused:
-   "AbortError: signal is aborted without reason"
-
-   Browser/native fetch will now wait normally.
+   No AbortController here.
+   AI + Render cold starts can take longer, especially inside embeds.
 ===================================================== */
 async function safeFetch(url: string, options: RequestInit) {
   return fetch(url, {
@@ -91,9 +105,10 @@ export async function generateProductivity(
   language: Language
 ) {
   try {
-    console.log("🌍 API_BASE_URL:", API_BASE_URL);
+    const endpoint = productivityEndpoint();
+    console.log("🌍 Productivity endpoint:", endpoint);
 
-    const res = await safeFetch(`${API_BASE_URL}/api/Productivity`, {
+    const res = await safeFetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ industry, description, mode: "generate", language }),
@@ -122,9 +137,10 @@ export async function compareIndustry(
   language: Language
 ) {
   try {
-    console.log("🌍 API_BASE_URL:", API_BASE_URL);
+    const endpoint = productivityEndpoint();
+    console.log("🌍 Productivity endpoint:", endpoint);
 
-    const res = await safeFetch(`${API_BASE_URL}/api/Productivity`, {
+    const res = await safeFetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ industry, description, mode: "compare", language }),
@@ -159,9 +175,10 @@ export async function analyzeActivityWorkflow(
   language: Language
 ) {
   try {
-    console.log("🌍 API_BASE_URL:", API_BASE_URL);
+    const endpoint = productivityEndpoint();
+    console.log("🌍 Productivity endpoint:", endpoint);
 
-    const res = await safeFetch(`${API_BASE_URL}/api/Productivity`, {
+    const res = await safeFetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -203,8 +220,9 @@ export async function saveConversation(
     if (!currentUser) return null; // not logged in — skip silently
 
     const token = await currentUser.getIdToken();
+    const endpoint = conversationSaveEndpoint();
 
-    const res = await safeFetch(`${API_BASE_URL}/api/Conversation/save`, {
+    const res = await safeFetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -242,7 +260,9 @@ export async function generateTitle(
   language: Language
 ): Promise<string> {
   try {
-    const res = await safeFetch(`${API_BASE_URL}/api/Productivity`, {
+    const endpoint = productivityEndpoint();
+
+    const res = await safeFetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ industry, description, mode: "title", language }),
