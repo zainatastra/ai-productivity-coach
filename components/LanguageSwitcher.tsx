@@ -5,28 +5,27 @@ import { ChevronDown } from "lucide-react";
 import { useLanguage } from "@/services/LanguageContext";
 import { motion, AnimatePresence } from "framer-motion";
 
+type LanguageCode = "en" | "de";
+
+const languages: Array<{
+  code: LanguageCode;
+  label: string;
+  full: string;
+  flag: string;
+}> = [
+  { code: "en", label: "EN", full: "English", flag: "/us.png" },
+  { code: "de", label: "DE", full: "Deutsch", flag: "/de.png" },
+];
+
 export default function LanguageSwitcher() {
   const { language, setLanguage } = useLanguage();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const languages = [
-    { code: "en", label: "EN", full: "English", flag: "/us.png" },
-    { code: "de", label: "DE", full: "Deutsch", flag: "/de.png" },
-  ];
-
-  // ✅ German should be the default selected language in the switcher.
-  // This runs once on mount and sets the global app language to German.
-  // Users can still manually switch to English afterward from the dropdown.
-  useEffect(() => {
-    setLanguage("de");
-    try {
-      localStorage.setItem("appLanguage", "de");
-    } catch {
-      // localStorage may be unavailable during restricted browser contexts
-    }
-  }, [setLanguage]);
-
+  // ✅ Important:
+  // Do NOT force German here.
+  // German default is handled once inside LanguageContext for first-time users.
+  // If we call setLanguage("de") here, clicking English instantly gets reset back to German.
   const active = languages.find((l) => l.code === language) || languages[1];
 
   useEffect(() => {
@@ -35,9 +34,15 @@ export default function LanguageSwitcher() {
         setOpen(false);
       }
     };
+
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  const handleSelectLanguage = (code: LanguageCode) => {
+    setLanguage(code);
+    setOpen(false);
+  };
 
   return (
     <>
@@ -59,7 +64,7 @@ export default function LanguageSwitcher() {
           gap: 6px;
           cursor: pointer;
           white-space: nowrap;
-          transition: background 0.15s, box-shadow 0.15s;
+          transition: background 0.15s, box-shadow 0.15s, border-color 0.15s;
           font-family: inherit;
           box-sizing: border-box;
         }
@@ -77,7 +82,7 @@ export default function LanguageSwitcher() {
 
         .ls-dropdown {
           position: absolute;
-          left: 0;
+          right: 0;
           top: calc(100% + 6px);
           width: 148px;
           background: #fff;
@@ -104,16 +109,27 @@ export default function LanguageSwitcher() {
           transition: background 0.12s;
         }
         .ls-option:hover { background: #f5f5f5; }
+        .ls-option.active {
+          background: #f8fafc;
+          font-weight: 700;
+          color: #111827;
+        }
       `}</style>
 
       <div ref={ref} style={{ position: "relative" }}>
-        <button className="ls-btn" onClick={() => setOpen((prev) => !prev)}>
+        <button
+          type="button"
+          className="ls-btn"
+          onClick={() => setOpen((prev) => !prev)}
+          aria-label="Change language"
+          aria-expanded={open}
+        >
           <img
-            src={active?.flag}
-            alt="flag"
+            src={active.flag}
+            alt={active.label}
             style={{ width: 14, height: 14, objectFit: "cover", borderRadius: 3 }}
           />
-          <span>{active?.label}</span>
+          <span>{active.label}</span>
           <ChevronDown
             size={12}
             style={{
@@ -132,18 +148,19 @@ export default function LanguageSwitcher() {
               exit={{ opacity: 0, y: -6, scale: 0.97 }}
               transition={{ type: "spring", stiffness: 500, damping: 35 }}
             >
-              {languages.map((lang) => (
+              {languages.map((item) => (
                 <button
-                  key={lang.code}
-                  className="ls-option"
-                  onClick={() => { setLanguage(lang.code as "en" | "de"); setOpen(false); }}
+                  key={item.code}
+                  type="button"
+                  className={`ls-option ${language === item.code ? "active" : ""}`}
+                  onClick={() => handleSelectLanguage(item.code)}
                 >
                   <img
-                    src={lang.flag}
-                    alt={lang.full}
+                    src={item.flag}
+                    alt={item.full}
                     style={{ width: 14, height: 14, objectFit: "cover", borderRadius: 3 }}
                   />
-                  <span>{lang.full}</span>
+                  <span>{item.full}</span>
                 </button>
               ))}
             </motion.div>

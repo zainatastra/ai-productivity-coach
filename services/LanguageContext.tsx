@@ -6,6 +6,7 @@ import { API_BASE_URL } from "@/services/api";
 type Language = "en" | "de";
 
 const DEFAULT_LANGUAGE: Language = "de";
+const STORAGE_KEY = "appLanguage";
 
 interface LanguageContextType {
   language: Language;
@@ -50,10 +51,14 @@ const DEFAULT_UI_TEXTS: Record<string, { en: string; de: string }> = {
   },
   login: { en: "Login", de: "Anmelden" },
   sign_up: { en: "Sign Up", de: "Registrieren" },
-  dashboard: { en: "Dashboard", de: "Dashboard" },
+  dashboard: { en: "Dashboard", de: "Übersicht" },
 };
 
 const LanguageContext = createContext<LanguageContextType | null>(null);
+
+function isValidLanguage(value: string | null): value is Language {
+  return value === "en" || value === "de";
+}
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguageState] = useState<Language>(DEFAULT_LANGUAGE);
@@ -61,21 +66,21 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
   // =========================
   // LOAD SAVED LANGUAGE
+  // German is only the first-time default.
+  // If the user manually chooses English, never force it back to German.
   // =========================
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("appLanguage") as Language | null;
+      const saved = localStorage.getItem(STORAGE_KEY);
 
-      if (saved === "en" || saved === "de") {
+      if (isValidLanguage(saved)) {
         setLanguageState(saved);
         return;
       }
 
-      // German is the system default for first-time visitors.
-      localStorage.setItem("appLanguage", DEFAULT_LANGUAGE);
+      localStorage.setItem(STORAGE_KEY, DEFAULT_LANGUAGE);
       setLanguageState(DEFAULT_LANGUAGE);
     } catch {
-      // localStorage not available (SSR guard)
       setLanguageState(DEFAULT_LANGUAGE);
     }
   }, []);
@@ -89,8 +94,10 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
     const fetchUITexts = async () => {
       try {
+        if (!API_BASE_URL) return;
+
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000); // 5s timeout
+        const timeout = setTimeout(() => controller.abort(), 5000);
 
         const res = await fetch(`${API_BASE_URL}/api/Admin/ui-texts`, {
           signal: controller.signal,
@@ -101,7 +108,6 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
         if (cancelled) return;
 
         if (!res.ok) {
-          // Backend reachable but returned error — keep defaults silently
           console.warn(
             `[LanguageContext] UI texts endpoint returned ${res.status}. Using defaults.`
           );
@@ -112,7 +118,6 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
         if (cancelled) return;
 
-        // Merge with defaults so missing keys never cause blank UI
         setUiTexts({ ...DEFAULT_UI_TEXTS, ...data });
       } catch (err: any) {
         if (cancelled) return;
@@ -120,17 +125,15 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
         if (err?.name === "AbortError") {
           console.warn("[LanguageContext] UI texts fetch timed out. Using defaults.");
         } else {
-          // ERR_CONNECTION_REFUSED, network error, etc. — silent fallback
           console.warn("[LanguageContext] UI texts fetch failed. Using defaults.", err?.message);
         }
-        // DEFAULT_UI_TEXTS already set as initial state — no action needed
       }
     };
 
     fetchUITexts();
 
     return () => {
-      cancelled = true; // Prevent state updates on unmounted component
+      cancelled = true;
     };
   }, []);
 
@@ -140,11 +143,21 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
     try {
-      localStorage.setItem("appLanguage", lang);
+      localStorage.setItem(STORAGE_KEY, lang);
+      document.documentElement.lang = lang;
     } catch {
       // localStorage not available
     }
   };
+
+  // Keep html lang synchronized after initial saved language is loaded.
+  useEffect(() => {
+    try {
+      document.documentElement.lang = language;
+    } catch {
+      // document unavailable in edge cases
+    }
+  }, [language]);
 
   // =========================
   // TRANSLATION FUNCTION
