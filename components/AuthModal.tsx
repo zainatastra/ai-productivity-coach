@@ -823,7 +823,7 @@ export default function AuthModal({
                 transition={{ duration: 0.28 }}
               >
                 <h1 className="text-xl font-semibold text-center mb-1">
-                  AI-Productivity Coach
+                  Ey Eric!
                 </h1>
 
                 <div className="auth-lang-wrap">
