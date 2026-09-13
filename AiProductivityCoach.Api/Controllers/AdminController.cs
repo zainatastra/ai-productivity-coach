@@ -41,6 +41,12 @@ namespace AiProductivityCoach.Api.Controllers
             public string Password { get; set; } = string.Empty;
         }
 
+        public class UpdatePublisherCredentialsDto
+        {
+            public string Email { get; set; } = string.Empty;
+            public string Password { get; set; } = string.Empty;
+        }
+
         // =====================================================
         // 👤 CREATE PUBLISHER ACCOUNT (ADMIN ONLY)
         // =====================================================
@@ -157,6 +163,142 @@ namespace AiProductivityCoach.Api.Controllers
         // =====================================================
         // 🔐 PUBLISHER CREDENTIAL / ACCESS MANAGEMENT (ADMIN ONLY)
         // =====================================================
+        [HttpPut("publishers/{uid}/credentials")]
+        public async Task<IActionResult> UpdatePublisherCredentials(
+            string uid,
+            [FromBody] UpdatePublisherCredentialsDto request)
+        {
+            var adminUid = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (string.IsNullOrWhiteSpace(adminUid))
+                return Unauthorized();
+
+            if (string.IsNullOrWhiteSpace(uid))
+                return BadRequest(new { message = "Publisher UID is required." });
+
+            var email = request.Email?.Trim().ToLowerInvariant() ?? string.Empty;
+            var password = request.Password ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(email) ||
+                !System.Net.Mail.MailAddress.TryCreate(email, out _))
+            {
+                return BadRequest(new { message = "A valid email address is required." });
+            }
+
+            if (!string.IsNullOrEmpty(password) && password.Length < 8)
+                return BadRequest(new { message = "New password must be at least 8 characters." });
+
+            try
+            {
+                var target = await FirebaseAuth.DefaultInstance.GetUserAsync(uid);
+
+                if (!IsPublisher(target))
+                    return NotFound(new { message = "Publisher account not found." });
+
+                if (target.Disabled)
+                    return Conflict(new { message = "Access is revoked for this publisher." });
+
+                var currentEmail = (target.Email ?? string.Empty).Trim().ToLowerInvariant();
+                var emailChanged = !string.Equals(currentEmail, email, StringComparison.OrdinalIgnoreCase);
+                var passwordChanged = !string.IsNullOrEmpty(password);
+
+                if (!emailChanged && !passwordChanged)
+                {
+                    return BadRequest(new
+                    {
+                        message = "Change the email address or provide a new password before updating credentials."
+                    });
+                }
+
+                var args = new UserRecordArgs
+                {
+                    Uid = uid
+                };
+
+                if (emailChanged)
+                {
+                    args.Email = email;
+                    args.EmailVerified = false;
+                }
+
+                if (passwordChanged)
+                    args.Password = password;
+
+                await FirebaseAuth.DefaultInstance.UpdateUserAsync(args);
+
+                // Force the publisher to sign in again with the updated credentials.
+                await FirebaseAuth.DefaultInstance.RevokeRefreshTokensAsync(uid);
+
+                var now = Timestamp.GetCurrentTimestamp();
+                var updates = new Dictionary<string, object>
+                {
+                    { "email", email },
+                    { "updatedAt", now },
+                    { "credentialsUpdatedAt", now },
+                    { "credentialsUpdatedBy", adminUid }
+                };
+
+                if (emailChanged)
+                {
+                    updates["emailChangedAt"] = now;
+                    updates["emailChangedBy"] = adminUid;
+                }
+
+                if (passwordChanged)
+                {
+                    updates["passwordChangedAt"] = now;
+                    updates["passwordChangedBy"] = adminUid;
+                }
+
+                await _firestore.Collection("users").Document(uid).SetAsync(
+                    updates,
+                    SetOptions.MergeAll
+                );
+
+                var noteParts = new List<string>();
+
+                if (emailChanged)
+                    noteParts.Add($"email: {currentEmail} -> {email}");
+
+                if (passwordChanged)
+                    noteParts.Add("password changed");
+
+                await WriteAuditLogAsync(
+                    adminUid,
+                    "admin",
+                    "publisher.credentials_updated",
+                    string.Empty,
+                    "publisher",
+                    uid,
+                    null,
+                    "credentials_updated",
+                    string.Join(" · ", noteParts)
+                );
+
+                return Ok(new
+                {
+                    success = true,
+                    uid,
+                    email,
+                    emailChanged,
+                    passwordChanged,
+                    message = "Publisher credentials updated successfully."
+                });
+            }
+            catch (FirebaseAuthException ex)
+            {
+                if (ex.AuthErrorCode == AuthErrorCode.EmailAlreadyExists)
+                {
+                    return Conflict(new
+                    {
+                        message = "Another account already uses this email address."
+                    });
+                }
+
+                return NotFound(new { message = "Publisher account not found." });
+            }
+        }
+
         [HttpPut("publishers/{uid}/password")]
         public async Task<IActionResult> ChangePublisherPassword(
             string uid,

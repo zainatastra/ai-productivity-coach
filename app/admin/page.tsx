@@ -104,7 +104,7 @@ type AuditLog = {
   createdAt?: string;
 };
 
-type PublisherAdminAction = "password" | "revoke" | "restore" | "delete";
+type PublisherAdminAction = "credentials" | "revoke" | "restore" | "delete";
 
 type ProviderConfirmAction = "approve" | "request_revision" | "reject" | "unpublish" | "republish" | "delete";
 
@@ -149,6 +149,7 @@ export default function AdminDashboard() {
   const [publisherActionLoading,     setPublisherActionLoading]     = useState(false);
   const [publisherActionError,       setPublisherActionError]       = useState("");
   const [newPublisherPassword,       setNewPublisherPassword]       = useState("");
+  const [newPublisherEmail,          setNewPublisherEmail]          = useState("");
   const [confirmPublisherPassword,   setConfirmPublisherPassword]   = useState("");
   const [showNewPublisherPassword,   setShowNewPublisherPassword]   = useState(false);
   const [adminToast,                 setAdminToast]                 = useState<AdminToast | null>(null);
@@ -523,6 +524,7 @@ export default function AdminDashboard() {
     setPublisherTarget(user);
     setPublisherAction(action);
     setPublisherActionError("");
+    setNewPublisherEmail(user?.email || "");
     setNewPublisherPassword("");
     setConfirmPublisherPassword("");
     setShowNewPublisherPassword(false);
@@ -533,6 +535,7 @@ export default function AdminDashboard() {
     setPublisherAction(null);
     setPublisherTarget(null);
     setPublisherActionError("");
+    setNewPublisherEmail("");
     setNewPublisherPassword("");
     setConfirmPublisherPassword("");
     setShowNewPublisherPassword(false);
@@ -546,14 +549,29 @@ export default function AdminDashboard() {
       return;
     }
 
-    if (publisherAction === "password") {
-      if (newPublisherPassword.length < 8) {
+    if (publisherAction === "credentials") {
+      const email = newPublisherEmail.trim().toLowerCase();
+      const currentEmail = String(publisherTarget.email || "").trim().toLowerCase();
+      const passwordChanged = newPublisherPassword.length > 0;
+      const emailChanged = email !== currentEmail;
+
+      if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+        setPublisherActionError("Enter a valid email address.");
+        return;
+      }
+
+      if (passwordChanged && newPublisherPassword.length < 8) {
         setPublisherActionError("New password must be at least 8 characters.");
         return;
       }
 
-      if (newPublisherPassword !== confirmPublisherPassword) {
+      if (passwordChanged && newPublisherPassword !== confirmPublisherPassword) {
         setPublisherActionError("Passwords do not match.");
+        return;
+      }
+
+      if (!emailChanged && !passwordChanged) {
+        setPublisherActionError("Change the email address or enter a new password before updating credentials.");
         return;
       }
     }
@@ -569,10 +587,13 @@ export default function AdminDashboard() {
       let method = "POST";
       let body: string | undefined;
 
-      if (publisherAction === "password") {
-        url += "/password";
+      if (publisherAction === "credentials") {
+        url += "/credentials";
         method = "PUT";
-        body = JSON.stringify({ password: newPublisherPassword });
+        body = JSON.stringify({
+          email: newPublisherEmail.trim().toLowerCase(),
+          password: newPublisherPassword,
+        });
       } else if (publisherAction === "revoke") {
         url += "/revoke";
         method = "POST";
@@ -602,8 +623,8 @@ export default function AdminDashboard() {
 
       const name = publisherTarget.fullName || publisherTarget.email || "Publisher";
       const successText =
-        publisherAction === "password"
-          ? `${name}'s password was changed and all existing sessions were revoked.`
+        publisherAction === "credentials"
+          ? `${name}'s credentials were updated and all existing sessions were revoked.`
           : publisherAction === "revoke"
             ? `${name}'s publisher access was revoked immediately.`
             : publisherAction === "restore"
@@ -613,6 +634,7 @@ export default function AdminDashboard() {
       setPublisherAction(null);
       setPublisherTarget(null);
       setPublisherActionError("");
+      setNewPublisherEmail("");
       setNewPublisherPassword("");
       setConfirmPublisherPassword("");
       setShowNewPublisherPassword(false);
@@ -2126,10 +2148,10 @@ export default function AdminDashboard() {
                                           <button
                                             className="adm-action-item"
                                             disabled={(user.status || "active").toLowerCase() === "disabled"}
-                                            onClick={() => openPublisherAction(user, "password")}
+                                            onClick={() => openPublisherAction(user, "credentials")}
                                           >
                                             <KeyRound size={14} />
-                                            Change Password
+                                            Update Credentials
                                           </button>
                                           {(user.status || "active").toLowerCase() === "disabled" ? (
                                             <button
@@ -3005,7 +3027,7 @@ export default function AdminDashboard() {
               <div className="adm-pub-head">
                 <div>
                   <div className={`adm-account-modal-icon ${publisherAction === "delete" ? "danger" : publisherAction === "revoke" ? "warn" : publisherAction === "restore" ? "restore" : ""}`}>
-                    {publisherAction === "password"
+                    {publisherAction === "credentials"
                       ? <KeyRound size={19} />
                       : publisherAction === "revoke"
                         ? <ShieldOff size={19} />
@@ -3015,8 +3037,8 @@ export default function AdminDashboard() {
                   </div>
 
                   <h2 className="adm-pub-title">
-                    {publisherAction === "password"
-                      ? "Change Password"
+                    {publisherAction === "credentials"
+                      ? "Update Credentials"
                       : publisherAction === "revoke"
                         ? "Revoke Publisher Access"
                         : publisherAction === "restore"
@@ -3025,8 +3047,8 @@ export default function AdminDashboard() {
                   </h2>
 
                   <p className="adm-pub-sub">
-                    {publisherAction === "password"
-                      ? "Set a new password for this publisher. Existing sessions will be invalidated immediately."
+                    {publisherAction === "credentials"
+                      ? "Update this publisher’s email address and/or password. Existing sessions will be invalidated immediately."
                       : publisherAction === "revoke"
                         ? "This publisher will be blocked from signing in and all current sessions will be revoked."
                         : publisherAction === "restore"
@@ -3062,10 +3084,23 @@ export default function AdminDashboard() {
                   </motion.div>
                 )}
 
-                {publisherAction === "password" && (
+                {publisherAction === "credentials" && (
                   <>
                     <div className="adm-pub-field">
-                      <label className="adm-pub-label">New Password</label>
+                      <label className="adm-pub-label">Email Address</label>
+                      <input
+                        className="adm-pub-input"
+                        type="email"
+                        value={newPublisherEmail}
+                        onChange={(e) => setNewPublisherEmail(e.target.value)}
+                        placeholder="publisher@company.com"
+                        autoComplete="off"
+                        disabled={publisherActionLoading}
+                      />
+                    </div>
+
+                    <div className="adm-pub-field">
+                      <label className="adm-pub-label">New Password <span style={{ fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
                       <div className="adm-pub-input-wrap">
                         <input
                           className="adm-pub-input password"
@@ -3158,10 +3193,10 @@ export default function AdminDashboard() {
                         <span className="adm-pub-spinner" />
                         Processing…
                       </>
-                    ) : publisherAction === "password" ? (
+                    ) : publisherAction === "credentials" ? (
                       <>
                         <KeyRound size={14} />
-                        Change Password
+                        Update Credentials
                       </>
                     ) : publisherAction === "revoke" ? (
                       <>
