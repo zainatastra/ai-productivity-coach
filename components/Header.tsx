@@ -3,7 +3,7 @@
 import { useAuth } from "@/services/AuthContext";
 import { useRouter } from "next/navigation";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
-import { Menu } from "lucide-react";
+import { Building2, Menu } from "lucide-react";
 import { useLanguage } from "@/services/LanguageContext";
 
 interface HeaderProps {
@@ -153,6 +153,44 @@ export default function Header({
           box-shadow: 0 3px 10px rgba(0,0,0,0.22);
         }
 
+
+        .hdr-directory {
+          height:30px;
+          padding:0 10px;
+          border-radius:999px;
+          border:1px solid #e5e7eb;
+          background:#fff;
+          color:#4b5563;
+          display:inline-flex;
+          align-items:center;
+          gap:5px;
+          font-family:inherit;
+          font-size:10px;
+          font-weight:600;
+          cursor:pointer;
+          white-space:nowrap;
+          transition:background .15s ease,color .15s ease,box-shadow .15s ease;
+        }
+
+        .hdr-directory:hover {
+          background:#f5f5f5;
+          color:#111;
+          box-shadow:0 2px 6px rgba(0,0,0,.06);
+        }
+
+        @media(min-width:768px){
+          .hdr-directory{
+            height:36px;
+            padding:0 13px;
+            font-size:11px;
+          }
+        }
+
+        @media(max-width:420px){
+          .hdr-directory span{display:none}
+          .hdr-directory{width:30px;padding:0;justify-content:center}
+        }
+
         /* CLEAR */
         .hdr-btn-clear {
           border: 1px solid #fecaca;
@@ -192,6 +230,15 @@ export default function Header({
 
         {/* RIGHT — language + auth buttons */}
         <div className="hdr-right">
+          <button
+            className="hdr-directory"
+            onClick={() => router.push("/providers")}
+            aria-label={language === "de" ? "Anbieter öffnen" : "Open providers"}
+          >
+            <Building2 size={12} />
+            <span>{language === "de" ? "Anbieter" : "Providers"}</span>
+          </button>
+
           <LanguageSwitcher />
 
           {!loading && !user && (

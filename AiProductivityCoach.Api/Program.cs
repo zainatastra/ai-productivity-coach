@@ -2,6 +2,7 @@ using FirebaseAdmin;
 using Google.Apis.Auth.OAuth2;
 using Google.Cloud.Firestore;
 using AiProductivityCoach.Api.Auth;
+using AiProductivityCoach.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -127,7 +128,11 @@ catch (Exception ex)
 
 if (FirebaseApp.DefaultInstance == null)
 {
-    FirebaseApp.Create(new AppOptions { Credential = credential });
+    FirebaseApp.Create(new AppOptions
+    {
+        Credential = credential
+    });
+
     Console.WriteLine("[Firebase] FirebaseApp initialized.");
 }
 
@@ -137,6 +142,7 @@ if (FirebaseApp.DefaultInstance == null)
 
 var firestoreProjectId = builder.Configuration["Firebase:ProjectId"]
     ?? "ai-productivity-coach-d40b7";
+
 
 builder.Services.AddSingleton<FirestoreDb>(_ =>
     new FirestoreDbBuilder
@@ -149,6 +155,26 @@ builder.Services.AddSingleton<FirestoreDb>(_ =>
 Console.WriteLine($"[Firestore] Registered in DI (Project = {firestoreProjectId})");
 
 // ==========================================
+// 🖼 PROVIDER MEDIA STORAGE
+// Physical files live in Vercel Blob.
+// ASP.NET remains authoritative for ownership,
+// workflow, Firestore metadata and cleanup requests.
+// ==========================================
+
+builder.Services.AddHttpClient<ProviderMediaStorage>();
+builder.Services.AddHttpClient();
+
+var vercelMediaBaseUrl = Environment.GetEnvironmentVariable("VERCEL_MEDIA_BASE_URL")
+    ?? builder.Configuration["VercelMedia:FrontendBaseUrl"]
+    ?? string.Empty;
+
+Console.WriteLine(
+    string.IsNullOrWhiteSpace(vercelMediaBaseUrl)
+        ? "[Storage] Vercel Blob bridge registered; VERCEL_MEDIA_BASE_URL is not configured yet."
+        : $"[Storage] Vercel Blob bridge registered (Frontend = {vercelMediaBaseUrl})"
+);
+
+// ==========================================
 // 🔐 AUTHENTICATION
 // ==========================================
 
@@ -156,7 +182,19 @@ builder.Services
     .AddAuthentication("Firebase")
     .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, FirebaseAuthenticationHandler>("Firebase", null);
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    // Central RBAC policies. Roles are supplied only by the trusted
+    // FirebaseAuthenticationHandler after Firebase token verification.
+    options.AddPolicy("AdminOnly", policy =>
+        policy.RequireRole("admin"));
+
+    options.AddPolicy("PublisherOnly", policy =>
+        policy.RequireRole("publisher"));
+
+    options.AddPolicy("PublisherOrAdmin", policy =>
+        policy.RequireRole("publisher", "admin"));
+});
 
 // ==========================================
 // 🚀 BUILD APP
@@ -206,6 +244,7 @@ if (!app.Environment.IsProduction())
     Console.WriteLine($"  OpenAI Key  : {(string.IsNullOrEmpty(openAiKey) ? "❌ MISSING" : "✅ Loaded")}");
     Console.WriteLine($"  Firebase    : ✅ Loaded");
     Console.WriteLine($"  Firestore   : Project = {firestoreProjectId}");
+    Console.WriteLine($"  Storage     : {(string.IsNullOrWhiteSpace(vercelMediaBaseUrl) ? "⚠️ Vercel media base URL not configured" : "✅ Vercel Blob")}");
     Console.WriteLine($"  CORS Origins: {string.Join(", ", allowedOrigins)}");
     Console.WriteLine("===========================================");
 }

@@ -25,7 +25,7 @@ namespace AiProductivityCoach.Api.Controllers
         }
 
         // =====================================================
-        // 🔥 SYNC USER (CREATE IF NOT EXISTS + AUTO UPDATE NAME)
+        // 🔥 SYNC USER (NORMAL APP USER ONLY + AUTO UPDATE NAME)
         // =====================================================
         [HttpPost("sync")]
         public async Task<IActionResult> SyncUser([FromBody] SyncUserDto? dto)
@@ -66,7 +66,8 @@ namespace AiProductivityCoach.Api.Controllers
                     {
                         { "email", email ?? "" },
                         { "fullName", fullName },
-                        { "role", "user" },
+                        { "role", "user" }, // metadata only; authorization uses trusted token claims
+                        { "status", "active" },
                         { "createdAt", Timestamp.GetCurrentTimestamp() }
                     };
 
@@ -79,13 +80,25 @@ namespace AiProductivityCoach.Api.Controllers
                         ? existingData["fullName"]?.ToString()
                         : null;
 
+                    var updates = new Dictionary<string, object>();
+
                     if (!string.IsNullOrWhiteSpace(fullName) &&
                         existingName != fullName)
                     {
-                        await userDoc.UpdateAsync(new Dictionary<string, object>
-                        {
-                            { "fullName", fullName }
-                        });
+                        updates["fullName"] = fullName;
+                    }
+
+                    // Backfill only legacy accounts that do not yet have a status.
+                    // Never overwrite an existing suspended/disabled state.
+                    if (!existingData.ContainsKey("status") ||
+                        string.IsNullOrWhiteSpace(existingData["status"]?.ToString()))
+                    {
+                        updates["status"] = "active";
+                    }
+
+                    if (updates.Count > 0)
+                    {
+                        await userDoc.UpdateAsync(updates);
                     }
                 }
 
@@ -118,12 +131,18 @@ namespace AiProductivityCoach.Api.Controllers
 
                 var data = snapshot.ToDictionary();
 
+                // Authorization role comes from the trusted ClaimsPrincipal created
+                // by FirebaseAuthenticationHandler, not from editable Firestore metadata.
+                var trustedRole = User.FindFirst(ClaimTypes.Role)?.Value ?? "user";
+                var accountStatus = User.FindFirst("account_status")?.Value ?? "active";
+
                 return Ok(new
                 {
                     uid,
                     email = data.ContainsKey("email") ? data["email"] : "",
                     fullName = data.ContainsKey("fullName") ? data["fullName"] : "",
-                    role = data.ContainsKey("role") ? data["role"] : "user"
+                    role = trustedRole,
+                    status = accountStatus
                 });
             }
             catch (Exception ex)

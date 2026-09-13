@@ -5,6 +5,8 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace AiProductivityCoach.Api.Controllers
 {
@@ -19,6 +21,30 @@ namespace AiProductivityCoach.Api.Controllers
         {
             _firestore = firestore;
             _configuration = configuration;
+        }
+
+
+        // ================= ACCESS CHECK =================
+        [HttpGet("access")]
+        [Authorize]
+        public IActionResult Access()
+        {
+            var uid = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var email = User.FindFirst(ClaimTypes.Email)?.Value ?? string.Empty;
+            var role = User.FindFirst(ClaimTypes.Role)?.Value ?? "user";
+            var status = User.FindFirst("account_status")?.Value ?? "active";
+
+            if (string.IsNullOrWhiteSpace(uid))
+                return Unauthorized();
+
+            return Ok(new
+            {
+                authenticated = true,
+                uid,
+                email,
+                role,
+                status
+            });
         }
 
         // ================= SEND OTP =================

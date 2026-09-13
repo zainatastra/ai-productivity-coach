@@ -26,3 +26,10 @@ export const app =
 export const adminApp =
   getApps().find(app => app.name === "adminApp") ||
   initializeApp(firebaseConfig, "adminApp");
+
+// ================================
+// PUBLISHER APP (SEPARATE AUTH SESSION)
+// ================================
+export const publisherApp =
+  getApps().find(app => app.name === "publisherApp") ||
+  initializeApp(firebaseConfig, "publisherApp");

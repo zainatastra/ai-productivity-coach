@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "firebase/auth";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { adminApp } from "@/services/firebase";
 import { Eye, EyeOff, ShieldAlert, Lock } from "lucide-react";
 import { API_BASE_URL } from "@/services/api";
@@ -25,25 +25,54 @@ export default function AdminLoginPage() {
     return () => clearTimeout(t);
   }, []);
 
-  /* redirect if already logged in */
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) router.replace("/admin");
+  const verifyAdminAccess = async (user: import("firebase/auth").User) => {
+    const token = await user.getIdToken();
+    const res = await fetch(`${API_BASE_URL}/api/auth/access`, {
+      headers: { Authorization: `Bearer ${token}` },
     });
+
+    if (!res.ok) return false;
+
+    const access = await res.json();
+    return access?.authenticated === true && access?.role === "admin";
+  };
+
+  /* redirect only when the existing session is actually authorized as admin */
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) return;
+
+      try {
+        const isAdmin = await verifyAdminAccess(user);
+        if (isAdmin) {
+          router.replace("/admin");
+        } else {
+          await signOut(auth);
+        }
+      } catch {
+        await signOut(auth);
+      }
+    });
+
     return () => unsubscribe();
   }, [auth, router]);
 
   const handleLogin = async () => {
     setError("");
     if (!email || !password) { setError("Enter admin credentials."); return; }
+
     try {
       setLoading(true);
+
       const result = await signInWithEmailAndPassword(auth, email, password);
-      const token  = await result.user.getIdToken();
-      const res    = await fetch(`${API_BASE_URL}/api/test/admin-users`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) { setError("Unauthorized access."); return; }
+      const isAdmin = await verifyAdminAccess(result.user);
+
+      if (!isAdmin) {
+        await signOut(auth);
+        setError("Unauthorized access.");
+        return;
+      }
+
       router.replace("/admin");
     } catch {
       setError("Invalid admin credentials.");
