@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import Header from "@/components/Header";
 import { API_BASE_URL } from "@/services/api";
+import { useLanguage } from "@/services/LanguageContext";
 
 type WhitepaperPayload = {
   providerId: string;
@@ -101,11 +102,58 @@ function sanitizeWhitepaperHtml(value: string) {
 export default function PublicWhitepaperPage() {
   const params = useParams<{ slug: string; whitepaperId: string }>();
   const router = useRouter();
+  const { language } = useLanguage();
+  const isGerman = language === "de";
 
   const slug = Array.isArray(params?.slug) ? params.slug[0] : params?.slug;
   const whitepaperId = Array.isArray(params?.whitepaperId)
     ? params.whitepaperId[0]
     : params?.whitepaperId;
+
+  const uiText = {
+    backToProvider: isGerman ? "Zurück zum Anbieter" : "Back to provider",
+    loadingWhitepaper: isGerman
+      ? "Freigegebenes Whitepaper wird geladen…"
+      : "Loading approved whitepaper…",
+    whitepaperNotFound: isGerman ? "Whitepaper nicht gefunden." : "Whitepaper not found.",
+    approvedProvider: isGerman
+      ? "Vom Administrator freigegebener Anbieter"
+      : "Administrator-approved provider",
+    providerFallback: isGerman ? "Anbieter" : "Provider",
+    whitepaperImage: isGerman ? "Whitepaper-Bild" : "Whitepaper image",
+    responseSubmitted: isGerman ? "Antwort gesendet" : "Response submitted",
+    responseSubmittedCopy: isGerman
+      ? "Vielen Dank. Ihre Angaben wurden für dieses Whitepaper gespeichert und können vom Anbieter eingesehen werden."
+      : "Thank you. Your information has been saved for this whitepaper and the provider can review your response.",
+    requestWhitepaper: isGerman ? "Dieses Whitepaper anfordern" : "Request this whitepaper",
+    formCopy: (providerName: string) =>
+      isGerman
+        ? `Füllen Sie das Formular aus. Ihre Anfrage wird sicher an ${providerName} übermittelt.`
+        : `Complete the form and your response will be sent securely to ${providerName}.`,
+    theProvider: isGerman ? "den Anbieter" : "the provider",
+    firstName: isGerman ? "Vorname" : "First Name",
+    lastName: isGerman ? "Nachname" : "Last Name",
+    email: isGerman ? "E-Mail" : "Email",
+    phone: isGerman ? "Telefon" : "Phone",
+    company: isGerman ? "Unternehmen" : "Company",
+    address: isGerman ? "Adresse" : "Address",
+    message: isGerman ? "Nachricht" : "Message",
+    optionalMessage: isGerman
+      ? "Optionale Nachricht an den Anbieter"
+      : "Optional message for the provider",
+    consent: isGerman
+      ? "Ich stimme zu, dass der Anbieter die in diesem Formular übermittelten Informationen für diese Whitepaper-Anfrage speichern und verarbeiten darf."
+      : "I agree that the provider may store and process the information submitted in this form for this whitepaper request.",
+    submitting: isGerman ? "Wird gesendet…" : "Submitting…",
+    submit: isGerman ? "Absenden" : "Submit",
+    website: "Website",
+    unableToSubmit: isGerman
+      ? "Ihre Anfrage konnte nicht gesendet werden."
+      : "Unable to submit your response.",
+    unableToSubmitRetry: isGerman
+      ? "Ihre Anfrage konnte nicht gesendet werden. Bitte versuchen Sie es erneut."
+      : "Unable to submit your response. Please try again.",
+  };
 
   const [payload, setPayload] = useState<WhitepaperPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -134,7 +182,7 @@ export default function PublicWhitepaperPage() {
         const result = await response.json().catch(() => null);
 
         if (!response.ok) {
-          setLoadError(result?.message || "Whitepaper not found.");
+          setLoadError(result?.message || (language === "de" ? "Whitepaper nicht gefunden." : "Whitepaper not found."));
           return;
         }
 
@@ -157,14 +205,14 @@ export default function PublicWhitepaperPage() {
         }
       } catch (error) {
         console.error("Public whitepaper load failed:", error);
-        setLoadError("Unable to load this whitepaper.");
+        setLoadError(language === "de" ? "Dieses Whitepaper konnte nicht geladen werden." : "Unable to load this whitepaper.");
       } finally {
         setLoading(false);
       }
     };
 
     void load();
-  }, [slug, whitepaperId, router]);
+  }, [slug, whitepaperId, router, language]);
 
   const bodyHtml = useMemo(() => {
     if (typeof window === "undefined") return "";
@@ -206,7 +254,7 @@ export default function PublicWhitepaperPage() {
       const result = await response.json().catch(() => null);
 
       if (!response.ok) {
-        setFormError(result?.message || "Unable to submit your response.");
+        setFormError(result?.message || uiText.unableToSubmit);
         return;
       }
 
@@ -214,7 +262,7 @@ export default function PublicWhitepaperPage() {
       setForm(EMPTY_FORM);
     } catch (error) {
       console.error("Whitepaper form submission failed:", error);
-      setFormError("Unable to submit your response. Please try again.");
+      setFormError(uiText.unableToSubmitRetry);
     } finally {
       setSubmitting(false);
     }
@@ -621,14 +669,14 @@ export default function PublicWhitepaperPage() {
             onClick={() => router.push(`/providers/${encodeURIComponent(slug || "")}`)}
           >
             <ArrowLeft size={12} />
-            Back to provider
+            {uiText.backToProvider}
           </button>
 
           {loading ? (
-            <div className="wp-loading">Loading approved whitepaper…</div>
+            <div className="wp-loading">{uiText.loadingWhitepaper}</div>
           ) : loadError || !payload ? (
             <div className="wp-not-found">
-              {loadError || "Whitepaper not found."}
+              {loadError || uiText.whitepaperNotFound}
             </div>
           ) : (
             <article className="wp-card">
@@ -645,7 +693,7 @@ export default function PublicWhitepaperPage() {
                     {payload.company?.logoUrl ? (
                       <img
                         src={payload.company.logoUrl}
-                        alt={`${payload.company?.name || "Provider"} logo`}
+                        alt={`${payload.company?.name || uiText.providerFallback} logo`}
                       />
                     ) : (
                       <Building2 size={18} />
@@ -657,7 +705,7 @@ export default function PublicWhitepaperPage() {
                       {payload.company?.name}
                     </div>
                     <div className="wp-provider-label">
-                      Administrator-approved provider
+                      {uiText.approvedProvider}
                     </div>
                   </div>
                 </div>
@@ -682,7 +730,7 @@ export default function PublicWhitepaperPage() {
                   ) : (
                     <div className="wp-image-placeholder">
                       <FileText size={28} />
-                      Whitepaper image
+                      {uiText.whitepaperImage}
                     </div>
                   )}
                 </div>
@@ -693,24 +741,20 @@ export default function PublicWhitepaperPage() {
                       <div className="wp-success-icon">
                         <CheckCircle2 size={26} />
                       </div>
-                      <h3>Response submitted</h3>
-                      <p>
-                        Thank you. Your information has been saved for this
-                        whitepaper and the provider can review your response.
-                      </p>
+                      <h3>{uiText.responseSubmitted}</h3>
+                      <p>{uiText.responseSubmittedCopy}</p>
                     </div>
                   ) : (
                     <>
-                      <h2 className="wp-form-title">Request this whitepaper</h2>
+                      <h2 className="wp-form-title">{uiText.requestWhitepaper}</h2>
                       <p className="wp-form-copy">
-                        Complete the form and your response will be sent securely
-                        to {payload.company?.name || "the provider"}.
+                        {uiText.formCopy(payload.company?.name || uiText.theProvider)}
                       </p>
 
                       <form className="wp-form-grid" onSubmit={handleSubmit}>
                         <div className="wp-honeypot" aria-hidden="true">
                           <label>
-                            Website
+                            {uiText.website}
                             <input
                               tabIndex={-1}
                               autoComplete="off"
@@ -724,7 +768,7 @@ export default function PublicWhitepaperPage() {
 
                         <div className="wp-field">
                           <label>
-                            First Name <span>*</span>
+                            {uiText.firstName} <span>*</span>
                           </label>
                           <input
                             className="wp-input"
@@ -739,7 +783,7 @@ export default function PublicWhitepaperPage() {
 
                         <div className="wp-field">
                           <label>
-                            Last Name <span>*</span>
+                            {uiText.lastName} <span>*</span>
                           </label>
                           <input
                             className="wp-input"
@@ -754,7 +798,7 @@ export default function PublicWhitepaperPage() {
 
                         <div className="wp-field">
                           <label>
-                            Email <span>*</span>
+                            {uiText.email} <span>*</span>
                           </label>
                           <input
                             className="wp-input"
@@ -770,7 +814,7 @@ export default function PublicWhitepaperPage() {
 
                         <div className="wp-field">
                           <label>
-                            Phone <span>*</span>
+                            {uiText.phone} <span>*</span>
                           </label>
                           <input
                             className="wp-input"
@@ -785,7 +829,7 @@ export default function PublicWhitepaperPage() {
                         </div>
 
                         <div className="wp-field full">
-                          <label>Company</label>
+                          <label>{uiText.company}</label>
                           <input
                             className="wp-input"
                             value={form.company}
@@ -797,7 +841,7 @@ export default function PublicWhitepaperPage() {
                         </div>
 
                         <div className="wp-field full">
-                          <label>Address</label>
+                          <label>{uiText.address}</label>
                           <textarea
                             className="wp-textarea"
                             value={form.address}
@@ -809,7 +853,7 @@ export default function PublicWhitepaperPage() {
                         </div>
 
                         <div className="wp-field full">
-                          <label>Message</label>
+                          <label>{uiText.message}</label>
                           <textarea
                             className="wp-textarea"
                             value={form.message}
@@ -817,7 +861,7 @@ export default function PublicWhitepaperPage() {
                               updateField("message", event.target.value)
                             }
                             maxLength={4000}
-                            placeholder="Optional message for the provider"
+                            placeholder={uiText.optionalMessage}
                           />
                         </div>
 
@@ -833,11 +877,7 @@ export default function PublicWhitepaperPage() {
                             }
                             required
                           />
-                          <span>
-                            I agree that the provider may store and process the
-                            information submitted in this form for this
-                            whitepaper request.
-                          </span>
+                          <span>{uiText.consent}</span>
                         </label>
 
                         {formError && (
@@ -852,12 +892,12 @@ export default function PublicWhitepaperPage() {
                           {submitting ? (
                             <>
                               <Loader2 size={14} className="animate-spin" />
-                              Submitting…
+                              {uiText.submitting}
                             </>
                           ) : (
                             <>
                               <Send size={13} />
-                              Submit
+                              {uiText.submit}
                             </>
                           )}
                         </button>

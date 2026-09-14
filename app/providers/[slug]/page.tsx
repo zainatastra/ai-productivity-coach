@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import Header from "@/components/Header";
 import { API_BASE_URL } from "@/services/api";
+import { useLanguage } from "@/services/LanguageContext";
 
 type PublicProvider = {
   id: string;
@@ -56,7 +57,74 @@ type TabKey =
 export default function ProviderProfilePage() {
   const params = useParams<{ slug: string }>();
   const router = useRouter();
+  const { language } = useLanguage();
+  const isGerman = language === "de";
   const slug = Array.isArray(params?.slug) ? params.slug[0] : params?.slug;
+
+  const uiText = {
+    providerDirectory: isGerman ? "Anbieterverzeichnis" : "Provider Directory",
+    loadingProfile: isGerman
+      ? "Freigegebenes Anbieterprofil wird geladen…"
+      : "Loading approved provider profile…",
+    profileNotFound: isGerman
+      ? "Anbieterprofil nicht gefunden."
+      : "Provider profile not found.",
+    unableToLoadProfile: isGerman
+      ? "Dieses Anbieterprofil konnte nicht geladen werden."
+      : "Unable to load this provider profile.",
+    approvedProviderProfile: isGerman
+      ? "Freigegebenes Anbieterprofil"
+      : "Approved provider profile",
+    visitWebsite: isGerman ? "Website besuchen" : "Visit Website",
+    about: isGerman ? "Über uns" : "About",
+    posts: isGerman ? "Beiträge" : "Posts",
+    whitepapers: isGerman ? "Whitepaper" : "Whitepapers",
+    products: isGerman ? "Produkte" : "Products",
+    contacts: isGerman ? "Kontakte" : "Contacts",
+    appointments: isGerman ? "Termine" : "Appointments",
+    webinars: isGerman ? "Webinare" : "Webinars",
+    events: isGerman ? "Veranstaltungen" : "Events",
+    aboutCompany: isGerman ? "Über" : "About",
+    noOverview: isGerman
+      ? "Es wurde noch keine öffentliche Unternehmensübersicht hinzugefügt."
+      : "No public overview has been added yet.",
+    mission: isGerman ? "Mission" : "Mission",
+    vision: isGerman ? "Vision" : "Vision",
+    founded: isGerman ? "Gegründet" : "Founded",
+    employees: isGerman ? "Mitarbeiter" : "Employees",
+    headquarters: isGerman ? "Hauptsitz" : "Headquarters",
+    specialties: isGerman ? "Fachgebiete" : "Specialties",
+    learnMore: isGerman ? "Mehr erfahren" : "Learn More",
+    viewEvent: isGerman ? "Veranstaltung ansehen" : "View Event",
+    noEventUrl: isGerman
+      ? "Keine Veranstaltungs-URL hinterlegt"
+      : "No event URL provided",
+    viewWhitepaper: isGerman ? "Whitepaper ansehen" : "View Whitepaper",
+    open: isGerman ? "Öffnen" : "Open",
+    product: isGerman ? "Produkt" : "Product",
+    category: isGerman ? "Kategorie" : "Category",
+    briefDescription: isGerman ? "Kurzbeschreibung" : "Brief Description",
+    features: isGerman ? "Funktionen" : "Features",
+    contact: isGerman ? "Kontakt" : "Contact",
+    webinar: isGerman ? "Webinar" : "Webinar",
+    event: isGerman ? "Veranstaltung" : "Event",
+    noApprovedPrefix: isGerman ? "Derzeit sind keine freigegebenen" : "No approved",
+    noApprovedSuffix: isGerman ? "verfügbar." : "are currently available.",
+  };
+
+  const categoryLabels: Record<string, string> = isGerman
+    ? {
+        Community: "Community",
+        "Data management": "Datenmanagement",
+        "ERP provider": "ERP-Anbieter",
+        Event: "Event",
+        "IT Provider": "IT-Anbieter",
+        "Marketing service provider": "Marketing-Dienstleister",
+        Publisher: "Verlag",
+        "Security Provider": "Security-Anbieter",
+        "Software Provider": "Software-Anbieter",
+      }
+    : {};
 
   const [profile, setProfile] = useState<PublicProvider | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,36 +144,36 @@ export default function ProviderProfilePage() {
         const payload = await res.json().catch(() => null);
 
         if (!res.ok) {
-          setError(payload?.message || "Provider profile not found.");
+          setError(payload?.message || (language === "de" ? "Anbieterprofil nicht gefunden." : "Provider profile not found."));
           return;
         }
 
         setProfile(payload);
       } catch (e) {
         console.error("Public provider profile failed:", e);
-        setError("Unable to load this provider profile.");
+        setError(language === "de" ? "Dieses Anbieterprofil konnte nicht geladen werden." : "Unable to load this provider profile.");
       } finally {
         setLoading(false);
       }
     };
 
     load();
-  }, [slug]);
+  }, [slug, language]);
 
   const tabs = useMemo(() => {
     if (!profile) return [];
 
     return [
-      ["about", "About", FileText, 1],
-      ["posts", "Posts", Newspaper, profile.posts.length],
-      ["whitepapers", "Whitepapers", FileText, profile.whitepapers.length],
-      ["products", "Products", Package, profile.products.length],
-      ["contacts", "Contacts", Users, profile.contacts.length],
-      ["calendar", "Appointments", CalendarDays, profile.appointments.length],
-      ["webinars", "Webinars", Video, profile.webinars.length],
-      ["events", "Events", Sparkles, profile.events.length],
+      ["about", uiText.about, FileText, 1],
+      ["posts", uiText.posts, Newspaper, profile.posts.length],
+      ["whitepapers", uiText.whitepapers, FileText, profile.whitepapers.length],
+      ["products", uiText.products, Package, profile.products.length],
+      ["contacts", uiText.contacts, Users, profile.contacts.length],
+      ["calendar", uiText.appointments, CalendarDays, profile.appointments.length],
+      ["webinars", uiText.webinars, Video, profile.webinars.length],
+      ["events", uiText.events, Sparkles, profile.events.length],
     ] as const;
-  }, [profile]);
+  }, [profile, isGerman]);
 
   return (
     <>
@@ -1148,14 +1216,14 @@ export default function ProviderProfilePage() {
         <main className="pp-shell">
           <button className="pp-back" onClick={() => router.push("/providers")}>
             <ArrowLeft size={12} />
-            Provider Directory
+            {uiText.providerDirectory}
           </button>
 
           {loading ? (
-            <div className="pp-loading">Loading approved provider profile…</div>
+            <div className="pp-loading">{uiText.loadingProfile}</div>
           ) : error || !profile ? (
             <div className="pp-content-card">
-              <div className="pp-empty">{error || "Provider profile not found."}</div>
+              <div className="pp-empty">{error || uiText.profileNotFound}</div>
             </div>
           ) : (
             <>
@@ -1184,7 +1252,7 @@ export default function ProviderProfilePage() {
                       <div className="pp-headline">
                         {profile.about?.headline ||
                           profile.company.shortDescription ||
-                          "Approved provider profile"}
+                          uiText.approvedProviderProfile}
                       </div>
                     </div>
                   </div>
@@ -1197,7 +1265,7 @@ export default function ProviderProfilePage() {
                       rel="noreferrer"
                     >
                       <Globe2 size={11} />
-                      Visit Website
+                      {uiText.visitWebsite}
                       <ExternalLink size={10} />
                     </a>
                   )}
@@ -1207,7 +1275,7 @@ export default function ProviderProfilePage() {
                   {(profile.company.categories || []).map((item: string) => (
                     <span className="pp-meta-pill" key={item}>
                       <Tags size={10} />
-                      {item}
+                      {categoryLabels[item] || item}
                     </span>
                   ))}
 
@@ -1259,25 +1327,25 @@ export default function ProviderProfilePage() {
               >
                 {activeTab === "about" && (
                   <>
-                    <h2 className="pp-section-title">About {profile.company.name}</h2>
+                    <h2 className="pp-section-title">{uiText.aboutCompany} {profile.company.name}</h2>
                     <div className="pp-about-grid">
                       <div>
                         <div className="pp-about-copy">
                           {profile.about?.overview ||
                             profile.company.shortDescription ||
-                            "No public overview has been added yet."}
+                            uiText.noOverview}
                         </div>
 
                         {profile.about?.mission && (
                           <div className="pp-about-block">
-                            <strong>Mission</strong>
+                            <strong>{uiText.mission}</strong>
                             <div>{profile.about.mission}</div>
                           </div>
                         )}
 
                         {profile.about?.vision && (
                           <div className="pp-about-block">
-                            <strong>Vision</strong>
+                            <strong>{uiText.vision}</strong>
                             <div>{profile.about.vision}</div>
                           </div>
                         )}
@@ -1286,25 +1354,25 @@ export default function ProviderProfilePage() {
                       <div className="pp-facts">
                         {profile.about?.foundedYear && (
                           <div className="pp-fact">
-                            <label>Founded</label>
+                            <label>{uiText.founded}</label>
                             <div>{profile.about.foundedYear}</div>
                           </div>
                         )}
                         {profile.about?.employeeRange && (
                           <div className="pp-fact">
-                            <label>Employees</label>
+                            <label>{uiText.employees}</label>
                             <div>{profile.about.employeeRange}</div>
                           </div>
                         )}
                         {profile.about?.headquarters && (
                           <div className="pp-fact">
-                            <label>Headquarters</label>
+                            <label>{uiText.headquarters}</label>
                             <div>{profile.about.headquarters}</div>
                           </div>
                         )}
                         {(profile.about?.specialties || []).length > 0 && (
                           <div className="pp-fact">
-                            <label>Specialties</label>
+                            <label>{uiText.specialties}</label>
                             <div>{profile.about.specialties.join(" · ")}</div>
                           </div>
                         )}
@@ -1315,7 +1383,7 @@ export default function ProviderProfilePage() {
 
                 {activeTab === "posts" && (
                   <PublicItems
-                    title="Posts"
+                    title={uiText.posts}
                     items={profile.posts}
                     primary="title"
                     copy="excerpt"
@@ -1323,34 +1391,37 @@ export default function ProviderProfilePage() {
                     itemHrefPrefix={`/providers/${encodeURIComponent(slug || "")}/posts/`}
                     imageKey="imageUrl"
                     subHeadingKey="subHeading"
+                    language={language}
                   />
                 )}
 
                 {activeTab === "whitepapers" && (
                   <PublicItems
-                    title="Whitepapers"
+                    title={uiText.whitepapers}
                     items={profile.whitepapers}
                     primary="title"
                     copy="content"
                     itemHrefPrefix={`/providers/${encodeURIComponent(slug || "")}/whitepapers/`}
                     imageKey="imageUrl"
                     whitepaperVariant
+                    language={language}
                   />
                 )}
 
                 {activeTab === "products" && (
                   <PublicItems
-                    title="Products"
+                    title={uiText.products}
                     items={profile.products}
                     primary="name"
                     copy="shortDescription"
                     productVariant
+                    language={language}
                   />
                 )}
 
                 {activeTab === "contacts" && (
                   <PublicItems
-                    title="Contacts"
+                    title={uiText.contacts}
                     items={profile.contacts}
                     primary="fullName"
                     copy="jobTitle"
@@ -1358,41 +1429,45 @@ export default function ProviderProfilePage() {
                     metaKeys={["email", "phone"]}
                     imageKey="photoUrl"
                     contactVariant
+                    language={language}
                   />
                 )}
 
                 {activeTab === "calendar" && (
                   <PublicItems
-                    title="Appointments"
+                    title={uiText.appointments}
                     items={profile.appointments}
                     primary="title"
                     copy="notes"
                     urlKey="bookingUrl"
                     metaKeys={["startAt", "endAt", "location"]}
+                    language={language}
                   />
                 )}
 
                 {activeTab === "webinars" && (
                   <PublicItems
-                    title="Webinars"
+                    title={uiText.webinars}
                     items={profile.webinars}
                     primary="title"
                     copy="subTitle"
                     itemHrefPrefix={`/providers/${encodeURIComponent(slug || "")}/webinars/`}
                     imageKey="bannerUrl"
                     webinarVariant
+                    language={language}
                   />
                 )}
 
                 {activeTab === "events" && (
                   <PublicItems
-                    title="Events"
+                    title={uiText.events}
                     items={profile.events}
                     primary="title"
                     copy="summary"
                     urlKey="eventUrl"
                     imageKey="imageUrl"
                     eventVariant
+                    language={language}
                   />
                 )}
               </motion.section>
@@ -1450,6 +1525,7 @@ function PublicItems({
   productVariant = false,
   eventVariant = false,
   webinarVariant = false,
+  language = "en",
 }: {
   title: string;
   items: any[];
@@ -1466,13 +1542,37 @@ function PublicItems({
   productVariant?: boolean;
   eventVariant?: boolean;
   webinarVariant?: boolean;
+  language?: "en" | "de";
 }) {
+  const isGerman = language === "de";
+
+  const labels = {
+    noApproved: (sectionTitle: string) =>
+      isGerman
+        ? `Derzeit sind keine freigegebenen ${sectionTitle.toLowerCase()} verfügbar.`
+        : `No approved ${sectionTitle.toLowerCase()} are currently available.`,
+    learnMore: isGerman ? "Mehr erfahren" : "Learn More",
+    viewEvent: isGerman ? "Veranstaltung ansehen" : "View Event",
+    noEventUrl: isGerman
+      ? "Keine Veranstaltungs-URL hinterlegt"
+      : "No event URL provided",
+    viewWhitepaper: isGerman ? "Whitepaper ansehen" : "View Whitepaper",
+    open: isGerman ? "Öffnen" : "Open",
+    product: isGerman ? "Produkt" : "Product",
+    category: isGerman ? "Kategorie" : "Category",
+    briefDescription: isGerman ? "Kurzbeschreibung" : "Brief Description",
+    features: isGerman ? "Funktionen" : "Features",
+    contact: isGerman ? "Kontakt" : "Contact",
+    webinar: "Webinar",
+    event: isGerman ? "Veranstaltung" : "Event",
+  };
+
   return (
     <>
       <h2 className="pp-section-title">{title}</h2>
 
       {items.length === 0 ? (
-        <div className="pp-empty">No approved {title.toLowerCase()} are currently available.</div>
+        <div className="pp-empty">{labels.noApproved(title)}</div>
       ) : webinarVariant ? (
         <div className="pp-webinar-grid">
           {items.map((item) => {
@@ -1489,7 +1589,7 @@ function PublicItems({
                   {imageKey && item[imageKey] ? (
                     <img
                       src={String(item[imageKey])}
-                      alt={String(item[primary] || "Webinar")}
+                      alt={String(item[primary] || labels.webinar)}
                     />
                   ) : (
                     <div className="pp-webinar-placeholder">
@@ -1500,12 +1600,12 @@ function PublicItems({
 
                 <div className="pp-webinar-body">
                   <h3 className="pp-webinar-title">
-                    {item[primary] || "Webinar"}
+                    {item[primary] || labels.webinar}
                   </h3>
 
                   {href && (
                     <a className="pp-webinar-button" href={href}>
-                      Learn More
+                      {labels.learnMore}
                       <ChevronRight size={11} />
                     </a>
                   )}
@@ -1530,18 +1630,18 @@ function PublicItems({
               <article className="pp-event-card" key={item.id || item.title}>
                 <div className="pp-event-image">
                   {item.imageUrl ? (
-                    <img src={String(item.imageUrl)} alt={String(item.title || "Event")} />
+                    <img src={String(item.imageUrl)} alt={String(item.title || labels.event)} />
                   ) : (
                     <div className="pp-event-image-placeholder">
                       <Sparkles size={28} />
-                      <span>Event</span>
+                      <span>{labels.event}</span>
                     </div>
                   )}
-                  <span className="pp-event-badge">Event</span>
+                  <span className="pp-event-badge">{labels.event}</span>
                 </div>
 
                 <div className="pp-event-content">
-                  <h3 className="pp-event-title">{item.title || "Event"}</h3>
+                  <h3 className="pp-event-title">{item.title || labels.event}</h3>
 
                   <div className="pp-event-details">
                     {item.location && (
@@ -1579,11 +1679,11 @@ function PublicItems({
                       target="_blank"
                       rel="noreferrer"
                     >
-                      View Event
+                      {labels.viewEvent}
                       <ExternalLink size={11} />
                     </a>
                   ) : (
-                    <span className="pp-event-no-link">No event URL provided</span>
+                    <span className="pp-event-no-link">{labels.noEventUrl}</span>
                   )}
                 </div>
               </article>
@@ -1595,10 +1695,10 @@ function PublicItems({
           <table className="pp-product-table">
             <thead>
               <tr>
-                <th>Product</th>
-                <th>Category</th>
-                <th>Brief Description</th>
-                <th>Features</th>
+                <th>{labels.product}</th>
+                <th>{labels.category}</th>
+                <th>{labels.briefDescription}</th>
+                <th>{labels.features}</th>
               </tr>
             </thead>
             <tbody>
@@ -1612,13 +1712,13 @@ function PublicItems({
 
                 return (
                   <tr key={item.id || item.name}>
-                    <td data-label="Product">
+                    <td data-label={labels.product}>
                       <div className="pp-product-name">
-                        {item.name || "Product"}
+                        {item.name || labels.product}
                       </div>
                     </td>
 
-                    <td data-label="Category">
+                    <td data-label={labels.category}>
                       {item.category ? (
                         <span className="pp-product-category">
                           {String(item.category)}
@@ -1628,7 +1728,7 @@ function PublicItems({
                       )}
                     </td>
 
-                    <td data-label="Brief Description">
+                    <td data-label={labels.briefDescription}>
                       {item.shortDescription ? (
                         <div className="pp-product-description">
                           {String(item.shortDescription)}
@@ -1638,7 +1738,7 @@ function PublicItems({
                       )}
                     </td>
 
-                    <td data-label="Features">
+                    <td data-label={labels.features}>
                       {rawFeatures.length > 0 ? (
                         <div className="pp-product-features">
                           {rawFeatures.map((feature: string, index: number) => (
@@ -1692,7 +1792,7 @@ function PublicItems({
                   {href && (
                     <a className="pp-whitepaper-button" href={href}>
                       <FileText size={11} />
-                      View Whitepaper
+                      {labels.viewWhitepaper}
                     </a>
                   )}
                 </div>
@@ -1714,7 +1814,7 @@ function PublicItems({
                 <article className="pp-item pp-contact-card" key={item.id}>
                   <div className="pp-contact-photo">
                     {item.photoUrl ? (
-                      <img src={item.photoUrl} alt={`${item.fullName || "Contact"} photo`} />
+                      <img src={item.photoUrl} alt={`${item.fullName || labels.contact} photo`} />
                     ) : (
                       <UserRound size={30} />
                     )}
@@ -1724,7 +1824,7 @@ function PublicItems({
                     <div className="pp-contact-top">
                       <div>
                         <h3 className="pp-contact-name">
-                          {item[primary] || "Contact"}
+                          {item[primary] || labels.contact}
                         </h3>
                         {description && (
                           <div className="pp-contact-role">{description}</div>
@@ -1738,7 +1838,7 @@ function PublicItems({
                           target="_blank"
                           rel="noreferrer"
                         >
-                          Open
+                          {labels.open}
                           <ExternalLink size={9} />
                         </a>
                       )}
@@ -1799,7 +1899,7 @@ function PublicItems({
                       rel="noreferrer"
                       onClick={(event) => event.stopPropagation()}
                     >
-                      Open
+                      {labels.open}
                       <ExternalLink size={9} />
                     </a>
                   )}

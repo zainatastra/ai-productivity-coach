@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import Header from "@/components/Header";
 import { API_BASE_URL } from "@/services/api";
+import { useLanguage } from "@/services/LanguageContext";
 
 type PublicArticlePayload = {
   providerId: string;
@@ -142,12 +143,12 @@ const normalizeArticleBody = (body: string) => {
     .join("");
 };
 
-const formatPublishedDate = (value?: string) => {
+const formatPublishedDate = (value: string | undefined, language: "en" | "de") => {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
 
-  return date.toLocaleDateString(undefined, {
+  return date.toLocaleDateString(language === "de" ? "de-DE" : "en-US", {
     day: "2-digit",
     month: "long",
     year: "numeric",
@@ -245,9 +246,53 @@ const getSafeVideoEmbedUrl = (value: string) => {
 export default function ProviderPostPage() {
   const params = useParams<{ slug: string; postId: string }>();
   const router = useRouter();
+  const { language } = useLanguage();
+  const isGerman = language === "de";
 
   const slug = Array.isArray(params?.slug) ? params.slug[0] : params?.slug;
   const postId = Array.isArray(params?.postId) ? params.postId[0] : params?.postId;
+
+  const uiText = {
+    backToProvider: isGerman ? "Zurück zum Anbieter" : "Back to provider",
+    loadingPost: isGerman
+      ? "Freigegebener Beitrag wird geladen…"
+      : "Loading approved post…",
+    postNotFound: isGerman ? "Beitrag nicht gefunden." : "Post not found.",
+    providerInsight: isGerman ? "Anbieter-Einblick" : "Provider insight",
+    providerArticle: isGerman ? "Anbieterartikel" : "Provider article",
+    publishedBy: isGerman ? "Veröffentlicht von" : "Published by",
+    approvedProviderFallback: isGerman
+      ? "Freigegebener Anbieter bei Ey Eric."
+      : "Approved provider on Ey Eric.",
+    article: isGerman ? "Artikel" : "Article",
+    minuteRead: (minutes: number) =>
+      isGerman
+        ? `${minutes} ${minutes === 1 ? "Minute" : "Minuten"} Lesezeit`
+        : `${minutes} minute${minutes === 1 ? "" : "s"} read`,
+    articleApprovedCopy: isGerman
+      ? "Dieser Artikel ist Teil des vom Administrator freigegebenen öffentlichen Anbieterprofils."
+      : "This article is part of the provider's administrator-approved public profile.",
+    noArticleContent: isGerman
+      ? "Dieser freigegebene Beitrag enthält noch keinen Artikelinhalt."
+      : "This approved post does not contain article content yet.",
+    video: "Video",
+    videoCopy: isGerman
+      ? "Sehen Sie sich das in diesem Anbieterartikel eingebettete Video an."
+      : "Watch the video included with this provider article.",
+    gallery: isGerman ? "Galerie" : "Gallery",
+    galleryCopy: isGerman
+      ? "Weitere visuelle Highlights aus diesem Anbieterartikel."
+      : "More visual highlights from this provider article.",
+    imageSingular: isGerman ? "Bild" : "image",
+    imagePlural: isGerman ? "Bilder" : "images",
+    openGalleryImage: isGerman ? "Galeriebild öffnen" : "Open gallery image",
+    articleImage: isGerman ? "Artikelbild" : "Article image",
+    relatedPosts: isGerman ? "Ähnliche Beiträge" : "Related Posts",
+    relatedCopy: isGerman
+      ? "Lesen Sie weitere thematisch passende Anbieterbeiträge."
+      : "Continue reading related provider insights.",
+    providerPost: isGerman ? "Anbieterbeitrag" : "Provider post",
+  };
 
   const [payload, setPayload] = useState<PublicArticlePayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -269,7 +314,7 @@ export default function ProviderPostPage() {
         const result = await res.json().catch(() => null);
 
         if (!res.ok) {
-          setError(result?.message || "Post not found.");
+          setError(result?.message || (language === "de" ? "Beitrag nicht gefunden." : "Post not found."));
           return;
         }
 
@@ -293,14 +338,14 @@ export default function ProviderPostPage() {
         }
       } catch (error) {
         console.error("Public article loading failed:", error);
-        setError("Unable to load this post.");
+        setError(language === "de" ? "Dieser Beitrag konnte nicht geladen werden." : "Unable to load this post.");
       } finally {
         setLoading(false);
       }
     };
 
     void load();
-  }, [slug, postId, router]);
+  }, [slug, postId, router, language]);
 
   const bodyHtml = useMemo(
     () => normalizeArticleBody(payload?.post?.body || ""),
@@ -964,13 +1009,13 @@ export default function ProviderPostPage() {
             onClick={() => router.push(`/providers/${encodeURIComponent(slug || "")}`)}
           >
             <ArrowLeft size={12} />
-            Back to provider
+            {uiText.backToProvider}
           </button>
 
           {loading ? (
-            <div className="pa-loading">Loading approved post…</div>
+            <div className="pa-loading">{uiText.loadingPost}</div>
           ) : error || !payload ? (
-            <div className="pa-error">{error || "Post not found."}</div>
+            <div className="pa-error">{error || uiText.postNotFound}</div>
           ) : (
             <>
               <motion.section
@@ -982,7 +1027,7 @@ export default function ProviderPostPage() {
                 <div className="pa-hero-copy">
                   <div className="pa-kicker">
                     <Newspaper size={11} />
-                    Provider insight
+                    {uiText.providerInsight}
                   </div>
 
                   {payload.post.subHeading && (
@@ -1006,7 +1051,7 @@ export default function ProviderPostPage() {
                       </div>
                       <div>
                         <div className="pa-company-name">{payload.company?.name}</div>
-                        <div className="pa-company-label">Provider article</div>
+                        <div className="pa-company-label">{uiText.providerArticle}</div>
                       </div>
                     </div>
 
@@ -1014,12 +1059,12 @@ export default function ProviderPostPage() {
                       {(payload.post.createdAt || payload.post.updatedAt) && (
                         <span className="pa-meta-pill">
                           <CalendarDays size={10} />
-                          {formatPublishedDate(payload.post.createdAt || payload.post.updatedAt)}
+                          {formatPublishedDate(payload.post.createdAt || payload.post.updatedAt, language)}
                         </span>
                       )}
                       <span className="pa-meta-pill">
                         <Clock3 size={10} />
-                        {readingMinutes} min read
+                        {uiText.minuteRead(readingMinutes)}
                       </span>
                     </div>
                   </div>
@@ -1038,20 +1083,20 @@ export default function ProviderPostPage() {
 
                   <aside className="pa-side">
                     <div className="pa-side-card">
-                      <div className="pa-side-label">Published by</div>
+                      <div className="pa-side-label">{uiText.publishedBy}</div>
                       <div className="pa-side-title">{payload.company?.name}</div>
                       <div className="pa-side-copy">
                         {payload.about?.headline ||
                           payload.company?.shortDescription ||
-                          "Approved provider on Ey Eric."}
+                          uiText.approvedProviderFallback}
                       </div>
                     </div>
 
                     <div className="pa-side-card">
-                      <div className="pa-side-label">Article</div>
-                      <div className="pa-side-title">{readingMinutes} minute read</div>
+                      <div className="pa-side-label">{uiText.article}</div>
+                      <div className="pa-side-title">{uiText.minuteRead(readingMinutes)}</div>
                       <div className="pa-side-copy">
-                        This article is part of the provider's administrator-approved public profile.
+                        {uiText.articleApprovedCopy}
                       </div>
                     </div>
                   </aside>
@@ -1067,7 +1112,7 @@ export default function ProviderPostPage() {
                     />
                   ) : (
                     <div className="pa-empty-body">
-                      This approved post does not contain article content yet.
+                      {uiText.noArticleContent}
                     </div>
                   )}
                 </article>
@@ -1076,16 +1121,16 @@ export default function ProviderPostPage() {
               {videoEmbedUrl && (
                 <section className="pa-video">
                   <div className="pa-video-head">
-                    <h2 className="pa-video-title">Video</h2>
+                    <h2 className="pa-video-title">{uiText.video}</h2>
                     <div className="pa-video-copy">
-                      Watch the video included with this provider article.
+                      {uiText.videoCopy}
                     </div>
                   </div>
 
                   <div className="pa-video-frame">
                     <iframe
                       src={videoEmbedUrl}
-                      title={`${payload.post.title || "Provider article"} video`}
+                      title={`${payload.post.title || uiText.providerArticle} ${uiText.video.toLowerCase()}`}
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                       allowFullScreen
                       loading="lazy"
@@ -1099,13 +1144,16 @@ export default function ProviderPostPage() {
                 <section className="pa-gallery">
                   <div className="pa-gallery-head">
                     <div>
-                      <h2 className="pa-gallery-title">Gallery</h2>
+                      <h2 className="pa-gallery-title">{uiText.gallery}</h2>
                       <div className="pa-gallery-copy">
-                        More visual highlights from this provider article.
+                        {uiText.galleryCopy}
                       </div>
                     </div>
                     <span className="pa-gallery-count">
-                      {galleryMedia.length} image{galleryMedia.length === 1 ? "" : "s"}
+                      {galleryMedia.length}{" "}
+                      {galleryMedia.length === 1
+                        ? uiText.imageSingular
+                        : uiText.imagePlural}
                     </span>
                   </div>
 
@@ -1117,11 +1165,11 @@ export default function ProviderPostPage() {
                         href={media.url}
                         target="_blank"
                         rel="noreferrer"
-                        aria-label={`Open gallery image ${index + 1}`}
+                        aria-label={`${uiText.openGalleryImage} ${index + 1}`}
                       >
                         <img
                           src={media.url}
-                          alt={`${payload.post.title || "Article"} gallery image ${index + 1}`}
+                          alt={`${payload.post.title || uiText.article} ${uiText.articleImage.toLowerCase()} ${index + 1}`}
                         />
                       </a>
                     ))}
@@ -1133,8 +1181,8 @@ export default function ProviderPostPage() {
                 <section className="pa-related">
                   <div className="pa-related-head">
                     <div>
-                      <h2 className="pa-related-title">Related Posts</h2>
-                      <div className="pa-related-copy">Continue reading related provider insights.</div>
+                      <h2 className="pa-related-title">{uiText.relatedPosts}</h2>
+                      <div className="pa-related-copy">{uiText.relatedCopy}</div>
                     </div>
                   </div>
 
@@ -1151,7 +1199,7 @@ export default function ProviderPostPage() {
                           </div>
                         )}
                         <div className="pa-related-card-copy">
-                          <div className="pa-related-card-title">{item.title || "Provider post"}</div>
+                          <div className="pa-related-card-title">{item.title || uiText.providerPost}</div>
                           {(item.subHeading || item.excerpt) && (
                             <div className="pa-related-card-text">
                               {item.subHeading || item.excerpt}
