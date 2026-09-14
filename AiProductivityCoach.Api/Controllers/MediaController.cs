@@ -52,7 +52,9 @@ namespace AiProductivityCoach.Api.Controllers
             bool PdfOnly,
             int MaxMb,
             string Scope,
-            string Slot
+            string Slot,
+            bool IsGallery = false,
+            bool IsContent = false
         );
 
         [HttpPost("authorize")]
@@ -80,6 +82,27 @@ namespace AiProductivityCoach.Api.Controllers
                 return resolved.Error;
 
             var definition = resolved.Definition!;
+
+            if (definition.IsGallery)
+            {
+                var galleryTarget = await resolved.TargetDocument!.GetSnapshotAsync(cancellationToken);
+                if (!galleryTarget.Exists)
+                    return NotFound(new { message = "Media target no longer exists." });
+
+                if (GetGalleryMediaCount(galleryTarget.ToDictionary()) >= 10)
+                    return Conflict(new { message = "A maximum of 10 gallery images is allowed per post." });
+            }
+
+            if (definition.IsContent)
+            {
+                var contentTarget = await resolved.TargetDocument!.GetSnapshotAsync(cancellationToken);
+                if (!contentTarget.Exists)
+                    return NotFound(new { message = "Media target no longer exists." });
+
+                if (GetContentMediaCount(contentTarget.ToDictionary()) >= 15)
+                    return Conflict(new { message = "A maximum of 15 images is allowed inside post content." });
+            }
+
             var validationError = ValidateUploadMetadata(companyId, request, definition);
 
             if (validationError != null)
@@ -167,6 +190,117 @@ namespace AiProductivityCoach.Api.Controllers
             }
 
             var currentData = current.ToDictionary();
+
+            if (definition.IsContent)
+            {
+                if (GetContentMediaCount(currentData) >= 15)
+                {
+                    await TryCleanupNewBlobAsync(request.Pathname, cancellationToken);
+                    return Conflict(new { message = "A maximum of 15 images is allowed inside post content." });
+                }
+
+                var contentItem = new Dictionary<string, object>
+                {
+                    ["url"] = request.Url.Trim(),
+                    ["objectPath"] = request.Pathname.Trim(),
+                    ["contentType"] = signature.ContentType ?? request.ContentType.Trim(),
+                    ["size"] = request.Size,
+                    ["uploadedAt"] = Timestamp.GetCurrentTimestamp()
+                };
+
+                try
+                {
+                    await targetDoc.UpdateAsync(
+                        new Dictionary<string, object>
+                        {
+                            ["contentMedia"] = FieldValue.ArrayUnion(contentItem),
+                            ["updatedAt"] = Timestamp.GetCurrentTimestamp()
+                        },
+                        cancellationToken: cancellationToken
+                    );
+                }
+                catch
+                {
+                    await TryCleanupNewBlobAsync(request.Pathname, cancellationToken);
+                    throw;
+                }
+
+                await WriteAuditLogAsync(
+                    GetPublisherUid()!,
+                    "publisher",
+                    "media.content_uploaded",
+                    companyId,
+                    request.ResourceType.Trim().ToLowerInvariant(),
+                    request.ResourceId.Trim(),
+                    cancellationToken
+                );
+
+                return Ok(new
+                {
+                    success = true,
+                    field = "contentMedia",
+                    url = request.Url.Trim(),
+                    pathname = request.Pathname.Trim(),
+                    contentType = signature.ContentType,
+                    content = true
+                });
+            }
+
+            if (definition.IsGallery)
+            {
+                if (GetGalleryMediaCount(currentData) >= 10)
+                {
+                    await TryCleanupNewBlobAsync(request.Pathname, cancellationToken);
+                    return Conflict(new { message = "A maximum of 10 gallery images is allowed per post." });
+                }
+
+                var galleryItem = new Dictionary<string, object>
+                {
+                    ["url"] = request.Url.Trim(),
+                    ["objectPath"] = request.Pathname.Trim(),
+                    ["contentType"] = signature.ContentType ?? request.ContentType.Trim(),
+                    ["size"] = request.Size,
+                    ["uploadedAt"] = Timestamp.GetCurrentTimestamp()
+                };
+
+                try
+                {
+                    await targetDoc.UpdateAsync(
+                        new Dictionary<string, object>
+                        {
+                            ["galleryMedia"] = FieldValue.ArrayUnion(galleryItem),
+                            ["updatedAt"] = Timestamp.GetCurrentTimestamp()
+                        },
+                        cancellationToken: cancellationToken
+                    );
+                }
+                catch
+                {
+                    await TryCleanupNewBlobAsync(request.Pathname, cancellationToken);
+                    throw;
+                }
+
+                await WriteAuditLogAsync(
+                    GetPublisherUid()!,
+                    "publisher",
+                    "media.gallery_uploaded",
+                    companyId,
+                    request.ResourceType.Trim().ToLowerInvariant(),
+                    request.ResourceId.Trim(),
+                    cancellationToken
+                );
+
+                return Ok(new
+                {
+                    success = true,
+                    field = "galleryMedia",
+                    url = request.Url.Trim(),
+                    pathname = request.Pathname.Trim(),
+                    contentType = signature.ContentType,
+                    gallery = true
+                });
+            }
+
             var previousObjectPath = GetString(currentData, definition.ObjectPathField);
 
             try
@@ -354,7 +488,7 @@ namespace AiProductivityCoach.Api.Controllers
 
             var resourceType = request.ResourceType?.Trim().ToLowerInvariant() ?? string.Empty;
             var resourceId = request.ResourceId?.Trim() ?? string.Empty;
-            var definitionForResource = GetResourceDefinition(resourceType);
+            var definitionForResource = GetResourceDefinition(resourceType, request.Slot);
 
             if (definitionForResource == null)
                 return (null, null, BadRequest(new { message = "Unsupported provider media type." }));
@@ -607,17 +741,94 @@ namespace AiProductivityCoach.Api.Controllers
             };
         }
 
-        private MediaDefinition? GetResourceDefinition(string resourceType)
+        private MediaDefinition? GetResourceDefinition(string resourceType, string? slot = null)
         {
-            return resourceType?.Trim().ToLowerInvariant() switch
+            var normalizedType = resourceType?.Trim().ToLowerInvariant() ?? string.Empty;
+            var normalizedSlot = slot?.Trim().ToLowerInvariant() ?? string.Empty;
+
+            if (normalizedType == "posts" && normalizedSlot == "content")
             {
-                "whitepapers" => new MediaDefinition("fileUrl", "fileObjectPath", true, GetMaxMb("WhitepaperMaxMb", 20), "whitepapers", "file"),
+                return new MediaDefinition(
+                    "contentMedia",
+                    string.Empty,
+                    false,
+                    GetMaxMb("PostContentImageMaxMb", 8),
+                    "posts",
+                    "content",
+                    false,
+                    true
+                );
+            }
+
+            if (normalizedType == "posts" && normalizedSlot == "gallery")
+            {
+                return new MediaDefinition(
+                    "galleryMedia",
+                    string.Empty,
+                    false,
+                    GetMaxMb("PostGalleryImageMaxMb", 8),
+                    "posts",
+                    "gallery",
+                    true
+                );
+            }
+
+            if (normalizedType == "webinars" && normalizedSlot == "banner")
+            {
+                return new MediaDefinition(
+                    "bannerUrl",
+                    "bannerObjectPath",
+                    false,
+                    GetMaxMb("WebinarBannerMaxMb", 8),
+                    "webinars",
+                    "banner"
+                );
+            }
+
+            if (normalizedType == "webinars" && normalizedSlot == "speaker")
+            {
+                return new MediaDefinition(
+                    "speakerImageUrl",
+                    "speakerImageObjectPath",
+                    false,
+                    GetMaxMb("WebinarSpeakerImageMaxMb", 5),
+                    "webinars",
+                    "speaker"
+                );
+            }
+
+            return normalizedType switch
+            {
+                "posts" => new MediaDefinition("imageUrl", "imageObjectPath", false, GetMaxMb("PostImageMaxMb", 8), "posts", "image"),
+                "whitepapers" => new MediaDefinition("imageUrl", "imageObjectPath", false, GetMaxMb("WhitepaperImageMaxMb", 8), "whitepapers", "image"),
                 "products" => new MediaDefinition("imageUrl", "imageObjectPath", false, GetMaxMb("ProductImageMaxMb", 8), "products", "image"),
                 "contacts" => new MediaDefinition("photoUrl", "photoObjectPath", false, GetMaxMb("ContactPhotoMaxMb", 5), "contacts", "photo"),
                 "webinars" => new MediaDefinition("thumbnailUrl", "thumbnailObjectPath", false, GetMaxMb("WebinarThumbnailMaxMb", 8), "webinars", "thumbnail"),
                 "events" => new MediaDefinition("imageUrl", "imageObjectPath", false, GetMaxMb("EventImageMaxMb", 8), "events", "image"),
                 _ => null
             };
+        }
+
+        private static int GetGalleryMediaCount(Dictionary<string, object> data)
+        {
+            if (!data.TryGetValue("galleryMedia", out var raw) ||
+                raw is not IEnumerable<object> items)
+            {
+                return 0;
+            }
+
+            return items.Count();
+        }
+
+        private static int GetContentMediaCount(Dictionary<string, object> data)
+        {
+            if (!data.TryGetValue("contentMedia", out var raw) ||
+                raw is not IEnumerable<object> items)
+            {
+                return 0;
+            }
+
+            return items.Count();
         }
 
         private int GetMaxMb(string key, int fallback)

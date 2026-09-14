@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import Header from "@/components/Header";
 import { API_BASE_URL } from "@/services/api";
+import { useLanguage } from "@/services/LanguageContext";
 
 type ProviderCard = {
   id: string;
@@ -31,6 +32,8 @@ type ProviderCard = {
 
 export default function ProvidersDirectory() {
   const router = useRouter();
+  const { language } = useLanguage();
+  const isGerman = language === "de";
   const [providers, setProviders] = useState<ProviderCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -49,21 +52,21 @@ export default function ProvidersDirectory() {
         const payload = await res.json().catch(() => []);
 
         if (!res.ok) {
-          setError(payload?.message || "Unable to load providers.");
+          setError(payload?.message || (language === "de" ? "Anbieter konnten nicht geladen werden." : "Unable to load providers."));
           return;
         }
 
         setProviders(Array.isArray(payload) ? payload : []);
       } catch (e) {
         console.error("Provider directory failed:", e);
-        setError("Unable to load providers.");
+        setError(language === "de" ? "Anbieter konnten nicht geladen werden." : "Unable to load providers.");
       } finally {
         setLoading(false);
       }
     };
 
     load();
-  }, []);
+  }, [language]);
 
   const categories = [
     "All",
@@ -79,6 +82,39 @@ export default function ProvidersDirectory() {
   ];
 
   const alphabet = ["All", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("")];
+
+  const categoryLabels: Record<string, { en: string; de: string }> = {
+    All: { en: "All", de: "Alle" },
+    Community: { en: "Community", de: "Community" },
+    "Data management": { en: "Data management", de: "Datenmanagement" },
+    "ERP provider": { en: "ERP provider", de: "ERP-Anbieter" },
+    Event: { en: "Event", de: "Event" },
+    "IT Provider": { en: "IT Provider", de: "IT-Anbieter" },
+    "Marketing service provider": {
+      en: "Marketing service provider",
+      de: "Marketing-Dienstleister",
+    },
+    Publisher: { en: "Publisher", de: "Verlag" },
+    "Security Provider": { en: "Security Provider", de: "Security-Anbieter" },
+    "Software Provider": { en: "Software Provider", de: "Software-Anbieter" },
+  };
+
+  const uiText = {
+    providerProfiles: isGerman ? "Anbieterprofile" : "Provider profiles",
+    searchPlaceholder: isGerman
+      ? "Unternehmen, Kategorien, Fachgebiete oder Standorte suchen..."
+      : "Search companies, categories, specialties or locations...",
+    categories: isGerman ? "Kategorien" : "Categories",
+    alphabet: "Alphabet",
+    approvedProviders: isGerman ? "Freigegebene Anbieter" : "Approved Providers",
+    loading: isGerman ? "Wird geladen…" : "Loading…",
+    providerSingular: isGerman ? "Anbieter" : "provider",
+    providerPlural: isGerman ? "Anbieter" : "providers",
+    noMatches: isGerman
+      ? "Keine freigegebenen Anbieter entsprechen Ihrer aktuellen Suche und den Filtern."
+      : "{uiText.noMatches}",
+    learnMore: isGerman ? "Mehr erfahren" : "Learn more",
+  };
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -438,7 +474,7 @@ export default function ProvidersDirectory() {
                 <div className="prov-filter-heading-icon">
                   <Building2 size={15} />
                 </div>
-                <span>Provider profiles</span>
+                <span>{uiText.providerProfiles}</span>
               </div>
 
               <div className="prov-search-wrap">
@@ -447,13 +483,13 @@ export default function ProvidersDirectory() {
                   className="prov-search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search companies, categories, specialties or locations..."
+                  placeholder={uiText.searchPlaceholder}
                 />
               </div>
             </div>
 
             <div className="prov-filter-row">
-              <div className="prov-filter-label">Categories</div>
+              <div className="prov-filter-label">{uiText.categories}</div>
               {categories.map((item) => (
                 <button
                   key={item}
@@ -461,13 +497,13 @@ export default function ProvidersDirectory() {
                   className={`prov-pill ${category === item ? "active" : ""}`}
                   onClick={() => setCategory(item)}
                 >
-                  {item}
+                  {categoryLabels[item]?.[isGerman ? "de" : "en"] || item}
                 </button>
               ))}
             </div>
 
             <div className="prov-filter-row">
-              <div className="prov-filter-label">Alphabet</div>
+              <div className="prov-filter-label">{uiText.alphabet}</div>
               {alphabet.map((item) => (
                 <button
                   key={item}
@@ -475,16 +511,22 @@ export default function ProvidersDirectory() {
                   className={`prov-pill ${letter === item ? "active" : ""}`}
                   onClick={() => setLetter(item)}
                 >
-                  {item}
+                  {item === "All" && isGerman ? "Alle" : item}
                 </button>
               ))}
             </div>
           </section>
 
           <div className="prov-results-head">
-            <div className="prov-results-title">Approved Providers</div>
+            <div className="prov-results-title">{uiText.approvedProviders}</div>
             <div className="prov-results-count">
-              {loading ? "Loading…" : `${filtered.length} provider${filtered.length === 1 ? "" : "s"}`}
+              {loading
+                ? uiText.loading
+                : `${filtered.length} ${
+                    filtered.length === 1
+                      ? uiText.providerSingular
+                      : uiText.providerPlural
+                  }`}
             </div>
           </div>
 
@@ -523,14 +565,8 @@ export default function ProvidersDirectory() {
                       <div className="prov-arrow"><ChevronRight size={13} /></div>
                     </div>
 
-                    <div className="prov-card-headline">
-                      {provider.headline ||
-                        provider.shortDescription ||
-                        "Approved provider profile"}
-                    </div>
-
                     <div className="prov-card-meta">
-                      <span>Learn more</span>
+                      <span>{uiText.learnMore}</span>
                       <ChevronRight size={11} />
                     </div>
                   </div>

@@ -5,6 +5,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Globalization;
+using System.Net;
 using System.Net.Mail;
 using AiProductivityCoach.Api.Services;
 
@@ -59,25 +60,24 @@ namespace AiProductivityCoach.Api.Controllers
         public class PostDto
         {
             public string Title { get; set; } = string.Empty;
+            public string SubHeading { get; set; } = string.Empty;
             public string Excerpt { get; set; } = string.Empty;
             public string Body { get; set; } = string.Empty;
+            public string VideoEmbedUrl { get; set; } = string.Empty;
         }
 
         public class WhitepaperDto
         {
             public string Title { get; set; } = string.Empty;
-            public string Summary { get; set; } = string.Empty;
-            public string Authors { get; set; } = string.Empty;
-            public string ExternalUrl { get; set; } = string.Empty;
+            public string Content { get; set; } = string.Empty;
         }
 
         public class ProductDto
         {
             public string Name { get; set; } = string.Empty;
+            public string Category { get; set; } = string.Empty;
             public string ShortDescription { get; set; } = string.Empty;
-            public string Description { get; set; } = string.Empty;
-            public string ProductUrl { get; set; } = string.Empty;
-            public string PriceLabel { get; set; } = string.Empty;
+            public List<string> Features { get; set; } = new();
         }
 
         public class ContactDto
@@ -102,20 +102,28 @@ namespace AiProductivityCoach.Api.Controllers
         public class WebinarDto
         {
             public string Title { get; set; } = string.Empty;
-            public string Summary { get; set; } = string.Empty;
-            public string ScheduledAt { get; set; } = string.Empty;
-            public string Speaker { get; set; } = string.Empty;
-            public string RegistrationUrl { get; set; } = string.Empty;
+            public string SubTitle { get; set; } = string.Empty;
+            public string Content { get; set; } = string.Empty;
+            public string SpeakerName { get; set; } = string.Empty;
+
+            // Used only when the Publisher UI needs a real Firestore resource
+            // before uploading banner/speaker media. Final saves still use the
+            // strict validation in CreateWebinar / UpdateWebinar.
+            public bool MediaDraft { get; set; }
         }
 
         public class EventDto
         {
             public string Title { get; set; } = string.Empty;
             public string Summary { get; set; } = string.Empty;
-            public string StartAt { get; set; } = string.Empty;
-            public string EndAt { get; set; } = string.Empty;
+            public string StartDate { get; set; } = string.Empty;
+            public string StartTime { get; set; } = string.Empty;
+            public string EndDate { get; set; } = string.Empty;
+            public string EndTime { get; set; } = string.Empty;
             public string Location { get; set; } = string.Empty;
             public string EventUrl { get; set; } = string.Empty;
+            public string StartAt { get; set; } = string.Empty;
+            public string EndAt { get; set; } = string.Empty;
         }
 
         // =====================================================
@@ -454,42 +462,83 @@ namespace AiProductivityCoach.Api.Controllers
             ListResourcesAsync(companyId, "posts");
 
         [HttpPost("{companyId}/posts")]
-        public Task<IActionResult> CreatePost(string companyId, [FromBody] PostDto request)
+        public async Task<IActionResult> CreatePost(string companyId, [FromBody] PostDto request)
         {
             var title = Clean(request.Title);
+            var subHeading = Clean(request.SubHeading);
             var excerpt = Clean(request.Excerpt);
-            var body = Clean(request.Body);
+            var body = SanitizePostBody(request.Body);
+            var rawVideoEmbedUrl = Clean(request.VideoEmbedUrl);
+            var videoEmbedUrl = NormalizeVideoEmbedUrl(rawVideoEmbedUrl);
+
+            if (!string.IsNullOrWhiteSpace(rawVideoEmbedUrl) &&
+                string.IsNullOrWhiteSpace(videoEmbedUrl))
+            {
+                return BadRequest(
+                    "Use a supported video URL from YouTube, Vimeo, Loom, Dailymotion or Wistia.");
+            }
 
             if (string.IsNullOrWhiteSpace(title) || title.Length > 180)
-                return BadRequestTask("Post title is required and must be 180 characters or fewer.");
-            if (excerpt.Length > 500 || body.Length > 20000)
-                return BadRequestTask("Post content exceeds the allowed length.");
+                return BadRequest("Post title is required and must be 180 characters or fewer.");
+            if (subHeading.Length > 320)
+                return BadRequest("Post sub-heading must be 320 characters or fewer.");
+            if (excerpt.Length > 500 || body.Length > 60000)
+                return BadRequest("Post content exceeds the allowed length.");
+            if (CountPostContentImages(body) > 15)
+                return BadRequest("A maximum of 15 images is allowed inside post content.");
 
-            return CreateResourceAsync(companyId, "posts", new Dictionary<string, object>
+            var slug = await GenerateUniquePostSlugAsync(companyId, title);
+
+            return await CreateResourceAsync(companyId, "posts", new Dictionary<string, object>
             {
                 { "title", title },
+                { "slug", slug },
+                { "subHeading", subHeading },
                 { "excerpt", excerpt },
-                { "body", body }
+                { "body", body },
+                { "videoEmbedUrl", videoEmbedUrl },
+                { "imageUrl", string.Empty },
+                { "galleryMedia", new List<Dictionary<string, object>>() },
+                { "contentMedia", new List<Dictionary<string, object>>() }
             });
         }
 
         [HttpPut("{companyId}/posts/{resourceId}")]
-        public Task<IActionResult> UpdatePost(string companyId, string resourceId, [FromBody] PostDto request)
+        public async Task<IActionResult> UpdatePost(string companyId, string resourceId, [FromBody] PostDto request)
         {
             var title = Clean(request.Title);
+            var subHeading = Clean(request.SubHeading);
             var excerpt = Clean(request.Excerpt);
-            var body = Clean(request.Body);
+            var body = SanitizePostBody(request.Body);
+            var rawVideoEmbedUrl = Clean(request.VideoEmbedUrl);
+            var videoEmbedUrl = NormalizeVideoEmbedUrl(rawVideoEmbedUrl);
+
+            if (!string.IsNullOrWhiteSpace(rawVideoEmbedUrl) &&
+                string.IsNullOrWhiteSpace(videoEmbedUrl))
+            {
+                return BadRequest(
+                    "Use a supported video URL from YouTube, Vimeo, Loom, Dailymotion or Wistia.");
+            }
 
             if (string.IsNullOrWhiteSpace(title) || title.Length > 180)
-                return BadRequestTask("Post title is required and must be 180 characters or fewer.");
-            if (excerpt.Length > 500 || body.Length > 20000)
-                return BadRequestTask("Post content exceeds the allowed length.");
+                return BadRequest("Post title is required and must be 180 characters or fewer.");
+            if (subHeading.Length > 320)
+                return BadRequest("Post sub-heading must be 320 characters or fewer.");
+            if (excerpt.Length > 500 || body.Length > 60000)
+                return BadRequest("Post content exceeds the allowed length.");
+            if (CountPostContentImages(body) > 15)
+                return BadRequest("A maximum of 15 images is allowed inside post content.");
 
-            return UpdateResourceAsync(companyId, "posts", resourceId, new Dictionary<string, object>
+            var slug = await GenerateUniquePostSlugAsync(companyId, title, resourceId);
+
+            return await UpdateResourceAsync(companyId, "posts", resourceId, new Dictionary<string, object>
             {
                 { "title", title },
+                { "slug", slug },
+                { "subHeading", subHeading },
                 { "excerpt", excerpt },
-                { "body", body }
+                { "body", body },
+                { "videoEmbedUrl", videoEmbedUrl }
             });
         }
 
@@ -508,22 +557,18 @@ namespace AiProductivityCoach.Api.Controllers
         public Task<IActionResult> CreateWhitepaper(string companyId, [FromBody] WhitepaperDto request)
         {
             var title = Clean(request.Title);
-            var summary = Clean(request.Summary);
-            var authors = Clean(request.Authors);
-            var externalUrl = Clean(request.ExternalUrl);
+            var content = SanitizeWhitepaperBody(request.Content);
 
             if (string.IsNullOrWhiteSpace(title) || title.Length > 180)
                 return BadRequestTask("Whitepaper title is required and must be 180 characters or fewer.");
-            if (summary.Length > 3000 || authors.Length > 300 || !IsValidOptionalUrl(externalUrl))
-                return BadRequestTask("One or more whitepaper fields are invalid.");
+            if (content.Length > 60000)
+                return BadRequestTask("Whitepaper content exceeds the allowed length.");
 
             return CreateResourceAsync(companyId, "whitepapers", new Dictionary<string, object>
             {
                 { "title", title },
-                { "summary", summary },
-                { "authors", authors },
-                { "externalUrl", externalUrl },
-                { "fileUrl", string.Empty }
+                { "content", content },
+                { "imageUrl", string.Empty }
             });
         }
 
@@ -531,21 +576,17 @@ namespace AiProductivityCoach.Api.Controllers
         public Task<IActionResult> UpdateWhitepaper(string companyId, string resourceId, [FromBody] WhitepaperDto request)
         {
             var title = Clean(request.Title);
-            var summary = Clean(request.Summary);
-            var authors = Clean(request.Authors);
-            var externalUrl = Clean(request.ExternalUrl);
+            var content = SanitizeWhitepaperBody(request.Content);
 
             if (string.IsNullOrWhiteSpace(title) || title.Length > 180)
                 return BadRequestTask("Whitepaper title is required and must be 180 characters or fewer.");
-            if (summary.Length > 3000 || authors.Length > 300 || !IsValidOptionalUrl(externalUrl))
-                return BadRequestTask("One or more whitepaper fields are invalid.");
+            if (content.Length > 60000)
+                return BadRequestTask("Whitepaper content exceeds the allowed length.");
 
             return UpdateResourceAsync(companyId, "whitepapers", resourceId, new Dictionary<string, object>
             {
                 { "title", title },
-                { "summary", summary },
-                { "authors", authors },
-                { "externalUrl", externalUrl }
+                { "content", content }
             });
         }
 
@@ -564,25 +605,25 @@ namespace AiProductivityCoach.Api.Controllers
         public Task<IActionResult> CreateProduct(string companyId, [FromBody] ProductDto request)
         {
             var name = Clean(request.Name);
+            var category = Clean(request.Category);
             var shortDescription = Clean(request.ShortDescription);
-            var description = Clean(request.Description);
-            var productUrl = Clean(request.ProductUrl);
-            var priceLabel = Clean(request.PriceLabel);
+            var features = CleanList(request.Features);
 
             if (string.IsNullOrWhiteSpace(name) || name.Length > 180)
                 return BadRequestTask("Product name is required and must be 180 characters or fewer.");
-            if (shortDescription.Length > 500 || description.Length > 6000 ||
-                priceLabel.Length > 80 || !IsValidOptionalUrl(productUrl))
-                return BadRequestTask("One or more product fields are invalid.");
+            if (string.IsNullOrWhiteSpace(category) || category.Length > 120)
+                return BadRequestTask("Product category is required and must be 120 characters or fewer.");
+            if (string.IsNullOrWhiteSpace(shortDescription) || shortDescription.Length > 1200)
+                return BadRequestTask("Brief description is required and must be 1200 characters or fewer.");
+            if (features.Count > 30 || features.Any(feature => feature.Length > 100))
+                return BadRequestTask("Use up to 30 product features, each 100 characters or fewer.");
 
             return CreateResourceAsync(companyId, "products", new Dictionary<string, object>
             {
                 { "name", name },
+                { "category", category },
                 { "shortDescription", shortDescription },
-                { "description", description },
-                { "productUrl", productUrl },
-                { "priceLabel", priceLabel },
-                { "imageUrl", string.Empty }
+                { "features", features }
             });
         }
 
@@ -590,24 +631,25 @@ namespace AiProductivityCoach.Api.Controllers
         public Task<IActionResult> UpdateProduct(string companyId, string resourceId, [FromBody] ProductDto request)
         {
             var name = Clean(request.Name);
+            var category = Clean(request.Category);
             var shortDescription = Clean(request.ShortDescription);
-            var description = Clean(request.Description);
-            var productUrl = Clean(request.ProductUrl);
-            var priceLabel = Clean(request.PriceLabel);
+            var features = CleanList(request.Features);
 
             if (string.IsNullOrWhiteSpace(name) || name.Length > 180)
                 return BadRequestTask("Product name is required and must be 180 characters or fewer.");
-            if (shortDescription.Length > 500 || description.Length > 6000 ||
-                priceLabel.Length > 80 || !IsValidOptionalUrl(productUrl))
-                return BadRequestTask("One or more product fields are invalid.");
+            if (string.IsNullOrWhiteSpace(category) || category.Length > 120)
+                return BadRequestTask("Product category is required and must be 120 characters or fewer.");
+            if (string.IsNullOrWhiteSpace(shortDescription) || shortDescription.Length > 1200)
+                return BadRequestTask("Brief description is required and must be 1200 characters or fewer.");
+            if (features.Count > 30 || features.Any(feature => feature.Length > 100))
+                return BadRequestTask("Use up to 30 product features, each 100 characters or fewer.");
 
             return UpdateResourceAsync(companyId, "products", resourceId, new Dictionary<string, object>
             {
                 { "name", name },
+                { "category", category },
                 { "shortDescription", shortDescription },
-                { "description", description },
-                { "productUrl", productUrl },
-                { "priceLabel", priceLabel }
+                { "features", features }
             });
         }
 
@@ -615,7 +657,6 @@ namespace AiProductivityCoach.Api.Controllers
         public Task<IActionResult> DeleteProduct(string companyId, string resourceId) =>
             DeleteResourceAsync(companyId, "products", resourceId);
 
-        // =====================================================
         // 👤 CONTACTS
         // =====================================================
         [HttpGet("{companyId}/contacts")]
@@ -763,28 +804,43 @@ namespace AiProductivityCoach.Api.Controllers
         public Task<IActionResult> CreateWebinar(string companyId, [FromBody] WebinarDto request)
         {
             var title = Clean(request.Title);
-            var summary = Clean(request.Summary);
-            var scheduledAt = Clean(request.ScheduledAt);
-            var speaker = Clean(request.Speaker);
-            var registrationUrl = Clean(request.RegistrationUrl);
+            var subTitle = Clean(request.SubTitle);
+            var content = SanitizeWhitepaperBody(request.Content);
+            var speakerName = Clean(request.SpeakerName);
 
             if (string.IsNullOrWhiteSpace(title) || title.Length > 180)
                 return BadRequestTask("Webinar title is required and must be 180 characters or fewer.");
-            if (summary.Length > 3000 || speaker.Length > 250 || !IsValidOptionalUrl(registrationUrl))
-                return BadRequestTask("One or more webinar fields are invalid.");
 
-            if (!string.IsNullOrWhiteSpace(scheduledAt) &&
-                !DateTimeOffset.TryParse(scheduledAt, out _))
-                return BadRequestTask("Webinar date/time is invalid.");
+            if (request.MediaDraft)
+            {
+                // Media upload needs a real webinar document first so Vercel Blob
+                // can commit against a verified owned resource. Keep this draft
+                // intentionally incomplete; UpdateWebinar remains strict.
+                if (subTitle.Length > 320)
+                    return BadRequestTask("Webinar sub-title must be 320 characters or fewer.");
+                if (content.Length > 60000)
+                    return BadRequestTask("Webinar content must be 60000 characters or fewer.");
+                if (speakerName.Length > 180)
+                    return BadRequestTask("Speaker name must be 180 characters or fewer.");
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(subTitle) || subTitle.Length > 320)
+                    return BadRequestTask("Webinar sub-title is required and must be 320 characters or fewer.");
+                if (string.IsNullOrWhiteSpace(content) || content.Length > 60000)
+                    return BadRequestTask("Webinar content is required and must be 60000 characters or fewer.");
+                if (string.IsNullOrWhiteSpace(speakerName) || speakerName.Length > 180)
+                    return BadRequestTask("Speaker name is required and must be 180 characters or fewer.");
+            }
 
             return CreateResourceAsync(companyId, "webinars", new Dictionary<string, object>
             {
                 { "title", title },
-                { "summary", summary },
-                { "scheduledAt", scheduledAt },
-                { "speaker", speaker },
-                { "registrationUrl", registrationUrl },
-                { "thumbnailUrl", string.Empty }
+                { "subTitle", subTitle },
+                { "content", content },
+                { "speakerName", speakerName },
+                { "bannerUrl", string.Empty },
+                { "speakerImageUrl", string.Empty }
             });
         }
 
@@ -792,27 +848,25 @@ namespace AiProductivityCoach.Api.Controllers
         public Task<IActionResult> UpdateWebinar(string companyId, string resourceId, [FromBody] WebinarDto request)
         {
             var title = Clean(request.Title);
-            var summary = Clean(request.Summary);
-            var scheduledAt = Clean(request.ScheduledAt);
-            var speaker = Clean(request.Speaker);
-            var registrationUrl = Clean(request.RegistrationUrl);
+            var subTitle = Clean(request.SubTitle);
+            var content = SanitizeWhitepaperBody(request.Content);
+            var speakerName = Clean(request.SpeakerName);
 
             if (string.IsNullOrWhiteSpace(title) || title.Length > 180)
                 return BadRequestTask("Webinar title is required and must be 180 characters or fewer.");
-            if (summary.Length > 3000 || speaker.Length > 250 || !IsValidOptionalUrl(registrationUrl))
-                return BadRequestTask("One or more webinar fields are invalid.");
-
-            if (!string.IsNullOrWhiteSpace(scheduledAt) &&
-                !DateTimeOffset.TryParse(scheduledAt, out _))
-                return BadRequestTask("Webinar date/time is invalid.");
+            if (string.IsNullOrWhiteSpace(subTitle) || subTitle.Length > 320)
+                return BadRequestTask("Webinar sub-title is required and must be 320 characters or fewer.");
+            if (string.IsNullOrWhiteSpace(content) || content.Length > 60000)
+                return BadRequestTask("Webinar content is required and must be 60000 characters or fewer.");
+            if (string.IsNullOrWhiteSpace(speakerName) || speakerName.Length > 180)
+                return BadRequestTask("Speaker name is required and must be 180 characters or fewer.");
 
             return UpdateResourceAsync(companyId, "webinars", resourceId, new Dictionary<string, object>
             {
                 { "title", title },
-                { "summary", summary },
-                { "scheduledAt", scheduledAt },
-                { "speaker", speaker },
-                { "registrationUrl", registrationUrl }
+                { "subTitle", subTitle },
+                { "content", content },
+                { "speakerName", speakerName }
             });
         }
 
@@ -820,7 +874,6 @@ namespace AiProductivityCoach.Api.Controllers
         public Task<IActionResult> DeleteWebinar(string companyId, string resourceId) =>
             DeleteResourceAsync(companyId, "webinars", resourceId);
 
-        // =====================================================
         // ✨ EVENTS
         // =====================================================
         [HttpGet("{companyId}/events")]
@@ -832,23 +885,36 @@ namespace AiProductivityCoach.Api.Controllers
         {
             var title = Clean(request.Title);
             var summary = Clean(request.Summary);
-            var startAt = Clean(request.StartAt);
-            var endAt = Clean(request.EndAt);
+            var startDate = Clean(request.StartDate);
+            var startTime = Clean(request.StartTime);
+            var endDate = Clean(request.EndDate);
+            var endTime = Clean(request.EndTime);
             var location = Clean(request.Location);
             var eventUrl = Clean(request.EventUrl);
 
+            ApplyLegacyEventDateTimeFallback(request, ref startDate, ref startTime, ref endDate, ref endTime);
+
             if (string.IsNullOrWhiteSpace(title) || title.Length > 180)
                 return BadRequestTask("Event title is required and must be 180 characters or fewer.");
-            if (summary.Length > 3000 || location.Length > 250 || !IsValidOptionalUrl(eventUrl))
+            if (string.IsNullOrWhiteSpace(location) || location.Length > 250)
+                return BadRequestTask("Event location is required and must be 250 characters or fewer.");
+            if (summary.Length > 3000 || !IsValidOptionalUrl(eventUrl))
                 return BadRequestTask("One or more event fields are invalid.");
 
-            var dateError = ValidateDateRange(startAt, endAt, "event");
-            if (dateError != null) return BadRequestTask(dateError);
+            var scheduleError = ValidateEventSchedule(startDate, startTime, endDate, endTime);
+            if (scheduleError != null) return BadRequestTask(scheduleError);
+
+            var startAt = $"{startDate}T{startTime}";
+            var endAt = $"{endDate}T{endTime}";
 
             return CreateResourceAsync(companyId, "events", new Dictionary<string, object>
             {
                 { "title", title },
                 { "summary", summary },
+                { "startDate", startDate },
+                { "startTime", startTime },
+                { "endDate", endDate },
+                { "endTime", endTime },
                 { "startAt", startAt },
                 { "endAt", endAt },
                 { "location", location },
@@ -862,23 +928,36 @@ namespace AiProductivityCoach.Api.Controllers
         {
             var title = Clean(request.Title);
             var summary = Clean(request.Summary);
-            var startAt = Clean(request.StartAt);
-            var endAt = Clean(request.EndAt);
+            var startDate = Clean(request.StartDate);
+            var startTime = Clean(request.StartTime);
+            var endDate = Clean(request.EndDate);
+            var endTime = Clean(request.EndTime);
             var location = Clean(request.Location);
             var eventUrl = Clean(request.EventUrl);
 
+            ApplyLegacyEventDateTimeFallback(request, ref startDate, ref startTime, ref endDate, ref endTime);
+
             if (string.IsNullOrWhiteSpace(title) || title.Length > 180)
                 return BadRequestTask("Event title is required and must be 180 characters or fewer.");
-            if (summary.Length > 3000 || location.Length > 250 || !IsValidOptionalUrl(eventUrl))
+            if (string.IsNullOrWhiteSpace(location) || location.Length > 250)
+                return BadRequestTask("Event location is required and must be 250 characters or fewer.");
+            if (summary.Length > 3000 || !IsValidOptionalUrl(eventUrl))
                 return BadRequestTask("One or more event fields are invalid.");
 
-            var dateError = ValidateDateRange(startAt, endAt, "event");
-            if (dateError != null) return BadRequestTask(dateError);
+            var scheduleError = ValidateEventSchedule(startDate, startTime, endDate, endTime);
+            if (scheduleError != null) return BadRequestTask(scheduleError);
+
+            var startAt = $"{startDate}T{startTime}";
+            var endAt = $"{endDate}T{endTime}";
 
             return UpdateResourceAsync(companyId, "events", resourceId, new Dictionary<string, object>
             {
                 { "title", title },
                 { "summary", summary },
+                { "startDate", startDate },
+                { "startTime", startTime },
+                { "endDate", endDate },
+                { "endTime", endTime },
                 { "startAt", startAt },
                 { "endAt", endAt },
                 { "location", location },
@@ -890,7 +969,6 @@ namespace AiProductivityCoach.Api.Controllers
         public Task<IActionResult> DeleteEvent(string companyId, string resourceId) =>
             DeleteResourceAsync(companyId, "events", resourceId);
 
-        // =====================================================
         // 📤 PREVIEW / SUBMISSION FOUNDATION
         // =====================================================
         [HttpPost("{companyId}/submit")]
@@ -1119,12 +1197,42 @@ namespace AiProductivityCoach.Api.Controllers
                 "fileObjectPath",
                 "imageObjectPath",
                 "photoObjectPath",
-                "thumbnailObjectPath"
+                "thumbnailObjectPath",
+                "bannerObjectPath",
+                "speakerImageObjectPath"
             })
             {
                 await _mediaStorage.DeleteIfExistsAsync(
                     GetString(resourceData, objectPathField)
                 );
+            }
+
+            if (resourceData.TryGetValue("galleryMedia", out var rawGallery) &&
+                rawGallery is IEnumerable<object> galleryItems)
+            {
+                foreach (var galleryItem in galleryItems)
+                {
+                    if (galleryItem is Dictionary<string, object> galleryMap)
+                    {
+                        await _mediaStorage.DeleteIfExistsAsync(
+                            GetString(galleryMap, "objectPath")
+                        );
+                    }
+                }
+            }
+
+            if (resourceData.TryGetValue("contentMedia", out var rawContentMedia) &&
+                rawContentMedia is IEnumerable<object> contentMediaItems)
+            {
+                foreach (var contentMediaItem in contentMediaItems)
+                {
+                    if (contentMediaItem is Dictionary<string, object> contentMediaMap)
+                    {
+                        await _mediaStorage.DeleteIfExistsAsync(
+                            GetString(contentMediaMap, "objectPath")
+                        );
+                    }
+                }
             }
 
             await docRef.DeleteAsync();
@@ -1217,6 +1325,49 @@ namespace AiProductivityCoach.Api.Controllers
                 candidate = $"{baseSlug}-{suffix}";
                 suffix++;
             }
+        }
+
+        private async Task<string> GenerateUniquePostSlugAsync(
+            string companyId,
+            string title,
+            string? currentResourceId = null)
+        {
+            var baseSlug = CreateSlug(title);
+
+            if (string.IsNullOrWhiteSpace(baseSlug))
+                baseSlug = "post";
+
+            var snapshot = await _firestore
+                .Collection("companies")
+                .Document(companyId)
+                .Collection("posts")
+                .GetSnapshotAsync();
+
+            var usedSlugs = snapshot.Documents
+                .Where(doc =>
+                    string.IsNullOrWhiteSpace(currentResourceId) ||
+                    !string.Equals(doc.Id, currentResourceId, StringComparison.Ordinal))
+                .Select(doc =>
+                {
+                    var data = doc.ToDictionary();
+                    var storedSlug = GetString(data, "slug");
+                    return string.IsNullOrWhiteSpace(storedSlug)
+                        ? CreateSlug(GetString(data, "title"))
+                        : storedSlug;
+                })
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var candidate = baseSlug;
+            var suffix = 2;
+
+            while (usedSlugs.Contains(candidate))
+            {
+                candidate = $"{baseSlug}-{suffix}";
+                suffix++;
+            }
+
+            return candidate;
         }
 
         private static string CreateSlug(string value)
@@ -1337,6 +1488,317 @@ namespace AiProductivityCoach.Api.Controllers
             return value;
         }
 
+        private static string SanitizePostBody(string? value)
+        {
+            var html = value?.Trim() ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(html))
+                return string.Empty;
+
+            html = Regex.Replace(
+                html,
+                @"<!--[\s\S]*?-->",
+                string.Empty,
+                RegexOptions.IgnoreCase);
+
+            html = Regex.Replace(
+                html,
+                @"<(script|style|iframe|object|embed)[^>]*>[\s\S]*?</\1\s*>",
+                string.Empty,
+                RegexOptions.IgnoreCase);
+
+            html = Regex.Replace(html, @"<\s*div\b[^>]*>", "<p>", RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"<\s*/\s*div\s*>", "</p>", RegexOptions.IgnoreCase);
+
+            var tokens = new List<string>();
+
+            // Preserve only verified Vercel Blob images. All other IMG tags are
+            // discarded before the general formatting whitelist is applied.
+            html = Regex.Replace(
+                html,
+                @"<\s*img\b(?<attrs>[^>]*)/?>",
+                match =>
+                {
+                    var attributes = match.Groups["attrs"].Value;
+                    var src = ExtractHtmlAttribute(attributes, "src");
+
+                    if (!IsValidPostContentImageUrl(src))
+                        return string.Empty;
+
+                    var alt = ExtractHtmlAttribute(attributes, "alt");
+                    if (string.IsNullOrWhiteSpace(alt))
+                        alt = "Post content image";
+
+                    if (alt.Length > 180)
+                        alt = alt[..180];
+
+                    var normalized =
+                        $"<img src=\"{WebUtility.HtmlEncode(src)}\" alt=\"{WebUtility.HtmlEncode(alt)}\">";
+
+                    var token = $"__EYERIC_RICH_TAG_{tokens.Count}__";
+                    tokens.Add(normalized);
+                    return token;
+                },
+                RegexOptions.IgnoreCase);
+
+            var allowedTag = new Regex(
+                @"<\s*(/?)\s*(p|br|strong|b|em|i|u|h1|h2|h3|blockquote|ul|ol|li)\b[^>]*>",
+                RegexOptions.IgnoreCase);
+
+            html = allowedTag.Replace(html, match =>
+            {
+                var closing = match.Groups[1].Value == "/";
+                var tag = match.Groups[2].Value.ToLowerInvariant();
+
+                var normalized = tag == "br"
+                    ? "<br>"
+                    : closing
+                        ? $"</{tag}>"
+                        : $"<{tag}>";
+
+                var token = $"__EYERIC_RICH_TAG_{tokens.Count}__";
+                tokens.Add(normalized);
+                return token;
+            });
+
+            html = Regex.Replace(html, @"<[^>]*>", string.Empty);
+
+            for (var index = 0; index < tokens.Count; index++)
+                html = html.Replace($"__EYERIC_RICH_TAG_{index}__", tokens[index]);
+
+            return html.Trim();
+        }
+
+
+        private static string SanitizeWhitepaperBody(string? value)
+        {
+            var html = value?.Trim() ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(html))
+                return string.Empty;
+
+            html = Regex.Replace(
+                html,
+                @"<!--[\s\S]*?-->",
+                string.Empty,
+                RegexOptions.IgnoreCase);
+
+            html = Regex.Replace(
+                html,
+                @"<(script|style|iframe|object|embed)[^>]*>[\s\S]*?</\1\s*>",
+                string.Empty,
+                RegexOptions.IgnoreCase);
+
+            // Whitepaper rich text intentionally does not allow embedded images.
+            html = Regex.Replace(
+                html,
+                @"<\s*img\b[^>]*>",
+                string.Empty,
+                RegexOptions.IgnoreCase);
+
+            html = Regex.Replace(html, @"<\s*div\b[^>]*>", "<p>", RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"<\s*/\s*div\s*>", "</p>", RegexOptions.IgnoreCase);
+
+            var tokens = new List<string>();
+
+            var allowedTag = new Regex(
+                @"<\s*(/?)\s*(p|br|strong|b|em|i|u|h1|h2|h3|blockquote|ul|ol|li)\b[^>]*>",
+                RegexOptions.IgnoreCase);
+
+            html = allowedTag.Replace(html, match =>
+            {
+                var closing = match.Groups[1].Value == "/";
+                var tag = match.Groups[2].Value.ToLowerInvariant();
+
+                var normalized = tag == "br"
+                    ? "<br>"
+                    : closing
+                        ? $"</{tag}>"
+                        : $"<{tag}>";
+
+                var token = $"__EYERIC_WHITEPAPER_TAG_{tokens.Count}__";
+                tokens.Add(normalized);
+                return token;
+            });
+
+            html = Regex.Replace(html, @"<[^>]*>", string.Empty);
+
+            for (var index = 0; index < tokens.Count; index++)
+                html = html.Replace($"__EYERIC_WHITEPAPER_TAG_{index}__", tokens[index]);
+
+            return html.Trim();
+        }
+
+        private static int CountPostContentImages(string html) =>
+            Regex.Matches(
+                html ?? string.Empty,
+                @"<\s*img\b",
+                RegexOptions.IgnoreCase
+            ).Count;
+
+        private static string ExtractHtmlAttribute(
+            string attributes,
+            string name)
+        {
+            var match = Regex.Match(
+                attributes ?? string.Empty,
+                $@"\b{Regex.Escape(name)}\s*=\s*(?:""(?<dq>[^""]*)""|'(?<sq>[^']*)'|(?<uq>[^\s>]+))",
+                RegexOptions.IgnoreCase);
+
+            if (!match.Success)
+                return string.Empty;
+
+            if (match.Groups["dq"].Success) return match.Groups["dq"].Value;
+            if (match.Groups["sq"].Success) return match.Groups["sq"].Value;
+            return match.Groups["uq"].Value;
+        }
+
+        private static bool IsValidPostContentImageUrl(string value)
+        {
+            if (!Uri.TryCreate(value?.Trim(), UriKind.Absolute, out var uri))
+                return false;
+
+            return uri.Scheme == Uri.UriSchemeHttps &&
+                   uri.Host.EndsWith(
+                       ".blob.vercel-storage.com",
+                       StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string NormalizeVideoEmbedUrl(string? value)
+        {
+            var raw = Clean(value);
+
+            if (string.IsNullOrWhiteSpace(raw))
+                return string.Empty;
+
+            if (!Uri.TryCreate(raw, UriKind.Absolute, out var uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp &&
+                 uri.Scheme != Uri.UriSchemeHttps))
+            {
+                return string.Empty;
+            }
+
+            var host = uri.Host
+                .ToLowerInvariant();
+
+            if (host.StartsWith("www."))
+                host = host[4..];
+
+            var segments = uri.AbsolutePath
+                .Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+            static bool SafeId(string candidate) =>
+                !string.IsNullOrWhiteSpace(candidate) &&
+                Regex.IsMatch(candidate, @"^[A-Za-z0-9_-]+$");
+
+            // YouTube: watch, shorts, live and existing embed URLs.
+            if (host is "youtube.com" or "m.youtube.com" or
+                "music.youtube.com" or "youtube-nocookie.com")
+            {
+                var id = string.Empty;
+
+                if (segments.Length > 0 &&
+                    string.Equals(segments[0], "watch", StringComparison.OrdinalIgnoreCase))
+                {
+                    var match = Regex.Match(
+                        uri.Query,
+                        @"(?:^\?|&)v=(?<id>[A-Za-z0-9_-]+)",
+                        RegexOptions.IgnoreCase);
+
+                    if (match.Success)
+                        id = match.Groups["id"].Value;
+                }
+                else if (segments.Length >= 2 &&
+                         new[] { "embed", "shorts", "live" }
+                             .Contains(segments[0], StringComparer.OrdinalIgnoreCase))
+                {
+                    id = segments[1];
+                }
+
+                return SafeId(id)
+                    ? $"https://www.youtube-nocookie.com/embed/{id}"
+                    : string.Empty;
+            }
+
+            if (host == "youtu.be")
+            {
+                var id = segments.FirstOrDefault() ?? string.Empty;
+
+                return SafeId(id)
+                    ? $"https://www.youtube-nocookie.com/embed/{id}"
+                    : string.Empty;
+            }
+
+            // Vimeo
+            if (host is "vimeo.com" or "player.vimeo.com")
+            {
+                var id = segments.FirstOrDefault(segment =>
+                    Regex.IsMatch(segment, @"^\d+$")) ?? string.Empty;
+
+                return !string.IsNullOrWhiteSpace(id)
+                    ? $"https://player.vimeo.com/video/{id}"
+                    : string.Empty;
+            }
+
+            // Loom
+            if (host == "loom.com")
+            {
+                for (var index = 0; index + 1 < segments.Length; index++)
+                {
+                    if ((segments[index].Equals("share", StringComparison.OrdinalIgnoreCase) ||
+                         segments[index].Equals("embed", StringComparison.OrdinalIgnoreCase)) &&
+                        SafeId(segments[index + 1]))
+                    {
+                        return $"https://www.loom.com/embed/{segments[index + 1]}";
+                    }
+                }
+
+                return string.Empty;
+            }
+
+            // Dailymotion
+            if (host == "dailymotion.com")
+            {
+                for (var index = 0; index + 1 < segments.Length; index++)
+                {
+                    if (segments[index].Equals("video", StringComparison.OrdinalIgnoreCase) &&
+                        SafeId(segments[index + 1]))
+                    {
+                        return $"https://www.dailymotion.com/embed/video/{segments[index + 1]}";
+                    }
+                }
+
+                return string.Empty;
+            }
+
+            if (host == "dai.ly")
+            {
+                var id = segments.FirstOrDefault() ?? string.Empty;
+
+                return SafeId(id)
+                    ? $"https://www.dailymotion.com/embed/video/{id}"
+                    : string.Empty;
+            }
+
+            // Wistia
+            if (host == "wistia.com" ||
+                host.EndsWith(".wistia.com", StringComparison.OrdinalIgnoreCase) ||
+                host == "fast.wistia.net")
+            {
+                for (var index = 0; index + 1 < segments.Length; index++)
+                {
+                    if ((segments[index].Equals("medias", StringComparison.OrdinalIgnoreCase) ||
+                         segments[index].Equals("iframe", StringComparison.OrdinalIgnoreCase)) &&
+                        SafeId(segments[index + 1]))
+                    {
+                        return $"https://fast.wistia.net/embed/iframe/{segments[index + 1]}";
+                    }
+                }
+            }
+
+            return string.Empty;
+        }
+
         private static string Clean(string? value) =>
             value?.Trim() ?? string.Empty;
 
@@ -1379,6 +1841,84 @@ namespace AiProductivityCoach.Api.Controllers
             return data.TryGetValue(key, out var value) && value is Timestamp timestamp
                 ? timestamp.ToDateTime().ToString("O")
                 : string.Empty;
+        }
+
+        private static void ApplyLegacyEventDateTimeFallback(
+            EventDto request,
+            ref string startDate,
+            ref string startTime,
+            ref string endDate,
+            ref string endTime)
+        {
+            static (string Date, string Time) SplitLegacy(string value)
+            {
+                var clean = value?.Trim() ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(clean))
+                    return (string.Empty, string.Empty);
+
+                if (DateTime.TryParse(clean, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out var parsed))
+                {
+                    return (
+                        parsed.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                        parsed.ToString("HH:mm", CultureInfo.InvariantCulture));
+                }
+
+                return (string.Empty, string.Empty);
+            }
+
+            if (string.IsNullOrWhiteSpace(startDate) || string.IsNullOrWhiteSpace(startTime))
+            {
+                var legacy = SplitLegacy(request.StartAt);
+                if (string.IsNullOrWhiteSpace(startDate)) startDate = legacy.Date;
+                if (string.IsNullOrWhiteSpace(startTime)) startTime = legacy.Time;
+            }
+
+            if (string.IsNullOrWhiteSpace(endDate) || string.IsNullOrWhiteSpace(endTime))
+            {
+                var legacy = SplitLegacy(request.EndAt);
+                if (string.IsNullOrWhiteSpace(endDate)) endDate = legacy.Date;
+                if (string.IsNullOrWhiteSpace(endTime)) endTime = legacy.Time;
+            }
+        }
+
+        private static string? ValidateEventSchedule(
+            string startDate,
+            string startTime,
+            string endDate,
+            string endTime)
+        {
+            if (string.IsNullOrWhiteSpace(startDate) ||
+                string.IsNullOrWhiteSpace(startTime) ||
+                string.IsNullOrWhiteSpace(endDate) ||
+                string.IsNullOrWhiteSpace(endTime))
+            {
+                return "Start date, start time, end date and end time are required.";
+            }
+
+            if (!DateTime.TryParseExact(
+                    $"{startDate} {startTime}",
+                    "yyyy-MM-dd HH:mm",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out var start))
+            {
+                return "Event start date or time is invalid.";
+            }
+
+            if (!DateTime.TryParseExact(
+                    $"{endDate} {endTime}",
+                    "yyyy-MM-dd HH:mm",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out var end))
+            {
+                return "Event end date or time is invalid.";
+            }
+
+            if (end < start)
+                return "Event end date/time cannot be before the start.";
+
+            return null;
         }
 
         private static string? ValidateDateRange(

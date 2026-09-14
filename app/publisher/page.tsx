@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   getAuth,
@@ -46,6 +46,15 @@ import {
   Ban,
   RotateCcw,
   EyeOff,
+  Bold,
+  Italic,
+  Underline,
+  Pilcrow,
+  Quote,
+  List,
+  ListOrdered,
+  ChevronDown,
+  MessageSquareText,
 } from "lucide-react";
 import { publisherApp } from "@/services/firebase";
 import { API_BASE_URL } from "@/services/api";
@@ -144,6 +153,94 @@ const formatSessionCountdown = (totalSeconds: number) => {
 };
 
 
+const getSafeVideoEmbedUrl = (value: string) => {
+  const raw = value.trim();
+  if (!raw) return "";
+
+  try {
+    const parsed = new URL(raw);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    const cleanPath = parsed.pathname.replace(/\/+$/, "");
+    const pathParts = cleanPath.split("/").filter(Boolean);
+
+    const safeId = (candidate: string | undefined) =>
+      candidate && /^[a-zA-Z0-9_-]+$/.test(candidate) ? candidate : "";
+
+    // YouTube
+    if (
+      host === "youtube.com" ||
+      host === "m.youtube.com" ||
+      host === "music.youtube.com" ||
+      host === "youtube-nocookie.com"
+    ) {
+      let id = "";
+
+      if (pathParts[0] === "watch") {
+        id = safeId(parsed.searchParams.get("v") || undefined);
+      } else if (["embed", "shorts", "live"].includes(pathParts[0] || "")) {
+        id = safeId(pathParts[1]);
+      }
+
+      return id ? `https://www.youtube-nocookie.com/embed/${id}` : "";
+    }
+
+    if (host === "youtu.be") {
+      const id = safeId(pathParts[0]);
+      return id ? `https://www.youtube-nocookie.com/embed/${id}` : "";
+    }
+
+    // Vimeo
+    if (host === "vimeo.com" || host === "player.vimeo.com") {
+      const id = pathParts.find((part) => /^\d+$/.test(part)) || "";
+      return id ? `https://player.vimeo.com/video/${id}` : "";
+    }
+
+    // Loom
+    if (host === "loom.com") {
+      const markerIndex = pathParts.findIndex((part) =>
+        ["share", "embed"].includes(part)
+      );
+      const id = markerIndex >= 0 ? safeId(pathParts[markerIndex + 1]) : "";
+      return id ? `https://www.loom.com/embed/${id}` : "";
+    }
+
+    // Dailymotion
+    if (host === "dailymotion.com") {
+      const markerIndex = pathParts.findIndex((part) => part === "video");
+      const id = markerIndex >= 0 ? safeId(pathParts[markerIndex + 1]) : "";
+      return id ? `https://www.dailymotion.com/embed/video/${id}` : "";
+    }
+
+    if (host === "dai.ly") {
+      const id = safeId(pathParts[0]);
+      return id ? `https://www.dailymotion.com/embed/video/${id}` : "";
+    }
+
+    // Wistia
+    if (
+      host === "wistia.com" ||
+      host.endsWith(".wistia.com") ||
+      host === "fast.wistia.net"
+    ) {
+      const mediaIndex = pathParts.findIndex((part) => part === "medias");
+      const iframeIndex = pathParts.findIndex((part) => part === "iframe");
+      const id =
+        mediaIndex >= 0
+          ? safeId(pathParts[mediaIndex + 1])
+          : iframeIndex >= 0
+            ? safeId(pathParts[iframeIndex + 1])
+            : "";
+
+      return id ? `https://fast.wistia.net/embed/iframe/${id}` : "";
+    }
+
+    return "";
+  } catch {
+    return "";
+  }
+};
+
+
 type ResourceMenu =
   | "posts"
   | "whitepapers"
@@ -161,11 +258,49 @@ type FoundationItem = {
   [key: string]: unknown;
 };
 
+type PostGalleryMedia = {
+  url: string;
+  contentType?: string;
+  size?: number;
+  uploadedAt?: string;
+};
+
+type WhitepaperResponse = {
+  id: string;
+  whitepaperId?: string;
+  whitepaperTitle?: string;
+  providerSlug?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  company?: string;
+  address?: string;
+  message?: string;
+  consentAccepted?: boolean;
+  submittedAt?: string;
+};
+
+type WebinarResponse = {
+  id: string;
+  webinarId?: string;
+  webinarTitle?: string;
+  providerSlug?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  country?: string;
+  company?: string;
+  message?: string;
+  consentAccepted?: boolean;
+  submittedAt?: string;
+};
+
 type FoundationField = {
   key: string;
   label: string;
   placeholder: string;
-  type?: "text" | "email" | "url" | "datetime-local" | "textarea";
+  type?: "text" | "email" | "url" | "date" | "time" | "datetime-local" | "textarea" | "richtext";
   required?: boolean;
   full?: boolean;
   maxLength?: number;
@@ -198,8 +333,9 @@ const RESOURCE_CONFIG: Record<
     primaryKey: "title",
     fields: [
       { key: "title", label: "Post Title", placeholder: "Enter post title", required: true, full: true, maxLength: 180 },
+      { key: "subHeading", label: "Sub-heading", placeholder: "Add a descriptive sub-heading for the article", full: true, maxLength: 320 },
       { key: "excerpt", label: "Excerpt", placeholder: "A short summary for cards and previews", type: "textarea", full: true, maxLength: 500 },
-      { key: "body", label: "Content", placeholder: "Write the complete post content...", type: "textarea", full: true, maxLength: 20000 },
+      { key: "body", label: "Content", placeholder: "Write the complete post content...", type: "richtext", full: true, maxLength: 60000 },
     ],
     media: {
       label: "Post Image",
@@ -214,44 +350,32 @@ const RESOURCE_CONFIG: Record<
     endpoint: "whitepapers",
     title: "Whitepapers",
     singular: "Whitepaper",
-    intro: "Prepare downloadable or externally hosted research and long-form resources.",
+    intro: "Create long-form whitepaper content with a dedicated cover image.",
     primaryKey: "title",
     fields: [
-      { key: "title", label: "Title", placeholder: "Whitepaper title", required: true, full: true, maxLength: 180 },
-      { key: "authors", label: "Authors", placeholder: "Author names", maxLength: 300 },
-      { key: "externalUrl", label: "External URL", placeholder: "https://...", type: "url" },
-      { key: "summary", label: "Summary", placeholder: "Summarize the whitepaper...", type: "textarea", full: true, maxLength: 3000 },
+      { key: "title", label: "Title", placeholder: "Enter whitepaper title", required: true, full: true, maxLength: 180 },
+      { key: "content", label: "Content", placeholder: "Write the complete whitepaper content...", type: "richtext", full: true, maxLength: 60000 },
     ],
     media: {
-      label: "Whitepaper PDF",
-      accept: "application/pdf,.pdf",
-      urlField: "fileUrl",
-      slot: "file",
-      helper: "PDF only · max 20 MB",
-      maxMb: 20,
-    },
-  },
-  products: {
-    endpoint: "products",
-    title: "Products",
-    singular: "Product",
-    intro: "Build structured product entries for the public company profile.",
-    primaryKey: "name",
-    fields: [
-      { key: "name", label: "Product Name", placeholder: "Product or solution name", required: true, full: true, maxLength: 180 },
-      { key: "priceLabel", label: "Price Label", placeholder: "e.g. Contact us / From €99", maxLength: 80 },
-      { key: "productUrl", label: "Product URL", placeholder: "https://...", type: "url" },
-      { key: "shortDescription", label: "Short Description", placeholder: "Short product summary", type: "textarea", full: true, maxLength: 500 },
-      { key: "description", label: "Full Description", placeholder: "Describe the product in detail...", type: "textarea", full: true, maxLength: 6000 },
-    ],
-    media: {
-      label: "Product Image",
+      label: "Whitepaper Image",
       accept: "image/jpeg,image/png,image/webp",
       urlField: "imageUrl",
       slot: "image",
       helper: "JPG, PNG or WEBP · max 8 MB",
       maxMb: 8,
     },
+  },
+  products: {
+    endpoint: "products",
+    title: "Products",
+    singular: "Product",
+    intro: "Create a structured product entry for the public product table.",
+    primaryKey: "name",
+    fields: [
+      { key: "name", label: "Product", placeholder: "Enter product name", required: true, full: true, maxLength: 180 },
+      { key: "category", label: "Category", placeholder: "Enter product category", required: true, full: true, maxLength: 120 },
+      { key: "shortDescription", label: "Brief Description", placeholder: "Write a concise product description...", type: "textarea", required: true, full: true, maxLength: 1200 },
+    ],
   },
   contacts: {
     endpoint: "contacts",
@@ -294,36 +418,29 @@ const RESOURCE_CONFIG: Record<
     endpoint: "webinars",
     title: "Webinars",
     singular: "Webinar",
-    intro: "Create webinar entries with speakers, schedules and registration links.",
+    intro: "Create a webinar landing experience with editorial content and speaker details.",
     primaryKey: "title",
     fields: [
-      { key: "title", label: "Webinar Title", placeholder: "Enter webinar title", required: true, full: true, maxLength: 180 },
-      { key: "scheduledAt", label: "Scheduled At", placeholder: "", type: "datetime-local" },
-      { key: "speaker", label: "Speaker", placeholder: "Speaker or host", maxLength: 250 },
-      { key: "registrationUrl", label: "Registration URL", placeholder: "https://...", type: "url", full: true },
-      { key: "summary", label: "Summary", placeholder: "Describe the webinar...", type: "textarea", full: true, maxLength: 3000 },
+      { key: "title", label: "Title", placeholder: "Enter webinar title", required: true, full: true, maxLength: 180 },
+      { key: "subTitle", label: "Sub-Title", placeholder: "Add a short webinar sub-title", required: true, full: true, maxLength: 320 },
+      { key: "content", label: "Content", placeholder: "Write the complete webinar content...", type: "richtext", required: true, full: true, maxLength: 60000 },
+      { key: "speakerName", label: "Speaker Name", placeholder: "Enter speaker name", required: true, full: true, maxLength: 180 },
     ],
-    media: {
-      label: "Webinar Thumbnail",
-      accept: "image/jpeg,image/png,image/webp",
-      urlField: "thumbnailUrl",
-      slot: "thumbnail",
-      helper: "JPG, PNG or WEBP · max 8 MB",
-      maxMb: 8,
-    },
   },
   events: {
     endpoint: "events",
     title: "Events",
     singular: "Event",
-    intro: "Create company event entries for conferences, exhibitions and other activities.",
+    intro: "Create company event entries with a clear schedule, location, image and destination.",
     primaryKey: "title",
     fields: [
       { key: "title", label: "Event Title", placeholder: "Enter event title", required: true, full: true, maxLength: 180 },
-      { key: "startAt", label: "Starts", placeholder: "", type: "datetime-local" },
-      { key: "endAt", label: "Ends", placeholder: "", type: "datetime-local" },
-      { key: "location", label: "Location", placeholder: "City, venue or online", maxLength: 250 },
-      { key: "eventUrl", label: "Event URL", placeholder: "https://...", type: "url" },
+      { key: "startDate", label: "Start Date", placeholder: "", type: "date", required: true },
+      { key: "startTime", label: "Start Time", placeholder: "", type: "time", required: true },
+      { key: "endDate", label: "End Date", placeholder: "", type: "date", required: true },
+      { key: "endTime", label: "End Time", placeholder: "", type: "time", required: true },
+      { key: "location", label: "Location", placeholder: "City, venue or online", required: true, full: true, maxLength: 250 },
+      { key: "eventUrl", label: "Event URL", placeholder: "Optional · https://...", type: "url", full: true },
       { key: "summary", label: "Summary", placeholder: "Describe the event...", type: "textarea", full: true, maxLength: 3000 },
     ],
     media: {
@@ -346,6 +463,517 @@ const EMPTY_RESOURCE_ITEMS: Record<ResourceMenu, FoundationItem[]> = {
   webinars: [],
   events: [],
 };
+
+
+function PostRichTextEditor({
+  value,
+  onChange,
+  placeholder,
+  disabled,
+  onUploadImage,
+  maxImages = 15,
+  allowImages = true,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  disabled: boolean;
+  onUploadImage?: (
+    file: File,
+    onProgress?: (percentage: number) => void
+  ) => Promise<string>;
+  maxImages?: number;
+  allowImages?: boolean;
+}) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const savedRangeRef = useRef<Range | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageUploadProgress, setImageUploadProgress] = useState(0);
+  const [imageError, setImageError] = useState("");
+  const [draggingImage, setDraggingImage] = useState(false);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    if (editor.innerHTML !== value) {
+      editor.innerHTML = value || "";
+    }
+  }, [value]);
+
+  const rangeBelongsToEditor = (range: Range | null) => {
+    const editor = editorRef.current;
+    if (!editor || !range) return false;
+
+    const container =
+      range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+        ? (range.commonAncestorContainer as Element)
+        : range.commonAncestorContainer.parentElement;
+
+    return Boolean(container && editor.contains(container));
+  };
+
+  const rememberSelection = () => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+
+    const range = selection.getRangeAt(0);
+    if (rangeBelongsToEditor(range)) {
+      savedRangeRef.current = range.cloneRange();
+    }
+  };
+
+  const getFallbackRange = () => {
+    const editor = editorRef.current;
+    if (!editor) return null;
+
+    if (savedRangeRef.current && rangeBelongsToEditor(savedRangeRef.current)) {
+      return savedRangeRef.current.cloneRange();
+    }
+
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(false);
+    return range;
+  };
+
+  const getRangeFromPoint = (clientX: number, clientY: number) => {
+    const editor = editorRef.current;
+    if (!editor) return getFallbackRange();
+
+    const documentWithCaret = document as Document & {
+      caretRangeFromPoint?: (x: number, y: number) => Range | null;
+      caretPositionFromPoint?: (
+        x: number,
+        y: number
+      ) => { offsetNode: Node; offset: number } | null;
+    };
+
+    let range: Range | null = null;
+
+    if (typeof documentWithCaret.caretRangeFromPoint === "function") {
+      range = documentWithCaret.caretRangeFromPoint(clientX, clientY);
+    } else if (typeof documentWithCaret.caretPositionFromPoint === "function") {
+      const position = documentWithCaret.caretPositionFromPoint(clientX, clientY);
+      if (position) {
+        range = document.createRange();
+        range.setStart(position.offsetNode, position.offset);
+        range.collapse(true);
+      }
+    }
+
+    return rangeBelongsToEditor(range) ? range : getFallbackRange();
+  };
+
+  const setCaretRange = (range: Range) => {
+    const selection = window.getSelection();
+    if (!selection) return;
+
+    selection.removeAllRanges();
+    selection.addRange(range);
+    savedRangeRef.current = range.cloneRange();
+  };
+
+  const countInlineImages = () =>
+    editorRef.current?.querySelectorAll("img").length || 0;
+
+  const insertImageAtRange = (url: string, sourceRange: Range | null) => {
+    const editor = editorRef.current;
+    if (!editor) return null;
+
+    const range =
+      sourceRange && rangeBelongsToEditor(sourceRange)
+        ? sourceRange.cloneRange()
+        : getFallbackRange();
+
+    if (!range) return null;
+
+    const image = document.createElement("img");
+    image.src = url;
+    image.alt = "Post content image";
+    image.setAttribute("draggable", "true");
+
+    range.deleteContents();
+    range.insertNode(image);
+
+    const nextRange = document.createRange();
+    nextRange.setStartAfter(image);
+    nextRange.collapse(true);
+    setCaretRange(nextRange);
+
+    onChange(editor.innerHTML);
+    return nextRange;
+  };
+
+  const validateInlineImage = (file: File) => {
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      return `${file.name}: use a JPG, PNG or WEBP image.`;
+    }
+
+    if (file.size > 8 * 1024 * 1024) {
+      return `${file.name}: image must be 8 MB or smaller.`;
+    }
+
+    return "";
+  };
+
+  const uploadImagesAtRange = async (
+    files: File[],
+    targetRange: Range | null
+  ) => {
+    if (
+      !allowImages ||
+      !onUploadImage ||
+      disabled ||
+      imageUploading ||
+      files.length === 0
+    ) return;
+
+    const remaining = Math.max(0, maxImages - countInlineImages());
+
+    if (remaining === 0) {
+      setImageError(`A maximum of ${maxImages} images is allowed inside post content.`);
+      return;
+    }
+
+    if (files.length > remaining) {
+      setImageError(
+        `You can add ${remaining} more content image${remaining === 1 ? "" : "s"}.`
+      );
+      return;
+    }
+
+    for (const file of files) {
+      const validationError = validateInlineImage(file);
+      if (validationError) {
+        setImageError(validationError);
+        return;
+      }
+    }
+
+    setImageError("");
+    setImageUploading(true);
+    setImageUploadProgress(0);
+
+    let workingRange =
+      targetRange && rangeBelongsToEditor(targetRange)
+        ? targetRange.cloneRange()
+        : getFallbackRange();
+
+    try {
+      for (let index = 0; index < files.length; index++) {
+        const file = files[index];
+
+        const url = await onUploadImage(file, (percentage) => {
+          const overall = Math.round(
+            ((index + percentage / 100) / files.length) * 100
+          );
+          setImageUploadProgress(Math.max(0, Math.min(100, overall)));
+        });
+
+        workingRange = insertImageAtRange(url, workingRange);
+      }
+
+      setImageUploadProgress(100);
+    } catch (error) {
+      console.error("Post content image upload failed:", error);
+      setImageError(
+        error instanceof Error
+          ? error.message
+          : "Unable to upload the content image. Please try again."
+      );
+    } finally {
+      setImageUploading(false);
+      window.setTimeout(() => setImageUploadProgress(0), 450);
+    }
+  };
+
+  const runCommand = (command: string, commandValue?: string) => {
+    if (disabled || imageUploading) return;
+
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    editor.focus();
+
+    if (savedRangeRef.current && rangeBelongsToEditor(savedRangeRef.current)) {
+      setCaretRange(savedRangeRef.current.cloneRange());
+    }
+
+    document.execCommand("styleWithCSS", false, "false");
+    document.execCommand(command, false, commandValue);
+
+    rememberSelection();
+    onChange(editor.innerHTML);
+  };
+
+  const formatBlock = (tag: "p" | "h1" | "h2" | "h3" | "blockquote") => {
+    runCommand("formatBlock", `<${tag}>`);
+  };
+
+  const openImagePicker = () => {
+    if (!allowImages || !onUploadImage || disabled || imageUploading) return;
+
+    rememberSelection();
+
+    if (countInlineImages() >= maxImages) {
+      setImageError(`A maximum of ${maxImages} images is allowed inside post content.`);
+      return;
+    }
+
+    imageInputRef.current?.click();
+  };
+
+  const hasDraggedFiles = (event: React.DragEvent<HTMLDivElement>) =>
+    Array.from(event.dataTransfer.items || []).some(
+      (item) => item.kind === "file"
+    );
+
+  return (
+    <div
+      className={`pub-rich-editor-shell ${disabled ? "disabled" : ""} ${
+        draggingImage ? "dragging-image" : ""
+      }`}
+    >
+      <div className="pub-rich-toolbar" aria-label="Post formatting toolbar">
+        <div className="pub-rich-toolbar-group">
+          <button
+            type="button"
+            className="pub-rich-tool"
+            title="Bold"
+            aria-label="Bold"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => runCommand("bold")}
+            disabled={disabled || imageUploading}
+          >
+            <Bold size={14} />
+          </button>
+          <button
+            type="button"
+            className="pub-rich-tool"
+            title="Italic"
+            aria-label="Italic"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => runCommand("italic")}
+            disabled={disabled || imageUploading}
+          >
+            <Italic size={14} />
+          </button>
+          <button
+            type="button"
+            className="pub-rich-tool"
+            title="Underline"
+            aria-label="Underline"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => runCommand("underline")}
+            disabled={disabled || imageUploading}
+          >
+            <Underline size={14} />
+          </button>
+        </div>
+
+        <span className="pub-rich-toolbar-divider" />
+
+        <div className="pub-rich-toolbar-group text">
+          <button
+            type="button"
+            className="pub-rich-tool text"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => formatBlock("p")}
+            disabled={disabled || imageUploading}
+            title="Paragraph"
+          >
+            <Pilcrow size={13} />
+            Paragraph
+          </button>
+          <button
+            type="button"
+            className="pub-rich-tool text"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => formatBlock("h1")}
+            disabled={disabled || imageUploading}
+            title="Heading 1"
+          >
+            H1
+          </button>
+          <button
+            type="button"
+            className="pub-rich-tool text"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => formatBlock("h2")}
+            disabled={disabled || imageUploading}
+            title="Heading 2"
+          >
+            H2
+          </button>
+          <button
+            type="button"
+            className="pub-rich-tool text"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => formatBlock("h3")}
+            disabled={disabled || imageUploading}
+            title="Heading 3"
+          >
+            H3
+          </button>
+          <button
+            type="button"
+            className="pub-rich-tool text"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => formatBlock("blockquote")}
+            disabled={disabled || imageUploading}
+            title="Quote"
+            aria-label="Quote"
+          >
+            <Quote size={13} />
+            Quote
+          </button>
+          <button
+            type="button"
+            className="pub-rich-tool text"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => runCommand("insertUnorderedList")}
+            disabled={disabled || imageUploading}
+            title="Bulleted list"
+            aria-label="Bulleted list"
+          >
+            <List size={13} />
+            Bullets
+          </button>
+          <button
+            type="button"
+            className="pub-rich-tool text"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => runCommand("insertOrderedList")}
+            disabled={disabled || imageUploading}
+            title="Numbered list"
+            aria-label="Numbered list"
+          >
+            <ListOrdered size={13} />
+            Numbered
+          </button>
+        </div>
+
+        {allowImages && (
+          <>
+            <span className="pub-rich-toolbar-divider" />
+
+            <div className="pub-rich-toolbar-group">
+              <button
+                type="button"
+                className="pub-rich-tool text"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  rememberSelection();
+                }}
+                onClick={openImagePicker}
+                disabled={disabled || imageUploading}
+                title={`Insert image at cursor · max ${maxImages}`}
+                aria-label="Insert image at cursor"
+              >
+                <ImagePlus size={14} />
+                Image
+              </button>
+
+              <input
+                ref={imageInputRef}
+                className="pub-rich-image-input"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                onChange={(event) => {
+                  const files = Array.from(event.currentTarget.files || []);
+                  event.currentTarget.value = "";
+                  void uploadImagesAtRange(files, getFallbackRange());
+                }}
+                disabled={disabled || imageUploading}
+              />
+            </div>
+
+            <div className="pub-rich-media-count">
+              {countInlineImages()}/{maxImages}
+            </div>
+          </>
+        )}
+      </div>
+
+      {imageUploading && (
+        <div className="pub-rich-upload-progress" aria-live="polite">
+          <div className="pub-media-progress-track">
+            <div
+              className="pub-media-progress-fill"
+              style={{ width: `${imageUploadProgress}%` }}
+            />
+          </div>
+          <span>{imageUploadProgress}%</span>
+        </div>
+      )}
+
+      {imageError && (
+        <div className="pub-rich-media-error">{imageError}</div>
+      )}
+
+      <div
+        ref={editorRef}
+        className="pub-rich-editor"
+        contentEditable={!disabled && !imageUploading}
+        suppressContentEditableWarning
+        data-placeholder={placeholder}
+        role="textbox"
+        aria-multiline="true"
+        aria-disabled={disabled || imageUploading}
+        onInput={(event) => {
+          rememberSelection();
+          onChange(event.currentTarget.innerHTML);
+        }}
+        onBlur={(event) => {
+          rememberSelection();
+          onChange(event.currentTarget.innerHTML);
+        }}
+        onMouseUp={rememberSelection}
+        onKeyUp={rememberSelection}
+        onFocus={rememberSelection}
+        onDragEnter={(event) => {
+          if (!allowImages || !hasDraggedFiles(event)) return;
+          event.preventDefault();
+          setDraggingImage(true);
+        }}
+        onDragOver={(event) => {
+          if (!allowImages || !hasDraggedFiles(event)) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+          setDraggingImage(true);
+        }}
+        onDragLeave={(event) => {
+          if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+            return;
+          }
+          setDraggingImage(false);
+        }}
+        onDrop={(event) => {
+          if (!allowImages) return;
+
+          const files = Array.from(event.dataTransfer.files || []).filter(
+            (file) => file.type.startsWith("image/")
+          );
+
+          if (files.length === 0) {
+            setDraggingImage(false);
+            return;
+          }
+
+          event.preventDefault();
+          event.stopPropagation();
+          setDraggingImage(false);
+
+          const range = getRangeFromPoint(event.clientX, event.clientY);
+          void uploadImagesAtRange(files, range);
+        }}
+      />
+    </div>
+  );
+}
 
 export default function PublisherDashboard() {
   const auth = getAuth(publisherApp);
@@ -407,7 +1035,28 @@ export default function PublisherDashboard() {
   const [resourceMediaFile, setResourceMediaFile] = useState<File | null>(null);
   const [resourceMediaUploading, setResourceMediaUploading] = useState(false);
   const [mediaUploadProgress, setMediaUploadProgress] = useState(0);
+  const [postBannerPreview, setPostBannerPreview] = useState("");
+  const [whitepaperImagePreview, setWhitepaperImagePreview] = useState("");
+  const [webinarBannerPreview, setWebinarBannerPreview] = useState("");
+  const [webinarSpeakerImagePreview, setWebinarSpeakerImagePreview] = useState("");
+  const [postGalleryMedia, setPostGalleryMedia] = useState<PostGalleryMedia[]>([]);
+  const [postGalleryUploading, setPostGalleryUploading] = useState(false);
+  const [postGalleryUploadProgress, setPostGalleryUploadProgress] = useState(0);
   const [resourceModalOpen, setResourceModalOpen] = useState(false);
+  const [whitepaperResponsesOpen, setWhitepaperResponsesOpen] = useState(false);
+  const [whitepaperResponsesLoading, setWhitepaperResponsesLoading] = useState(false);
+  const [whitepaperResponsesError, setWhitepaperResponsesError] = useState("");
+  const [whitepaperResponses, setWhitepaperResponses] = useState<WhitepaperResponse[]>([]);
+  const [whitepaperResponsesTitle, setWhitepaperResponsesTitle] = useState("");
+  const [expandedWhitepaperResponseId, setExpandedWhitepaperResponseId] = useState<string | null>(null);
+  const [webinarResponsesOpen, setWebinarResponsesOpen] = useState(false);
+  const [webinarResponsesLoading, setWebinarResponsesLoading] = useState(false);
+  const [webinarResponsesError, setWebinarResponsesError] = useState("");
+  const [webinarResponses, setWebinarResponses] = useState<WebinarResponse[]>([]);
+  const [webinarResponsesTitle, setWebinarResponsesTitle] = useState("");
+  const [expandedWebinarResponseId, setExpandedWebinarResponseId] = useState<string | null>(null);
+  const [productFeatures, setProductFeatures] = useState<string[]>([]);
+  const [productFeatureDraft, setProductFeatureDraft] = useState("");
 
   const navItems = useMemo(
     () => [
@@ -449,7 +1098,10 @@ export default function PublisherDashboard() {
   const resourceFormHasContent = (menu: ResourceMenu) =>
     RESOURCE_CONFIG[menu].fields.some(
       (field) => (resourceForm[field.key] || "").trim().length > 0
-    ) || resourceMediaFile !== null || editingResourceId !== null;
+    ) ||
+    (menu === "products" && productFeatures.length > 0) ||
+    resourceMediaFile !== null ||
+    editingResourceId !== null;
 
   const expirePublisherSession = async () => {
     if (sessionExpiryHandledRef.current) return;
@@ -749,6 +1401,7 @@ export default function PublisherDashboard() {
     slot,
     resourceType = "",
     resourceId = "",
+    onProgress,
   }: {
     companyId: string;
     file: File;
@@ -756,6 +1409,7 @@ export default function PublisherDashboard() {
     slot: string;
     resourceType?: string;
     resourceId?: string;
+    onProgress?: (percentage: number) => void;
   }) => {
     const user = auth.currentUser;
     if (!user) throw new Error("Your publisher session has expired.");
@@ -794,7 +1448,12 @@ export default function PublisherDashboard() {
       contentType: file.type,
       multipart: file.size > 4 * 1024 * 1024,
       onUploadProgress: ({ percentage }) => {
-        setMediaUploadProgress(Math.round(percentage));
+        const rounded = Math.round(percentage);
+        if (onProgress) {
+          onProgress(rounded);
+        } else {
+          setMediaUploadProgress(rounded);
+        }
       },
     });
 
@@ -1269,9 +1928,77 @@ export default function PublisherDashboard() {
       return form;
     }, {});
 
+  const readPostGalleryMedia = (value: unknown): PostGalleryMedia[] => {
+    if (!Array.isArray(value)) return [];
+
+    return value
+      .map((item) => {
+        if (!item || typeof item !== "object") return null;
+        const media = item as Record<string, unknown>;
+        const url = typeof media.url === "string" ? media.url : "";
+        if (!url) return null;
+
+        return {
+          url,
+          contentType:
+            typeof media.contentType === "string" ? media.contentType : undefined,
+          size: typeof media.size === "number" ? media.size : undefined,
+          uploadedAt:
+            typeof media.uploadedAt === "string" ? media.uploadedAt : undefined,
+        } satisfies PostGalleryMedia;
+      })
+      .filter((item): item is PostGalleryMedia => item !== null)
+      .slice(0, 10);
+  };
+
+  const addProductFeature = () => {
+    const value = productFeatureDraft.trim();
+
+    if (!value) return;
+
+    if (value.length > 100) {
+      setSectionError("Each product feature must be 100 characters or fewer.");
+      return;
+    }
+
+    if (productFeatures.length >= 30) {
+      setSectionError("A maximum of 30 product features is allowed.");
+      return;
+    }
+
+    if (
+      productFeatures.some(
+        (feature) => feature.toLowerCase() === value.toLowerCase()
+      )
+    ) {
+      setProductFeatureDraft("");
+      return;
+    }
+
+    setProductFeatures((current) => [...current, value]);
+    setProductFeatureDraft("");
+    setSectionError("");
+  };
+
+  const removeProductFeature = (index: number) => {
+    if (editingLocked || sectionSaving) return;
+
+    setProductFeatures((current) =>
+      current.filter((_, featureIndex) => featureIndex !== index)
+    );
+  };
+
   const openNewResourceModal = (menu: ResourceMenu) => {
     setEditingResourceId(null);
+    setProductFeatures([]);
+    setProductFeatureDraft("");
     setResourceMediaFile(null);
+    setPostBannerPreview("");
+    setWhitepaperImagePreview("");
+    setWebinarBannerPreview("");
+    setWebinarSpeakerImagePreview("");
+    setPostGalleryMedia([]);
+    setPostGalleryUploadProgress(0);
     setResourceForm(emptyFormFor(menu));
     setSectionError("");
     setSectionSuccess("");
@@ -1279,10 +2006,18 @@ export default function PublisherDashboard() {
   };
 
   const closeResourceModal = () => {
-    if (sectionSaving || resourceMediaUploading) return;
+    if (sectionSaving || resourceMediaUploading || postGalleryUploading) return;
+    setProductFeatures([]);
+    setProductFeatureDraft("");
     if (isResourceMenu(activeMenu)) {
       setEditingResourceId(null);
       setResourceMediaFile(null);
+      setPostBannerPreview("");
+      setWhitepaperImagePreview("");
+      setWebinarBannerPreview("");
+      setWebinarSpeakerImagePreview("");
+      setPostGalleryMedia([]);
+      setPostGalleryUploadProgress(0);
       setResourceForm(emptyFormFor(activeMenu));
     }
     setSectionError("");
@@ -1443,6 +2178,645 @@ export default function PublisherDashboard() {
     }
   };
 
+  const validatePostImageFile = (file: File) => {
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      return "Use a JPG, PNG or WEBP image.";
+    }
+
+    if (file.size > 8 * 1024 * 1024) {
+      return "Image must be 8 MB or smaller.";
+    }
+
+    return "";
+  };
+
+  const ensurePostDraftForMedia = async (): Promise<string | null> => {
+    if (editingResourceId) return editingResourceId;
+
+    const company = companies[0];
+    const user = auth.currentUser;
+    if (!company || !user) return null;
+
+    const title = (resourceForm.title || "").trim();
+
+    if (!title) {
+      setSectionError("Enter the Post Title before uploading post media.");
+      return null;
+    }
+
+    const config = RESOURCE_CONFIG.posts;
+    const payload = config.fields.reduce<Record<string, string>>((result, field) => {
+      result[field.key] = resourceForm[field.key]?.trim() || "";
+      return result;
+    }, {});
+
+    payload.videoEmbedUrl = (resourceForm.videoEmbedUrl || "").trim();
+
+    try {
+      setSectionSaving(true);
+      setSectionError("");
+      const token = await user.getIdToken();
+
+      const res = await fetch(
+        `${API_BASE_URL}/api/company/${company.id}/${config.endpoint}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const result = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setSectionError(result?.message || "Unable to prepare the post for media upload.");
+        return null;
+      }
+
+      const resourceId = String(result?.id || "");
+      if (!resourceId) {
+        setSectionError("The post was created but its media target could not be resolved.");
+        return null;
+      }
+
+      setEditingResourceId(resourceId);
+      return resourceId;
+    } catch (error) {
+      console.error("Post media draft creation failed:", error);
+      setSectionError("Unable to prepare the post for media upload.");
+      return null;
+    } finally {
+      setSectionSaving(false);
+    }
+  };
+
+
+  const ensureWhitepaperDraftForMedia = async (): Promise<string | null> => {
+    if (editingResourceId) return editingResourceId;
+
+    const company = companies[0];
+    const user = auth.currentUser;
+    if (!company || !user) return null;
+
+    const title = (resourceForm.title || "").trim();
+
+    if (!title) {
+      setSectionError("Enter the Whitepaper Title before uploading the whitepaper image.");
+      return null;
+    }
+
+    const config = RESOURCE_CONFIG.whitepapers;
+    const payload = config.fields.reduce<Record<string, string>>((result, field) => {
+      result[field.key] = resourceForm[field.key]?.trim() || "";
+      return result;
+    }, {});
+
+    try {
+      setSectionSaving(true);
+      setSectionError("");
+      const token = await user.getIdToken();
+
+      const res = await fetch(
+        `${API_BASE_URL}/api/company/${company.id}/${config.endpoint}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const result = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setSectionError(
+          result?.message || "Unable to prepare the whitepaper for image upload."
+        );
+        return null;
+      }
+
+      const resourceId = String(result?.id || "");
+      if (!resourceId) {
+        setSectionError(
+          "The whitepaper was created but its image target could not be resolved."
+        );
+        return null;
+      }
+
+      setEditingResourceId(resourceId);
+      return resourceId;
+    } catch (error) {
+      console.error("Whitepaper media draft creation failed:", error);
+      setSectionError("Unable to prepare the whitepaper for image upload.");
+      return null;
+    } finally {
+      setSectionSaving(false);
+    }
+  };
+
+  const ensureWebinarDraftForMedia = async (): Promise<string | null> => {
+    if (editingResourceId) return editingResourceId;
+
+    const company = companies[0];
+    const user = auth.currentUser;
+    if (!company || !user) return null;
+
+    const title = (resourceForm.title || "").trim();
+
+    if (!title) {
+      setSectionError("Enter the Webinar Title before uploading webinar media.");
+      return null;
+    }
+
+    const config = RESOURCE_CONFIG.webinars;
+    const payload: Record<string, string | boolean> =
+      config.fields.reduce<Record<string, string | boolean>>((result, field) => {
+        result[field.key] = resourceForm[field.key]?.trim() || "";
+        return result;
+      }, {});
+
+    // The backend will create an incomplete draft solely so the media commit
+    // has a verified webinar resource to target. The final Add/Update Webinar
+    // action still performs full required-field validation.
+    payload.mediaDraft = true;
+
+    try {
+      setSectionSaving(true);
+      setSectionError("");
+      const token = await user.getIdToken();
+
+      const res = await fetch(
+        `${API_BASE_URL}/api/company/${company.id}/${config.endpoint}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const result = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        const serverMessage =
+          typeof result === "string"
+            ? result
+            : result?.message;
+
+        setSectionError(
+          serverMessage || "Unable to prepare the webinar for media upload."
+        );
+        return null;
+      }
+
+      const resourceId = String(result?.id || "");
+      if (!resourceId) {
+        setSectionError(
+          "The webinar was created but its media target could not be resolved."
+        );
+        return null;
+      }
+
+      setEditingResourceId(resourceId);
+      return resourceId;
+    } catch (error) {
+      console.error("Webinar media draft creation failed:", error);
+      setSectionError("Unable to prepare the webinar for media upload.");
+      return null;
+    } finally {
+      setSectionSaving(false);
+    }
+  };
+
+  const handleWebinarMediaSelection = async (
+    file: File | null,
+    slot: "banner" | "speaker"
+  ) => {
+    if (!file || editingLocked || sectionSaving || resourceMediaUploading) return;
+
+    const validationError = validatePostImageFile(file);
+    if (validationError) {
+      setSectionError(validationError);
+      return;
+    }
+
+    const company = companies[0];
+    if (!company) return;
+
+    setSectionError("");
+
+    const resourceId = await ensureWebinarDraftForMedia();
+    if (!resourceId) return;
+
+    try {
+      setResourceMediaUploading(true);
+      setMediaUploadProgress(0);
+
+      const result = await uploadProviderMedia({
+        companyId: company.id,
+        file,
+        scope: "resource",
+        slot,
+        resourceType: "webinars",
+        resourceId,
+      });
+
+      if (slot === "banner") {
+        setWebinarBannerPreview(result.url);
+      } else {
+        setWebinarSpeakerImagePreview(result.url);
+      }
+
+      await loadFoundationSection("webinars");
+      await loadCompanyDetails(company.id);
+      setSectionSuccess(
+        slot === "banner"
+          ? "Webinar banner uploaded automatically."
+          : "Speaker image uploaded automatically."
+      );
+      window.setTimeout(() => setSectionSuccess(""), 2200);
+    } catch (error) {
+      console.error(`Webinar ${slot} upload failed:`, error);
+      setSectionError(
+        getMediaErrorMessage(
+          error,
+          slot === "banner"
+            ? "Unable to upload the webinar banner. Please try again."
+            : "Unable to upload the speaker image. Please try again."
+        )
+      );
+    } finally {
+      setResourceMediaUploading(false);
+      setMediaUploadProgress(0);
+    }
+  };
+
+
+  const handleWhitepaperImageSelection = async (file: File | null) => {
+    if (!file || editingLocked || sectionSaving || resourceMediaUploading) return;
+
+    const validationError = validatePostImageFile(file);
+    if (validationError) {
+      setSectionError(validationError);
+      return;
+    }
+
+    const company = companies[0];
+    if (!company) return;
+
+    setResourceMediaFile(file);
+    setSectionError("");
+
+    const resourceId = await ensureWhitepaperDraftForMedia();
+    if (!resourceId) {
+      setResourceMediaFile(null);
+      return;
+    }
+
+    try {
+      setResourceMediaUploading(true);
+      setMediaUploadProgress(0);
+
+      const result = await uploadProviderMedia({
+        companyId: company.id,
+        file,
+        scope: "resource",
+        slot: "image",
+        resourceType: "whitepapers",
+        resourceId,
+      });
+
+      setWhitepaperImagePreview(result.url);
+      setResourceMediaFile(null);
+      await loadFoundationSection("whitepapers");
+      await loadCompanyDetails(company.id);
+      setSectionSuccess("Whitepaper image uploaded automatically.");
+      window.setTimeout(() => setSectionSuccess(""), 2200);
+    } catch (error) {
+      console.error("Whitepaper image upload failed:", error);
+      setSectionError(
+        getMediaErrorMessage(
+          error,
+          "Unable to upload the whitepaper image. Check the image and your connection, then try again."
+        )
+      );
+    } finally {
+      setResourceMediaUploading(false);
+      setMediaUploadProgress(0);
+    }
+  };
+
+  const handlePostBannerSelection = async (file: File | null) => {
+    if (!file || editingLocked || sectionSaving || resourceMediaUploading) return;
+
+    const validationError = validatePostImageFile(file);
+    if (validationError) {
+      setSectionError(validationError);
+      return;
+    }
+
+    const company = companies[0];
+    if (!company) return;
+
+    setResourceMediaFile(file);
+    setSectionError("");
+
+    const resourceId = await ensurePostDraftForMedia();
+    if (!resourceId) {
+      setResourceMediaFile(null);
+      return;
+    }
+
+    try {
+      setResourceMediaUploading(true);
+      setMediaUploadProgress(0);
+
+      const result = await uploadProviderMedia({
+        companyId: company.id,
+        file,
+        scope: "resource",
+        slot: "image",
+        resourceType: "posts",
+        resourceId,
+      });
+
+      setPostBannerPreview(result.url);
+      setResourceMediaFile(null);
+      await loadFoundationSection("posts");
+      await loadCompanyDetails(company.id);
+      setSectionSuccess("Post banner uploaded automatically.");
+      window.setTimeout(() => setSectionSuccess(""), 2200);
+    } catch (error) {
+      console.error("Post banner upload failed:", error);
+      setSectionError(
+        getMediaErrorMessage(
+          error,
+          "Unable to upload the post banner. Check the image and your connection, then try again."
+        )
+      );
+    } finally {
+      setResourceMediaUploading(false);
+      setMediaUploadProgress(0);
+    }
+  };
+
+  const handlePostGallerySelection = async (files: File[] | FileList | null) => {
+    const selected = Array.isArray(files) ? files : Array.from(files || []);
+
+    if (selected.length === 0 || editingLocked || sectionSaving || postGalleryUploading) {
+      return;
+    }
+    const remaining = Math.max(0, 10 - postGalleryMedia.length);
+
+    if (remaining === 0) {
+      setSectionError("A maximum of 10 gallery images is allowed.");
+      return;
+    }
+
+    if (selected.length > remaining) {
+      setSectionError(
+        `You can add ${remaining} more gallery image${remaining === 1 ? "" : "s"}.`
+      );
+      return;
+    }
+
+    for (const file of selected) {
+      const validationError = validatePostImageFile(file);
+      if (validationError) {
+        setSectionError(`${file.name}: ${validationError}`);
+        return;
+      }
+    }
+
+    const company = companies[0];
+    if (!company) return;
+
+    setSectionError("");
+
+    const resourceId = await ensurePostDraftForMedia();
+    if (!resourceId) return;
+
+    const uploaded: PostGalleryMedia[] = [];
+
+    try {
+      setPostGalleryUploading(true);
+      setPostGalleryUploadProgress(0);
+
+      for (let index = 0; index < selected.length; index++) {
+        const file = selected[index];
+
+        const result = await uploadProviderMedia({
+          companyId: company.id,
+          file,
+          scope: "resource",
+          slot: "gallery",
+          resourceType: "posts",
+          resourceId,
+          onProgress: (percentage) => {
+            const overall = Math.round(
+              ((index + percentage / 100) / selected.length) * 100
+            );
+            setPostGalleryUploadProgress(Math.max(0, Math.min(100, overall)));
+          },
+        });
+
+        const uploadedMedia: PostGalleryMedia = {
+          url: result.url,
+          contentType: file.type,
+          size: file.size,
+        };
+
+        uploaded.push(uploadedMedia);
+        setPostGalleryMedia((current) => [...current, uploadedMedia].slice(0, 10));
+      }
+      setPostGalleryUploadProgress(100);
+      await loadFoundationSection("posts");
+      await loadCompanyDetails(company.id);
+      setSectionSuccess(
+        `${uploaded.length} gallery image${uploaded.length === 1 ? "" : "s"} uploaded successfully.`
+      );
+      window.setTimeout(() => setSectionSuccess(""), 2400);
+    } catch (error) {
+      console.error("Post gallery upload failed:", error);
+      setSectionError(
+        getMediaErrorMessage(
+          error,
+          "Unable to upload one or more gallery images. Please try again."
+        )
+      );
+    } finally {
+      setPostGalleryUploading(false);
+      window.setTimeout(() => setPostGalleryUploadProgress(0), 350);
+    }
+  };
+
+
+  const handlePostContentImageUpload = async (
+    file: File,
+    onProgress?: (percentage: number) => void
+  ): Promise<string> => {
+    const validationError = validatePostImageFile(file);
+
+    if (validationError) {
+      setSectionError(validationError);
+      throw new Error(validationError);
+    }
+
+    const company = companies[0];
+    if (!company) {
+      throw new Error("Company profile could not be resolved.");
+    }
+
+    setSectionError("");
+
+    const resourceId = await ensurePostDraftForMedia();
+    if (!resourceId) {
+      throw new Error(
+        "Enter the Post Title before uploading images inside the article content."
+      );
+    }
+
+    try {
+      const result = await uploadProviderMedia({
+        companyId: company.id,
+        file,
+        scope: "resource",
+        slot: "content",
+        resourceType: "posts",
+        resourceId,
+        onProgress,
+      });
+
+      await loadFoundationSection("posts");
+      return result.url;
+    } catch (error) {
+      console.error("Post content image upload failed:", error);
+      const message = getMediaErrorMessage(
+        error,
+        "Unable to upload the image inside the post content. Please try again."
+      );
+      setSectionError(message);
+      throw new Error(message);
+    }
+  };
+
+  const openWhitepaperResponses = async (item: FoundationItem) => {
+    const company = companies[0];
+    const user = auth.currentUser;
+    if (!company || !user) return;
+
+    try {
+      setWhitepaperResponsesOpen(true);
+      setWhitepaperResponsesLoading(true);
+      setWhitepaperResponsesError("");
+      setWhitepaperResponses([]);
+      setExpandedWhitepaperResponseId(null);
+      setWhitepaperResponsesTitle(
+        typeof item.title === "string" && item.title.trim()
+          ? item.title
+          : "Whitepaper"
+      );
+
+      const token = await user.getIdToken();
+      const res = await fetch(
+        `${API_BASE_URL}/api/providers/${encodeURIComponent(
+          company.slug
+        )}/whitepapers/${encodeURIComponent(item.id)}/responses`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        }
+      );
+
+      const payload = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setWhitepaperResponsesError(
+          payload?.message || "Unable to load whitepaper responses."
+        );
+        return;
+      }
+
+      setWhitepaperResponses(Array.isArray(payload) ? payload : []);
+    } catch (error) {
+      console.error("Whitepaper responses loading failed:", error);
+      setWhitepaperResponsesError("Unable to load whitepaper responses.");
+    } finally {
+      setWhitepaperResponsesLoading(false);
+    }
+  };
+
+  const closeWhitepaperResponses = () => {
+    if (whitepaperResponsesLoading) return;
+    setWhitepaperResponsesOpen(false);
+    setWhitepaperResponsesError("");
+    setWhitepaperResponses([]);
+    setWhitepaperResponsesTitle("");
+    setExpandedWhitepaperResponseId(null);
+  };
+
+  const openWebinarResponses = async (item: FoundationItem) => {
+    const company = companies[0];
+    const user = auth.currentUser;
+    if (!company || !user) return;
+
+    try {
+      setWebinarResponsesOpen(true);
+      setWebinarResponsesLoading(true);
+      setWebinarResponsesError("");
+      setWebinarResponses([]);
+      setExpandedWebinarResponseId(null);
+      setWebinarResponsesTitle(
+        typeof item.title === "string" && item.title.trim()
+          ? item.title
+          : "Webinar"
+      );
+
+      const token = await user.getIdToken();
+      const res = await fetch(
+        `${API_BASE_URL}/api/providers/${encodeURIComponent(
+          company.slug
+        )}/webinars/${encodeURIComponent(item.id)}/responses`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        }
+      );
+
+      const payload = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setWebinarResponsesError(
+          payload?.message || "Unable to load webinar responses."
+        );
+        return;
+      }
+
+      setWebinarResponses(Array.isArray(payload) ? payload : []);
+    } catch (error) {
+      console.error("Webinar responses loading failed:", error);
+      setWebinarResponsesError("Unable to load webinar responses.");
+    } finally {
+      setWebinarResponsesLoading(false);
+    }
+  };
+
+  const closeWebinarResponses = () => {
+    if (webinarResponsesLoading) return;
+    setWebinarResponsesOpen(false);
+    setWebinarResponsesError("");
+    setWebinarResponses([]);
+    setWebinarResponsesTitle("");
+    setExpandedWebinarResponseId(null);
+  };
+
   const saveResource = async (menu: ResourceMenu): Promise<boolean> => {
     const company = companies[0];
     const user = auth.currentUser;
@@ -1458,17 +2832,37 @@ export default function PublisherDashboard() {
     setSectionError("");
     setSectionSuccess("");
 
-    const requiredField = config.fields.find((field) => field.required);
+    const requiredField = config.fields.find(
+      (field) => field.required && !resourceForm[field.key]?.trim()
+    );
 
-    if (requiredField && !resourceForm[requiredField.key]?.trim()) {
+    if (requiredField) {
       setSectionError(`${requiredField.label} is required.`);
       return false;
     }
 
-    const payload = config.fields.reduce<Record<string, string>>((result, field) => {
-      result[field.key] = resourceForm[field.key]?.trim() || "";
-      return result;
-    }, {});
+    const payload: Record<string, string | string[]> =
+      config.fields.reduce<Record<string, string | string[]>>((result, field) => {
+        result[field.key] = resourceForm[field.key]?.trim() || "";
+        return result;
+      }, {});
+
+    if (menu === "products") {
+      payload.features = productFeatures;
+    }
+
+    if (menu === "posts") {
+      const videoEmbedUrl = (resourceForm.videoEmbedUrl || "").trim();
+
+      if (videoEmbedUrl && !getSafeVideoEmbedUrl(videoEmbedUrl)) {
+        setSectionError(
+          "Enter a supported video URL from YouTube, Vimeo, Loom, Dailymotion or Wistia."
+        );
+        return false;
+      }
+
+      payload.videoEmbedUrl = videoEmbedUrl;
+    }
 
     try {
       setSectionSaving(true);
@@ -1510,6 +2904,13 @@ export default function PublisherDashboard() {
       }
 
       setResourceMediaFile(null);
+      setPostBannerPreview("");
+      setWhitepaperImagePreview("");
+      setWebinarBannerPreview("");
+      setWebinarSpeakerImagePreview("");
+      setPostGalleryMedia([]);
+      setProductFeatures([]);
+      setProductFeatureDraft("");
       setResourceForm(emptyFormFor(menu));
       setEditingResourceId(null);
       setResourceModalOpen(false);
@@ -1556,8 +2957,104 @@ export default function PublisherDashboard() {
       return form;
     }, {});
 
+    if (menu === "posts") {
+      nextForm.videoEmbedUrl =
+        typeof item.videoEmbedUrl === "string" ? item.videoEmbedUrl : "";
+    }
+
+    if (menu === "webinars") {
+      if (!nextForm.subTitle && typeof item.subTitle === "string") {
+        nextForm.subTitle = item.subTitle;
+      }
+
+      if (!nextForm.content) {
+        nextForm.content =
+          typeof item.content === "string"
+            ? item.content
+            : typeof item.summary === "string"
+              ? item.summary
+              : "";
+      }
+
+      if (!nextForm.speakerName) {
+        nextForm.speakerName =
+          typeof item.speakerName === "string"
+            ? item.speakerName
+            : typeof item.speaker === "string"
+              ? item.speaker
+              : "";
+      }
+    }
+
+    if (menu === "events") {
+      const splitLegacyDateTime = (value: unknown) => {
+        if (typeof value !== "string" || !value.trim()) {
+          return { date: "", time: "" };
+        }
+
+        const raw = value.trim();
+        const direct = raw.match(/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}:\d{2})/);
+
+        if (direct) {
+          return { date: direct[1], time: direct[2] };
+        }
+
+        const parsed = new Date(raw);
+        if (Number.isNaN(parsed.getTime())) {
+          return { date: "", time: "" };
+        }
+
+        const pad = (part: number) => String(part).padStart(2, "0");
+
+        return {
+          date: `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}`,
+          time: `${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`,
+        };
+      };
+
+      const legacyStart = splitLegacyDateTime(item.startAt);
+      const legacyEnd = splitLegacyDateTime(item.endAt);
+
+      if (!nextForm.startDate) nextForm.startDate = legacyStart.date;
+      if (!nextForm.startTime) nextForm.startTime = legacyStart.time;
+      if (!nextForm.endDate) nextForm.endDate = legacyEnd.date;
+      if (!nextForm.endTime) nextForm.endTime = legacyEnd.time;
+    }
+
     setEditingResourceId(item.id);
     setResourceMediaFile(null);
+    setPostBannerPreview(
+      menu === "posts" && typeof item.imageUrl === "string" ? item.imageUrl : ""
+    );
+    setWhitepaperImagePreview(
+      menu === "whitepapers" && typeof item.imageUrl === "string" ? item.imageUrl : ""
+    );
+    setWebinarBannerPreview(
+      menu === "webinars"
+        ? typeof item.bannerUrl === "string" && item.bannerUrl
+          ? item.bannerUrl
+          : typeof item.thumbnailUrl === "string"
+            ? item.thumbnailUrl
+            : ""
+        : ""
+    );
+    setWebinarSpeakerImagePreview(
+      menu === "webinars" && typeof item.speakerImageUrl === "string"
+        ? item.speakerImageUrl
+        : ""
+    );
+    setPostGalleryMedia(
+      menu === "posts" ? readPostGalleryMedia(item.galleryMedia) : []
+    );
+    setProductFeatures(
+      menu === "products" && Array.isArray(item.features)
+        ? item.features
+            .filter((feature): feature is string => typeof feature === "string")
+            .slice(0, 30)
+        : []
+    );
+    setProductFeatureDraft("");
+    setPostGalleryUploadProgress(0);
     setResourceForm(nextForm);
     setSectionError("");
     setSectionSuccess("");
@@ -1601,6 +3098,14 @@ export default function PublisherDashboard() {
       if (editingResourceId === resourceId) {
         setEditingResourceId(null);
         setResourceMediaFile(null);
+        setPostBannerPreview("");
+        setWhitepaperImagePreview("");
+        setWebinarBannerPreview("");
+        setWebinarSpeakerImagePreview("");
+        setPostGalleryMedia([]);
+        setProductFeatures([]);
+        setProductFeatureDraft("");
+        setPostGalleryUploadProgress(0);
         setResourceForm(emptyFormFor(menu));
       }
 
@@ -2808,7 +4313,46 @@ export default function PublisherDashboard() {
         }
         .pub-media-upload-btn.secondary { background:#fff; border-color:#e4e7eb; color:#66707f; }
         .pub-media-upload-btn:disabled { opacity:.45; cursor:not-allowed; }
-        .pub-media-progress { min-width:80px; color:#66707f; font-size:9px; font-weight:700; }
+        .pub-media-progress {
+          width:100%;
+          margin-top:9px;
+          display:flex;
+          align-items:center;
+          gap:9px;
+          color:#66707f;
+          font-size:9px;
+          font-weight:700;
+        }
+
+        .pub-media-progress-track {
+          position:relative;
+          flex:1;
+          min-width:90px;
+          height:6px;
+          overflow:hidden;
+          border-radius:999px;
+          background:#e8eefc;
+          box-shadow:inset 0 0 0 1px rgba(37,99,235,.06);
+        }
+
+        .pub-media-progress-fill {
+          height:100%;
+          border-radius:999px;
+          background:linear-gradient(90deg,#2563eb,#60a5fa);
+          box-shadow:0 0 10px rgba(37,99,235,.30);
+          transition:width .12s linear;
+        }
+
+        .pub-media-progress-value {
+          width:34px;
+          flex-shrink:0;
+          text-align:right;
+          color:#2563eb;
+          font-size:9px;
+          font-weight:800;
+          font-variant-numeric:tabular-nums;
+        }
+
         .pub-resource-media {
           grid-column:1 / -1;
           border:1.5px solid rgba(37,99,235,.52);
@@ -2863,6 +4407,225 @@ export default function PublisherDashboard() {
           margin-top:8px; display:inline-flex; align-items:center; gap:5px; padding:5px 8px;
           border-radius:999px; background:#f0fdf4; border:1px solid #dcfce7;
           color:#15803d; font-size:8.5px; font-weight:700;
+        }
+
+        .pub-post-banner-preview {
+          margin-top:12px;
+          width:220px;
+          max-width:100%;
+          overflow:hidden;
+          border:1px solid #dbe4f0;
+          border-radius:14px;
+          background:#fff;
+          box-shadow:0 8px 20px rgba(15,23,42,.07);
+        }
+
+        .pub-post-banner-preview img {
+          width:100%;
+          height:112px;
+          object-fit:cover;
+          display:block;
+          background:#eef1f4;
+        }
+
+        .pub-post-banner-preview-copy {
+          min-height:32px;
+          display:flex;
+          align-items:center;
+          gap:6px;
+          padding:0 10px;
+          color:#15803d;
+          background:#f8fff9;
+          border-top:1px solid #e8f5eb;
+          font-size:8.5px;
+          font-weight:800;
+        }
+
+        .pub-webinar-media-grid {
+          grid-column:1 / -1;
+          display:grid;
+          grid-template-columns:minmax(0,1.35fr) minmax(280px,.65fr);
+          gap:14px;
+          align-items:start;
+        }
+
+        .pub-webinar-media-grid .pub-resource-media {
+          height:100%;
+        }
+
+        .pub-post-banner-preview.webinar-banner img {
+          max-height:270px;
+          object-fit:cover;
+        }
+
+        .pub-webinar-speaker-preview {
+          margin-top:12px;
+          overflow:hidden;
+          border:1px solid #e4e8ee;
+          border-radius:16px;
+          background:#fff;
+        }
+
+        .pub-webinar-speaker-preview img {
+          width:100%;
+          height:220px;
+          display:block;
+          object-fit:cover;
+          object-position:center top;
+          background:#f5f6f8;
+        }
+
+        @media(max-width:760px){
+          .pub-webinar-media-grid{grid-template-columns:1fr}
+          .pub-webinar-speaker-preview img{height:260px}
+        }
+
+        .pub-post-video-embed {
+          grid-column:1 / -1;
+          border:1.5px solid #e2e7ee;
+          background:#fafbfc;
+          border-radius:18px;
+          padding:15px;
+          transition:border-color .2s ease,box-shadow .2s ease,background .2s ease;
+        }
+
+        .pub-post-video-embed:focus-within {
+          border-color:#2563eb;
+          background:#fff;
+          box-shadow:
+            0 0 0 4px rgba(37,99,235,.08),
+            0 10px 26px rgba(37,99,235,.08);
+        }
+
+        .pub-post-video-preview {
+          position:relative;
+          width:100%;
+          aspect-ratio:16 / 9;
+          overflow:hidden;
+          margin-top:12px;
+          border-radius:14px;
+          border:1px solid #e3e7ed;
+          background:#111827;
+          box-shadow:0 10px 28px rgba(15,23,42,.10);
+        }
+
+        .pub-post-video-preview iframe {
+          position:absolute;
+          inset:0;
+          width:100%;
+          height:100%;
+          border:0;
+          display:block;
+        }
+
+        .pub-post-video-error {
+          margin-top:8px;
+          padding:9px 11px;
+          border-radius:12px;
+          border:1px solid #fecdd3;
+          background:#fff1f2;
+          color:#be123c;
+          font-size:9.5px;
+          font-weight:600;
+          line-height:1.55;
+        }
+
+        .pub-post-gallery-uploader {
+          grid-column:1 / -1;
+          border:1.5px solid rgba(37,99,235,.52);
+          background:#fbfdff;
+          border-radius:18px;
+          padding:15px;
+          box-shadow:
+            0 0 0 3px rgba(59,130,246,.055),
+            0 8px 22px rgba(37,99,235,.07);
+          transition:border-color .2s ease,box-shadow .2s ease,transform .2s ease;
+        }
+
+        .pub-post-gallery-uploader:hover {
+          border-color:#2563eb;
+          box-shadow:
+            0 0 0 4px rgba(37,99,235,.10),
+            0 12px 30px rgba(37,99,235,.13);
+        }
+
+        .pub-post-gallery-head {
+          display:flex;
+          align-items:flex-start;
+          justify-content:space-between;
+          gap:12px;
+          margin-bottom:10px;
+        }
+
+        .pub-post-gallery-count {
+          flex-shrink:0;
+          padding:5px 8px;
+          border-radius:999px;
+          background:#eff6ff;
+          border:1px solid #dbeafe;
+          color:#2563eb;
+          font-size:8.5px;
+          font-weight:800;
+        }
+
+        .pub-post-gallery-input {
+          position:absolute;
+          width:1px;
+          height:1px;
+          opacity:0;
+          pointer-events:none;
+        }
+
+        .pub-post-gallery-trigger {
+          min-height:42px;
+          border:1px dashed #bfdbfe;
+          border-radius:14px;
+          background:#fff;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          gap:7px;
+          color:#315f9f;
+          font-size:9.5px;
+          font-weight:800;
+          cursor:pointer;
+          transition:background .16s ease,border-color .16s ease;
+        }
+
+        .pub-post-gallery-trigger:hover {
+          background:#f8fbff;
+          border-color:#60a5fa;
+        }
+
+        .pub-post-gallery-trigger.disabled {
+          opacity:.48;
+          cursor:not-allowed;
+        }
+
+        .pub-post-gallery-preview {
+          display:grid;
+          grid-template-columns:repeat(5,minmax(0,1fr));
+          gap:8px;
+          margin-top:12px;
+        }
+
+        .pub-post-gallery-thumb {
+          aspect-ratio:1 / .78;
+          overflow:hidden;
+          border-radius:11px;
+          border:1px solid #e6eaf0;
+          background:#f2f4f7;
+        }
+
+        .pub-post-gallery-thumb img {
+          width:100%;
+          height:100%;
+          object-fit:cover;
+          display:block;
+        }
+
+        @media(max-width:700px){
+          .pub-post-gallery-preview{grid-template-columns:repeat(2,minmax(0,1fr))}
         }
 
 
@@ -3658,6 +5421,363 @@ export default function PublisherDashboard() {
           box-shadow:0 32px 90px rgba(15,23,42,.20);
         }
 
+
+        .pub-resource-modal.post-modal {
+          width:min(1080px,calc(100vw - 48px));
+          max-height:min(92vh,940px);
+        }
+
+        .pub-resource-modal.post-modal .pub-resource-modal-copy {
+          max-width:760px;
+        }
+
+        .pub-rich-editor-shell {
+          overflow:hidden;
+          border:1.5px solid #e4e7eb;
+          border-radius:18px;
+          background:#fff;
+          transition:border-color .18s ease,box-shadow .18s ease;
+        }
+
+        .pub-rich-editor-shell:focus-within {
+          border-color:#111827;
+          box-shadow:0 0 0 4px rgba(17,24,39,.05);
+        }
+
+        .pub-rich-editor-shell.disabled {
+          opacity:.62;
+          background:#f8fafc;
+        }
+
+        .pub-rich-toolbar {
+          min-height:45px;
+          display:flex;
+          align-items:center;
+          flex-wrap:wrap;
+          gap:8px;
+          padding:7px 9px;
+          border-bottom:1px solid #eceef1;
+          background:#f8fafc;
+        }
+
+        .pub-rich-toolbar-group {
+          display:flex;
+          align-items:center;
+          gap:5px;
+        }
+
+        .pub-rich-toolbar-divider {
+          width:1px;
+          height:23px;
+          background:#dfe3e8;
+        }
+
+        .pub-rich-tool {
+          min-width:31px;
+          height:31px;
+          border:1px solid #e2e5e9;
+          border-radius:9px;
+          background:#fff;
+          color:#596273;
+          display:inline-flex;
+          align-items:center;
+          justify-content:center;
+          gap:5px;
+          padding:0 8px;
+          font-family:inherit;
+          font-size:9px;
+          font-weight:800;
+          cursor:pointer;
+          transition:background .15s ease,border-color .15s ease,color .15s ease,transform .15s ease;
+        }
+
+        .pub-rich-tool:hover:not(:disabled) {
+          background:#111827;
+          border-color:#111827;
+          color:#fff;
+          transform:translateY(-1px);
+        }
+
+        .pub-rich-tool.text {
+          min-width:36px;
+        }
+
+        .pub-rich-tool:disabled {
+          cursor:not-allowed;
+          opacity:.45;
+        }
+
+        .pub-rich-editor {
+          min-height:270px;
+          max-height:460px;
+          overflow-y:auto;
+          padding:18px 19px 24px;
+          outline:none;
+          color:#1f2937;
+          font-family:inherit;
+          font-size:13px;
+          line-height:1.8;
+          word-break:break-word;
+        }
+
+        .pub-rich-editor:empty::before {
+          content:attr(data-placeholder);
+          color:#b0b7c1;
+          pointer-events:none;
+        }
+
+        .pub-rich-editor p {
+          margin:0 0 14px;
+        }
+
+        .pub-rich-editor h1 {
+          margin:24px 0 12px;
+          font-size:28px;
+          line-height:1.2;
+          font-weight:800;
+          letter-spacing:-.035em;
+          color:#111827;
+        }
+
+        .pub-rich-editor h2 {
+          margin:22px 0 10px;
+          font-size:22px;
+          line-height:1.25;
+          font-weight:800;
+          letter-spacing:-.025em;
+          color:#111827;
+        }
+
+        .pub-rich-editor h3 {
+          margin:20px 0 9px;
+          font-size:17px;
+          line-height:1.3;
+          font-weight:800;
+          color:#111827;
+        }
+
+        .pub-rich-editor blockquote {
+          margin:18px 0;
+          padding:14px 16px;
+          border-left:3px solid #2563eb;
+          border-radius:0 14px 14px 0;
+          background:#f8fafc;
+          color:#536072;
+          font-style:italic;
+          line-height:1.75;
+        }
+
+        .pub-rich-editor img {
+          display:block;
+          width:min(100%,760px);
+          height:auto;
+          max-height:520px;
+          object-fit:contain;
+          margin:22px auto;
+          border-radius:16px;
+          border:1px solid #e5e9ef;
+          background:#f4f6f8;
+          box-shadow:0 10px 26px rgba(15,23,42,.07);
+          cursor:grab;
+        }
+
+        .pub-rich-editor img:active {
+          cursor:grabbing;
+        }
+
+        .pub-rich-editor-shell.dragging-image {
+          border-color:#2563eb;
+          box-shadow:
+            0 0 0 4px rgba(37,99,235,.10),
+            0 16px 36px rgba(37,99,235,.10);
+        }
+
+        .pub-rich-editor-shell.dragging-image .pub-rich-editor {
+          background:#f8fbff;
+        }
+
+        .pub-rich-image-input {
+          position:absolute;
+          width:1px;
+          height:1px;
+          opacity:0;
+          pointer-events:none;
+        }
+
+        .pub-rich-media-count {
+          margin-left:auto;
+          min-width:42px;
+          height:25px;
+          padding:0 8px;
+          border-radius:999px;
+          border:1px solid #dbeafe;
+          background:#eff6ff;
+          color:#2563eb;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          font-size:8.5px;
+          font-weight:800;
+          font-variant-numeric:tabular-nums;
+        }
+
+        .pub-rich-upload-progress {
+          padding:8px 10px;
+          display:flex;
+          align-items:center;
+          gap:9px;
+          border-bottom:1px solid #e8edf5;
+          background:#f8fbff;
+          color:#2563eb;
+          font-size:9px;
+          font-weight:800;
+        }
+
+
+        .pub-rich-editor ul,
+        .pub-rich-editor ol {
+          margin:10px 0 14px 24px;
+          padding-left:16px;
+        }
+
+        .pub-rich-editor ul {
+          list-style-type:disc;
+        }
+
+        .pub-rich-editor ol {
+          list-style-type:decimal;
+        }
+
+        .pub-rich-editor li {
+          margin:5px 0;
+          padding-left:2px;
+        }
+
+        .pub-rich-media-error {
+          padding:8px 11px;
+          border-bottom:1px solid #fee2e2;
+          background:#fff5f5;
+          color:#b91c1c;
+          font-size:9px;
+          font-weight:700;
+          line-height:1.45;
+        }
+
+
+        .pub-product-features {
+          border:1.5px solid #e4e7eb;
+          border-radius:18px;
+          background:#fafbfc;
+          padding:12px;
+          transition:border-color .18s ease,box-shadow .18s ease,background .18s ease;
+        }
+
+        .pub-product-features:focus-within {
+          border-color:#111827;
+          background:#fff;
+          box-shadow:0 0 0 4px rgba(17,24,39,.05);
+        }
+
+        .pub-product-feature-entry {
+          display:grid;
+          grid-template-columns:minmax(0,1fr) auto;
+          gap:8px;
+          align-items:center;
+        }
+
+        .pub-product-feature-entry .pub-foundation-input {
+          background:#fff;
+        }
+
+        .pub-product-feature-add {
+          height:44px;
+          padding:0 14px;
+          border:1px solid #111827;
+          border-radius:999px;
+          background:#111827;
+          color:#fff;
+          display:inline-flex;
+          align-items:center;
+          justify-content:center;
+          gap:6px;
+          font-family:inherit;
+          font-size:9.5px;
+          font-weight:800;
+          cursor:pointer;
+          white-space:nowrap;
+          transition:transform .16s ease,opacity .16s ease,background .16s ease;
+        }
+
+        .pub-product-feature-add:hover:not(:disabled) {
+          background:#000;
+          transform:translateY(-1px);
+        }
+
+        .pub-product-feature-add:disabled {
+          opacity:.42;
+          cursor:not-allowed;
+        }
+
+        .pub-product-feature-note {
+          margin:8px 2px 0;
+          color:#9aa2ad;
+          font-size:9px;
+          line-height:1.5;
+        }
+
+        .pub-product-feature-list {
+          display:flex;
+          flex-wrap:wrap;
+          gap:7px;
+          margin-top:12px;
+          padding-top:12px;
+          border-top:1px solid #eceef1;
+        }
+
+        .pub-product-feature-pill {
+          min-height:30px;
+          padding:0 7px 0 11px;
+          border-radius:999px;
+          border:1px solid #dde2e8;
+          background:#fff;
+          color:#4f5866;
+          display:inline-flex;
+          align-items:center;
+          gap:7px;
+          font-size:9px;
+          font-weight:700;
+          line-height:1.25;
+        }
+
+        .pub-product-feature-pill button {
+          width:20px;
+          height:20px;
+          border:0;
+          border-radius:50%;
+          background:#f3f4f6;
+          color:#7b8492;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          cursor:pointer;
+          padding:0;
+        }
+
+        .pub-product-feature-pill button:hover:not(:disabled) {
+          background:#fee2e2;
+          color:#b91c1c;
+        }
+
+        .pub-product-feature-pill button:disabled {
+          cursor:not-allowed;
+          opacity:.5;
+        }
+
+        @media(max-width:600px){
+          .pub-product-feature-entry{grid-template-columns:1fr}
+          .pub-product-feature-add{width:100%}
+        }
+
         .pub-resource-modal-head {
           flex-shrink:0;
           display:flex;
@@ -3742,11 +5862,166 @@ export default function PublisherDashboard() {
           .pub-resource-manager-footer{padding:16px 18px 20px}
           .pub-resource-modal-overlay{padding:12px}
           .pub-resource-modal{max-height:92vh;border-radius:22px}
+          .pub-resource-modal.post-modal{width:100%;max-height:94vh}
+          .pub-rich-toolbar{gap:6px}
+          .pub-rich-toolbar-divider{display:none}
+          .pub-rich-editor{min-height:230px;padding:15px}
           .pub-resource-modal-head{padding:20px 18px 16px}
           .pub-resource-modal-body{padding:18px}
           .pub-resource-modal-foot{padding:14px 18px}
           .pub-resource-modal-foot .pub-primary-btn,
           .pub-resource-modal-foot .pub-secondary-btn{flex:1}
+        }
+
+
+        .pub-mini-btn.responses {
+          border-color:#dbeafe;
+          background:#eff6ff;
+          color:#2563eb;
+        }
+
+        .pub-mini-btn.responses:hover {
+          background:#dbeafe;
+          color:#1d4ed8;
+        }
+
+        .pub-responses-modal {
+          width:min(1180px,calc(100vw - 48px));
+          max-height:min(90vh,900px);
+          display:flex;
+          flex-direction:column;
+          overflow:hidden;
+          background:#fff;
+          border:1px solid #e8eaee;
+          border-radius:26px;
+          box-shadow:0 32px 90px rgba(15,23,42,.20);
+        }
+
+        .pub-responses-body {
+          flex:1;
+          min-height:0;
+          overflow:auto;
+          padding:20px 24px 26px;
+        }
+
+        .pub-responses-count {
+          display:inline-flex;
+          align-items:center;
+          gap:6px;
+          padding:6px 9px;
+          margin-bottom:14px;
+          border-radius:999px;
+          background:#eff6ff;
+          border:1px solid #dbeafe;
+          color:#2563eb;
+          font-size:9px;
+          font-weight:800;
+        }
+
+        .pub-responses-table-wrap {
+          width:100%;
+          overflow-x:auto;
+          border:1px solid #e8eaee;
+          border-radius:16px;
+        }
+
+        .pub-responses-table {
+          width:100%;
+          min-width:1060px;
+          border-collapse:collapse;
+          background:#fff;
+        }
+
+        .pub-responses-table th {
+          padding:11px 12px;
+          text-align:left;
+          background:#f8fafc;
+          border-bottom:1px solid #e8eaee;
+          color:#7a8391;
+          font-size:8.5px;
+          font-weight:800;
+          letter-spacing:.05em;
+          text-transform:uppercase;
+          white-space:nowrap;
+        }
+
+        .pub-responses-table td {
+          padding:12px;
+          border-bottom:1px solid #f0f1f3;
+          color:#4b5563;
+          font-size:10px;
+          line-height:1.5;
+          vertical-align:middle;
+        }
+
+        .pub-response-message-btn {
+          width:30px;
+          height:30px;
+          border-radius:999px;
+          border:1px solid #e3e6ea;
+          background:#fff;
+          color:#66707f;
+          display:inline-flex;
+          align-items:center;
+          justify-content:center;
+          cursor:pointer;
+        }
+
+        .pub-response-message-btn.open svg {
+          transform:rotate(180deg);
+        }
+
+        .pub-response-message-btn svg {
+          transition:transform .18s ease;
+        }
+
+        .pub-response-expanded td {
+          padding:0!important;
+          background:#fbfcfd;
+        }
+
+        .pub-response-message-panel {
+          padding:16px 18px 18px;
+          border-top:1px solid #eef0f3;
+        }
+
+        .pub-response-message-label {
+          display:flex;
+          align-items:center;
+          gap:6px;
+          color:#6b7280;
+          font-size:8.5px;
+          font-weight:800;
+          text-transform:uppercase;
+          letter-spacing:.055em;
+          margin-bottom:7px;
+        }
+
+        .pub-response-message-copy {
+          color:#374151;
+          font-size:10.5px;
+          line-height:1.7;
+          white-space:pre-wrap;
+          word-break:break-word;
+        }
+
+        .pub-responses-empty {
+          min-height:220px;
+          border:1px dashed #dfe3e8;
+          border-radius:16px;
+          background:#fafbfc;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          text-align:center;
+          color:#929aa6;
+          font-size:10.5px;
+          padding:24px;
+        }
+
+        @media(max-width:700px){
+          .pub-responses-modal{width:100%;max-height:94vh}
+          .pub-responses-body{padding:16px}
         }
 
         .pub-preview-grid {
@@ -4517,6 +6792,19 @@ export default function PublisherDashboard() {
                                       </button>
                                     )}
                                   </div>
+                                  {companyMediaUploading === "logo" && (
+                                    <div className="pub-media-progress" aria-live="polite">
+                                      <div className="pub-media-progress-track">
+                                        <div
+                                          className="pub-media-progress-fill"
+                                          style={{ width: `${Math.max(0, Math.min(100, mediaUploadProgress))}%` }}
+                                        />
+                                      </div>
+                                      <span className="pub-media-progress-value">
+                                        {mediaUploadProgress}%
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div className="pub-media-card">
@@ -4612,6 +6900,19 @@ export default function PublisherDashboard() {
                                       </button>
                                     )}
                                   </div>
+                                  {companyMediaUploading === "banner" && (
+                                    <div className="pub-media-progress" aria-live="polite">
+                                      <div className="pub-media-progress-track">
+                                        <div
+                                          className="pub-media-progress-fill"
+                                          style={{ width: `${Math.max(0, Math.min(100, mediaUploadProgress))}%` }}
+                                        />
+                                      </div>
+                                      <span className="pub-media-progress-value">
+                                        {mediaUploadProgress}%
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
@@ -5065,6 +7366,24 @@ export default function PublisherDashboard() {
                                       </td>
                                       <td>
                                         <div className="pub-resource-table-actions">
+                                          {activeMenu === "whitepapers" && (
+                                            <button
+                                              className="pub-mini-btn responses"
+                                              onClick={() => void openWhitepaperResponses(item)}
+                                            >
+                                              <Users size={10} />
+                                              Show Responses
+                                            </button>
+                                          )}
+                                          {activeMenu === "webinars" && (
+                                            <button
+                                              className="pub-mini-btn responses"
+                                              onClick={() => void openWebinarResponses(item)}
+                                            >
+                                              <Users size={10} />
+                                              Show Responses
+                                            </button>
+                                          )}
                                           <button
                                             className="pub-mini-btn"
                                             onClick={() => editResource(activeMenu, item)}
@@ -5115,7 +7434,14 @@ export default function PublisherDashboard() {
                           }}
                         >
                           <motion.div
-                            className="pub-resource-modal"
+                            className={`pub-resource-modal ${
+                              activeMenu === "posts" ||
+                              activeMenu === "whitepapers" ||
+                              activeMenu === "products" ||
+                              activeMenu === "webinars"
+                                ? "post-modal"
+                                : ""
+                            }`}
                             initial={{ opacity: 0, y: 18, scale: .985 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: 10, scale: .99 }}
@@ -5139,7 +7465,7 @@ export default function PublisherDashboard() {
                                 type="button"
                                 className="pub-resource-modal-close"
                                 onClick={closeResourceModal}
-                                disabled={sectionSaving || resourceMediaUploading}
+                                disabled={sectionSaving || resourceMediaUploading || postGalleryUploading}
                                 aria-label="Close"
                               >
                                 <X size={17} />
@@ -5153,85 +7479,658 @@ export default function PublisherDashboard() {
 
                               <div className="pub-foundation-form-grid">
                                 {RESOURCE_CONFIG[activeMenu].fields.map((field) => (
-                                  <div
-                                    key={field.key}
-                                    className={`pub-foundation-field ${field.full ? "full" : ""}`}
-                                  >
-                                    <label>
-                                      {field.label}
-                                      {field.required ? " *" : ""}
-                                    </label>
+                                  <Fragment key={field.key}>
+                                    <div
+                                      className={`pub-foundation-field ${field.full ? "full" : ""}`}
+                                    >
+                                      <label>
+                                        {field.label}
+                                        {field.required ? " *" : ""}
+                                      </label>
 
-                                    {field.type === "textarea" ? (
-                                      <textarea
-                                        className="pub-foundation-textarea"
-                                        value={resourceForm[field.key] || ""}
-                                        maxLength={field.maxLength}
-                                        onChange={(e) =>
-                                          setResourceForm((current) => ({
-                                            ...current,
-                                            [field.key]: e.target.value,
-                                          }))
-                                        }
-                                        placeholder={field.placeholder}
-                                        disabled={sectionSaving || editingLocked}
-                                      />
-                                    ) : (
-                                      <input
-                                        className="pub-foundation-input"
-                                        type={field.type || "text"}
-                                        value={resourceForm[field.key] || ""}
-                                        maxLength={field.maxLength}
-                                        onChange={(e) =>
-                                          setResourceForm((current) => ({
-                                            ...current,
-                                            [field.key]: e.target.value,
-                                          }))
-                                        }
-                                        placeholder={field.placeholder}
-                                        disabled={sectionSaving || editingLocked}
-                                      />
-                                    )}
-                                  </div>
+                                      {field.type === "richtext" &&
+                                      (activeMenu === "posts" ||
+                                        activeMenu === "whitepapers" ||
+                                        activeMenu === "webinars") ? (
+                                        <PostRichTextEditor
+                                          value={resourceForm[field.key] || ""}
+                                          placeholder={field.placeholder}
+                                          disabled={sectionSaving || editingLocked}
+                                          maxImages={15}
+                                          allowImages={activeMenu === "posts"}
+                                          onUploadImage={
+                                            activeMenu === "posts"
+                                              ? handlePostContentImageUpload
+                                              : undefined
+                                          }
+                                          onChange={(nextValue) =>
+                                            setResourceForm((current) => ({
+                                              ...current,
+                                              [field.key]: nextValue,
+                                            }))
+                                          }
+                                        />
+                                      ) : field.type === "textarea" ? (
+                                        <textarea
+                                          className="pub-foundation-textarea"
+                                          value={resourceForm[field.key] || ""}
+                                          maxLength={field.maxLength}
+                                          onChange={(e) =>
+                                            setResourceForm((current) => ({
+                                              ...current,
+                                              [field.key]: e.target.value,
+                                            }))
+                                          }
+                                          placeholder={field.placeholder}
+                                          disabled={sectionSaving || editingLocked}
+                                        />
+                                      ) : (
+                                        <input
+                                          className="pub-foundation-input"
+                                          type={field.type || "text"}
+                                          value={resourceForm[field.key] || ""}
+                                          maxLength={field.maxLength}
+                                          onChange={(e) =>
+                                            setResourceForm((current) => ({
+                                              ...current,
+                                              [field.key]: e.target.value,
+                                            }))
+                                          }
+                                          placeholder={field.placeholder}
+                                          disabled={sectionSaving || editingLocked}
+                                        />
+                                      )}
+                                    </div>
+
+                                    {activeMenu === "posts" &&
+                                      field.key === "excerpt" &&
+                                      RESOURCE_CONFIG.posts.media && (
+                                        <label
+                                          className="pub-resource-media"
+                                          style={{
+                                            cursor:
+                                              editingLocked ||
+                                              sectionSaving ||
+                                              resourceMediaUploading
+                                                ? "not-allowed"
+                                                : "pointer",
+                                          }}
+                                        >
+                                          <div className="pub-resource-media-title">
+                                            <UploadCloud size={12} />
+                                            Post Banner
+                                          </div>
+                                          <div className="pub-resource-media-copy">
+                                            Select an image and it will upload automatically.
+                                            {" · "}
+                                            {RESOURCE_CONFIG.posts.media.helper}
+                                          </div>
+
+                                          <input
+                                            className="pub-media-input"
+                                            type="file"
+                                            accept={RESOURCE_CONFIG.posts.media.accept}
+                                            onChange={(e) => {
+                                              const file = e.target.files?.[0] || null;
+                                              e.currentTarget.value = "";
+                                              void handlePostBannerSelection(file);
+                                            }}
+                                            disabled={
+                                              editingLocked ||
+                                              sectionSaving ||
+                                              resourceMediaUploading
+                                            }
+                                          />
+
+                                          <div className="pub-resource-file" aria-hidden="true">
+                                            <span style={{ fontWeight: 700 }}>
+                                              {resourceMediaUploading
+                                                ? "Uploading banner…"
+                                                : resourceMediaFile
+                                                  ? resourceMediaFile.name
+                                                  : "Choose banner image"}
+                                            </span>
+                                          </div>
+
+                                          {resourceMediaUploading && (
+                                            <div className="pub-media-progress" aria-live="polite">
+                                              <div className="pub-media-progress-track">
+                                                <div
+                                                  className="pub-media-progress-fill"
+                                                  style={{
+                                                    width: `${Math.max(
+                                                      0,
+                                                      Math.min(100, mediaUploadProgress)
+                                                    )}%`,
+                                                  }}
+                                                />
+                                              </div>
+                                              <span className="pub-media-progress-value">
+                                                {mediaUploadProgress}%
+                                              </span>
+                                            </div>
+                                          )}
+
+                                          {postBannerPreview && !resourceMediaUploading && (
+                                            <div className="pub-post-banner-preview">
+                                              <img src={postBannerPreview} alt="Uploaded post banner" />
+                                              <div className="pub-post-banner-preview-copy">
+                                                <CircleCheck size={12} />
+                                                <span>Banner uploaded</span>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </label>
+                                      )}
+                                  </Fragment>
                                 ))}
 
-                                {RESOURCE_CONFIG[activeMenu].media && (
-                                  <div className="pub-resource-media">
-                                    <div className="pub-resource-media-title">
-                                      <UploadCloud size={12} />
-                                      {RESOURCE_CONFIG[activeMenu].media!.label}
+                                {activeMenu === "products" && (
+                                  <div className="pub-foundation-field full">
+                                    <label>Features</label>
+
+                                    <div className="pub-product-features">
+                                      <div className="pub-product-feature-entry">
+                                        <input
+                                          className="pub-foundation-input"
+                                          type="text"
+                                          value={productFeatureDraft}
+                                          maxLength={100}
+                                          placeholder="Type a feature and press Enter or Add"
+                                          onChange={(event) =>
+                                            setProductFeatureDraft(event.target.value)
+                                          }
+                                          onKeyDown={(event) => {
+                                            if (event.key === "Enter") {
+                                              event.preventDefault();
+                                              addProductFeature();
+                                            }
+                                          }}
+                                          disabled={sectionSaving || editingLocked}
+                                        />
+
+                                        <button
+                                          type="button"
+                                          className="pub-product-feature-add"
+                                          onClick={addProductFeature}
+                                          disabled={
+                                            sectionSaving ||
+                                            editingLocked ||
+                                            !productFeatureDraft.trim() ||
+                                            productFeatures.length >= 30
+                                          }
+                                        >
+                                          <Plus size={12} />
+                                          Add
+                                        </button>
+                                      </div>
+
+                                      <div className="pub-product-feature-note">
+                                        Add each feature separately. Up to 30 features.
+                                      </div>
+
+                                      {productFeatures.length > 0 && (
+                                        <div className="pub-product-feature-list">
+                                          {productFeatures.map((feature, index) => (
+                                            <span
+                                              className="pub-product-feature-pill"
+                                              key={`${feature}-${index}`}
+                                            >
+                                              {feature}
+                                              <button
+                                                type="button"
+                                                onClick={() => removeProductFeature(index)}
+                                                disabled={sectionSaving || editingLocked}
+                                                aria-label={`Remove ${feature}`}
+                                              >
+                                                <X size={10} />
+                                              </button>
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
                                     </div>
+                                  </div>
+                                )}
+
+                                {activeMenu !== "posts" &&
+                                  activeMenu !== "whitepapers" &&
+                                  activeMenu !== "webinars" &&
+                                  RESOURCE_CONFIG[activeMenu].media && (
+                                    <label
+                                      className="pub-resource-media"
+                                      style={{
+                                        cursor:
+                                          editingLocked || sectionSaving || resourceMediaUploading
+                                            ? "not-allowed"
+                                            : "pointer",
+                                      }}
+                                    >
+                                      <div className="pub-resource-media-title">
+                                        <UploadCloud size={12} />
+                                        {RESOURCE_CONFIG[activeMenu].media!.label}
+                                      </div>
+                                      <div className="pub-resource-media-copy">
+                                        {editingResourceId
+                                          ? "Choose a new file only if you want to replace the currently attached media."
+                                          : "Choose the media file to attach to this entry."}
+                                        {" · "}
+                                        {RESOURCE_CONFIG[activeMenu].media!.helper}
+                                      </div>
+
+                                      <input
+                                        className="pub-media-input"
+                                        type="file"
+                                        accept={RESOURCE_CONFIG[activeMenu].media!.accept}
+                                        onChange={(e) => {
+                                          setResourceMediaFile(e.target.files?.[0] || null);
+                                          e.currentTarget.value = "";
+                                        }}
+                                        disabled={
+                                          editingLocked ||
+                                          sectionSaving ||
+                                          resourceMediaUploading
+                                        }
+                                      />
+
+                                      <div className="pub-resource-file" aria-hidden="true">
+                                        <span style={{ fontWeight: 700 }}>
+                                          {resourceMediaFile ? "Replace selected file" : "Choose file"}
+                                        </span>
+                                        {resourceMediaFile && (
+                                          <span style={{ marginLeft: 7 }}>
+                                            {resourceMediaFile.name}
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {resourceMediaFile && (
+                                        <div className="pub-media-selected">
+                                          Selected: {resourceMediaFile.name}
+                                        </div>
+                                      )}
+
+                                      {resourceMediaUploading && (
+                                        <div className="pub-media-progress" aria-live="polite">
+                                          <div className="pub-media-progress-track">
+                                            <div
+                                              className="pub-media-progress-fill"
+                                              style={{
+                                                width: `${Math.max(
+                                                  0,
+                                                  Math.min(100, mediaUploadProgress)
+                                                )}%`,
+                                              }}
+                                            />
+                                          </div>
+                                          <span className="pub-media-progress-value">
+                                            {mediaUploadProgress}%
+                                          </span>
+                                        </div>
+                                      )}
+                                    </label>
+                                  )}
+
+                                {activeMenu === "whitepapers" &&
+                                  RESOURCE_CONFIG.whitepapers.media && (
+                                    <label
+                                      className="pub-resource-media"
+                                      style={{
+                                        cursor:
+                                          editingLocked ||
+                                          sectionSaving ||
+                                          resourceMediaUploading
+                                            ? "not-allowed"
+                                            : "pointer",
+                                      }}
+                                    >
+                                      <div className="pub-resource-media-title">
+                                        <UploadCloud size={12} />
+                                        Whitepaper Image
+                                      </div>
+
+                                      <div className="pub-resource-media-copy">
+                                        Select the whitepaper image and it will upload automatically.
+                                        {" · "}
+                                        {RESOURCE_CONFIG.whitepapers.media.helper}
+                                      </div>
+
+                                      <input
+                                        className="pub-media-input"
+                                        type="file"
+                                        accept={RESOURCE_CONFIG.whitepapers.media.accept}
+                                        onChange={(event) => {
+                                          const file = event.currentTarget.files?.[0] || null;
+                                          event.currentTarget.value = "";
+                                          void handleWhitepaperImageSelection(file);
+                                        }}
+                                        disabled={
+                                          editingLocked ||
+                                          sectionSaving ||
+                                          resourceMediaUploading
+                                        }
+                                      />
+
+                                      <div className="pub-resource-file" aria-hidden="true">
+                                        <span style={{ fontWeight: 700 }}>
+                                          {whitepaperImagePreview
+                                            ? "Replace whitepaper image"
+                                            : "Choose whitepaper image"}
+                                        </span>
+                                      </div>
+
+                                      {resourceMediaUploading && (
+                                        <div className="pub-media-progress" aria-live="polite">
+                                          <div className="pub-media-progress-track">
+                                            <div
+                                              className="pub-media-progress-fill"
+                                              style={{
+                                                width: `${Math.max(
+                                                  0,
+                                                  Math.min(100, mediaUploadProgress)
+                                                )}%`,
+                                              }}
+                                            />
+                                          </div>
+                                          <span className="pub-media-progress-value">
+                                            {mediaUploadProgress}%
+                                          </span>
+                                        </div>
+                                      )}
+
+                                      {whitepaperImagePreview && (
+                                        <div className="pub-post-banner-preview">
+                                          <img
+                                            src={whitepaperImagePreview}
+                                            alt="Uploaded whitepaper image"
+                                          />
+                                          <div className="pub-post-banner-preview-copy">
+                                            <CircleCheck size={11} />
+                                            <span>Whitepaper image uploaded</span>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </label>
+                                  )}
+
+                                {activeMenu === "webinars" && (
+                                  <div className="pub-webinar-media-grid">
+                                    <label
+                                      className="pub-resource-media"
+                                      style={{
+                                        cursor:
+                                          editingLocked ||
+                                          sectionSaving ||
+                                          resourceMediaUploading
+                                            ? "not-allowed"
+                                            : "pointer",
+                                      }}
+                                    >
+                                      <div className="pub-resource-media-title">
+                                        <UploadCloud size={12} />
+                                        Banner Image
+                                      </div>
+                                      <div className="pub-resource-media-copy">
+                                        Upload the hero/banner image for the webinar page.
+                                        {" · "}JPG, PNG or WEBP · max 8 MB
+                                      </div>
+
+                                      <input
+                                        className="pub-media-input"
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp"
+                                        onChange={(event) => {
+                                          const file = event.currentTarget.files?.[0] || null;
+                                          event.currentTarget.value = "";
+                                          void handleWebinarMediaSelection(file, "banner");
+                                        }}
+                                        disabled={
+                                          editingLocked ||
+                                          sectionSaving ||
+                                          resourceMediaUploading
+                                        }
+                                      />
+
+                                      <div className="pub-resource-file" aria-hidden="true">
+                                        <span style={{ fontWeight: 700 }}>
+                                          {webinarBannerPreview
+                                            ? "Replace banner image"
+                                            : "Choose banner image"}
+                                        </span>
+                                      </div>
+
+                                      {resourceMediaUploading && (
+                                        <div className="pub-media-progress" aria-live="polite">
+                                          <div className="pub-media-progress-track">
+                                            <div
+                                              className="pub-media-progress-fill"
+                                              style={{
+                                                width: `${Math.max(
+                                                  0,
+                                                  Math.min(100, mediaUploadProgress)
+                                                )}%`,
+                                              }}
+                                            />
+                                          </div>
+                                          <span className="pub-media-progress-value">
+                                            {mediaUploadProgress}%
+                                          </span>
+                                        </div>
+                                      )}
+
+                                      {webinarBannerPreview && (
+                                        <div className="pub-post-banner-preview webinar-banner">
+                                          <img
+                                            src={webinarBannerPreview}
+                                            alt="Uploaded webinar banner"
+                                          />
+                                          <div className="pub-post-banner-preview-copy">
+                                            <CircleCheck size={11} />
+                                            <span>Banner uploaded</span>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </label>
+
+                                    <label
+                                      className="pub-resource-media"
+                                      style={{
+                                        cursor:
+                                          editingLocked ||
+                                          sectionSaving ||
+                                          resourceMediaUploading
+                                            ? "not-allowed"
+                                            : "pointer",
+                                      }}
+                                    >
+                                      <div className="pub-resource-media-title">
+                                        <UserRound size={12} />
+                                        Speaker Image
+                                      </div>
+                                      <div className="pub-resource-media-copy">
+                                        Upload the speaker portrait shown below the webinar content.
+                                        {" · "}JPG, PNG or WEBP · max 5 MB
+                                      </div>
+
+                                      <input
+                                        className="pub-media-input"
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp"
+                                        onChange={(event) => {
+                                          const file = event.currentTarget.files?.[0] || null;
+                                          event.currentTarget.value = "";
+                                          void handleWebinarMediaSelection(file, "speaker");
+                                        }}
+                                        disabled={
+                                          editingLocked ||
+                                          sectionSaving ||
+                                          resourceMediaUploading
+                                        }
+                                      />
+
+                                      <div className="pub-resource-file" aria-hidden="true">
+                                        <span style={{ fontWeight: 700 }}>
+                                          {webinarSpeakerImagePreview
+                                            ? "Replace speaker image"
+                                            : "Choose speaker image"}
+                                        </span>
+                                      </div>
+
+                                      {webinarSpeakerImagePreview && (
+                                        <div className="pub-webinar-speaker-preview">
+                                          <img
+                                            src={webinarSpeakerImagePreview}
+                                            alt="Uploaded speaker"
+                                          />
+                                          <div className="pub-post-banner-preview-copy">
+                                            <CircleCheck size={11} />
+                                            <span>Speaker image uploaded</span>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </label>
+                                  </div>
+                                )}
+
+                                {activeMenu === "posts" && (
+                                  <div className="pub-post-video-embed">
+                                    <div className="pub-resource-media-title">
+                                      <Video size={12} />
+                                      Video Embed Link
+                                    </div>
+
                                     <div className="pub-resource-media-copy">
-                                      {editingResourceId
-                                        ? "Choose a new file only if you want to replace the currently attached media."
-                                        : "Choose the media file to attach to this entry."}
-                                      {" · "}
-                                      {RESOURCE_CONFIG[activeMenu].media!.helper}
+                                      Paste a YouTube, Vimeo, Loom, Dailymotion or Wistia video URL.
+                                      The video preview loads automatically.
                                     </div>
 
                                     <input
-                                      className="pub-resource-file"
-                                      type="file"
-                                      accept={RESOURCE_CONFIG[activeMenu].media!.accept}
-                                      onChange={(e) =>
-                                        setResourceMediaFile(e.target.files?.[0] || null)
+                                      className="pub-foundation-input"
+                                      type="url"
+                                      value={resourceForm.videoEmbedUrl || ""}
+                                      placeholder="https://www.youtube.com/watch?v=..."
+                                      onChange={(event) =>
+                                        setResourceForm((current) => ({
+                                          ...current,
+                                          videoEmbedUrl: event.target.value,
+                                        }))
                                       }
-                                      disabled={
-                                        editingLocked ||
-                                        sectionSaving ||
-                                        resourceMediaUploading
-                                      }
+                                      disabled={sectionSaving || editingLocked}
                                     />
 
-                                    {resourceMediaFile && (
-                                      <div className="pub-media-selected">
-                                        Selected: {resourceMediaFile.name}
+                                    {(resourceForm.videoEmbedUrl || "").trim() && (
+                                      getSafeVideoEmbedUrl(
+                                        resourceForm.videoEmbedUrl || ""
+                                      ) ? (
+                                        <div className="pub-post-video-preview">
+                                          <iframe
+                                            src={getSafeVideoEmbedUrl(
+                                              resourceForm.videoEmbedUrl || ""
+                                            )}
+                                            title="Video preview"
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                            allowFullScreen
+                                            referrerPolicy="strict-origin-when-cross-origin"
+                                          />
+                                        </div>
+                                      ) : (
+                                        <div className="pub-post-video-error">
+                                          Unsupported or invalid video URL. Use YouTube, Vimeo,
+                                          Loom, Dailymotion or Wistia.
+                                        </div>
+                                      )
+                                    )}
+                                  </div>
+                                )}
+
+                                {activeMenu === "posts" && (
+                                  <div className="pub-post-gallery-uploader">
+                                    <div className="pub-post-gallery-head">
+                                      <div>
+                                        <div className="pub-resource-media-title">
+                                          <ImagePlus size={12} />
+                                          Upload Gallery Media
+                                        </div>
+                                        <div className="pub-resource-media-copy" style={{ marginBottom: 0 }}>
+                                          Upload up to 10 JPG, PNG or WEBP images. Upload begins automatically after selection.
+                                        </div>
+                                      </div>
+                                      <span className="pub-post-gallery-count">
+                                        {postGalleryMedia.length}/10
+                                      </span>
+                                    </div>
+
+                                    <label
+                                      className={`pub-post-gallery-trigger ${
+                                        editingLocked ||
+                                        sectionSaving ||
+                                        postGalleryUploading ||
+                                        postGalleryMedia.length >= 10
+                                          ? "disabled"
+                                          : ""
+                                      }`}
+                                    >
+                                      <UploadCloud size={13} />
+                                      {postGalleryUploading
+                                        ? "Uploading gallery…"
+                                        : postGalleryMedia.length >= 10
+                                          ? "Gallery limit reached"
+                                          : "Choose gallery images"}
+
+                                      <input
+                                        className="pub-post-gallery-input"
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp"
+                                        multiple
+                                        onChange={(e) => {
+                                          // FileList is live in Chromium. Copy the File objects before
+                                          // clearing the input, otherwise the list becomes empty and the
+                                          // gallery upload silently never starts.
+                                          const files = Array.from(e.currentTarget.files || []);
+                                          e.currentTarget.value = "";
+                                          void handlePostGallerySelection(files);
+                                        }}
+                                        disabled={
+                                          editingLocked ||
+                                          sectionSaving ||
+                                          postGalleryUploading ||
+                                          postGalleryMedia.length >= 10
+                                        }
+                                      />
+                                    </label>
+
+                                    {postGalleryUploading && (
+                                      <div className="pub-media-progress" aria-live="polite">
+                                        <div className="pub-media-progress-track">
+                                          <div
+                                            className="pub-media-progress-fill"
+                                            style={{
+                                              width: `${Math.max(
+                                                0,
+                                                Math.min(100, postGalleryUploadProgress)
+                                              )}%`,
+                                            }}
+                                          />
+                                        </div>
+                                        <span className="pub-media-progress-value">
+                                          {postGalleryUploadProgress}%
+                                        </span>
                                       </div>
                                     )}
 
-                                    {resourceMediaUploading && (
-                                      <div className="pub-media-progress">
-                                        Uploading… {mediaUploadProgress}%
+                                    {postGalleryMedia.length > 0 && (
+                                      <div className="pub-post-gallery-preview">
+                                        {postGalleryMedia.map((media, index) => (
+                                          <div
+                                            className="pub-post-gallery-thumb"
+                                            key={`${media.url}-${index}`}
+                                          >
+                                            <img
+                                              src={media.url}
+                                              alt={`Gallery image ${index + 1}`}
+                                            />
+                                          </div>
+                                        ))}
                                       </div>
                                     )}
                                   </div>
@@ -5243,7 +8142,7 @@ export default function PublisherDashboard() {
                               <button
                                 className="pub-secondary-btn"
                                 onClick={closeResourceModal}
-                                disabled={sectionSaving || resourceMediaUploading}
+                                disabled={sectionSaving || resourceMediaUploading || postGalleryUploading}
                               >
                                 Cancel
                               </button>
@@ -5251,7 +8150,7 @@ export default function PublisherDashboard() {
                               <button
                                 className="pub-primary-btn"
                                 onClick={() => saveResource(activeMenu)}
-                                disabled={sectionSaving || editingLocked || resourceMediaUploading}
+                                disabled={sectionSaving || editingLocked || resourceMediaUploading || postGalleryUploading}
                               >
                                 <Save size={14} />
                                 {sectionSaving
@@ -5384,6 +8283,274 @@ export default function PublisherDashboard() {
           </section>
         </main>
       </div>
+
+      <AnimatePresence>
+        {whitepaperResponsesOpen && (
+          <motion.div
+            className="pub-resource-modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) closeWhitepaperResponses();
+            }}
+          >
+            <motion.div
+              className="pub-responses-modal"
+              initial={{ opacity: 0, y: 18, scale: .985 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: .99 }}
+              transition={{ duration: .22, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <div className="pub-resource-modal-head">
+                <div>
+                  <div className="pub-foundation-kicker">
+                    <Users size={11} />
+                    Whitepaper leads
+                  </div>
+                  <h2 className="pub-resource-modal-title">Responses</h2>
+                  <p className="pub-resource-modal-copy">{whitepaperResponsesTitle}</p>
+                </div>
+
+                <button
+                  type="button"
+                  className="pub-resource-modal-close"
+                  onClick={closeWhitepaperResponses}
+                  disabled={whitepaperResponsesLoading}
+                  aria-label="Close responses"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              <div className="pub-responses-body">
+                {whitepaperResponsesError ? (
+                  <div className="pub-foundation-feedback error">
+                    {whitepaperResponsesError}
+                  </div>
+                ) : whitepaperResponsesLoading ? (
+                  <div className="pub-responses-empty">Loading responses…</div>
+                ) : whitepaperResponses.length === 0 ? (
+                  <div className="pub-responses-empty">
+                    No responses have been submitted for this whitepaper yet.
+                  </div>
+                ) : (
+                  <>
+                    <div className="pub-responses-count">
+                      <Users size={10} />
+                      {whitepaperResponses.length} response
+                      {whitepaperResponses.length === 1 ? "" : "s"}
+                    </div>
+
+                    <div className="pub-responses-table-wrap">
+                      <table className="pub-responses-table">
+                        <thead>
+                          <tr>
+                            <th>First Name</th>
+                            <th>Last Name</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Company</th>
+                            <th>Address</th>
+                            <th>Submitted</th>
+                            <th>Message</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {whitepaperResponses.map((response) => {
+                            const expanded =
+                              expandedWhitepaperResponseId === response.id;
+
+                            return (
+                              <Fragment key={response.id}>
+                                <tr>
+                                  <td>{response.firstName || "—"}</td>
+                                  <td>{response.lastName || "—"}</td>
+                                  <td>{response.email || "—"}</td>
+                                  <td>{response.phone || "—"}</td>
+                                  <td>{response.company || "—"}</td>
+                                  <td>{response.address || "—"}</td>
+                                  <td>{formatResourceDate(response.submittedAt)}</td>
+                                  <td>
+                                    <button
+                                      type="button"
+                                      className={`pub-response-message-btn ${
+                                        expanded ? "open" : ""
+                                      }`}
+                                      onClick={() =>
+                                        setExpandedWhitepaperResponseId(
+                                          expanded ? null : response.id
+                                        )
+                                      }
+                                      title={expanded ? "Hide message" : "Show message"}
+                                    >
+                                      <ChevronDown size={13} />
+                                    </button>
+                                  </td>
+                                </tr>
+
+                                {expanded && (
+                                  <tr className="pub-response-expanded">
+                                    <td colSpan={8}>
+                                      <div className="pub-response-message-panel">
+                                        <div className="pub-response-message-label">
+                                          <MessageSquareText size={11} />
+                                          Message
+                                        </div>
+                                        <div className="pub-response-message-copy">
+                                          {response.message?.trim() ||
+                                            "No message was provided with this response."}
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {webinarResponsesOpen && (
+          <motion.div
+            className="pub-resource-modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) closeWebinarResponses();
+            }}
+          >
+            <motion.div
+              className="pub-responses-modal"
+              initial={{ opacity: 0, y: 18, scale: .985 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: .99 }}
+              transition={{ duration: .22, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <div className="pub-resource-modal-head">
+                <div>
+                  <div className="pub-foundation-kicker">
+                    <Users size={11} />
+                    Webinar leads
+                  </div>
+                  <h2 className="pub-resource-modal-title">Responses</h2>
+                  <p className="pub-resource-modal-copy">{webinarResponsesTitle}</p>
+                </div>
+
+                <button
+                  type="button"
+                  className="pub-resource-modal-close"
+                  onClick={closeWebinarResponses}
+                  disabled={webinarResponsesLoading}
+                  aria-label="Close responses"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              <div className="pub-responses-body">
+                {webinarResponsesError ? (
+                  <div className="pub-foundation-feedback error">
+                    {webinarResponsesError}
+                  </div>
+                ) : webinarResponsesLoading ? (
+                  <div className="pub-responses-empty">Loading responses…</div>
+                ) : webinarResponses.length === 0 ? (
+                  <div className="pub-responses-empty">
+                    No responses have been submitted for this webinar yet.
+                  </div>
+                ) : (
+                  <>
+                    <div className="pub-responses-count">
+                      <Users size={10} />
+                      {webinarResponses.length} response
+                      {webinarResponses.length === 1 ? "" : "s"}
+                    </div>
+
+                    <div className="pub-responses-table-wrap">
+                      <table className="pub-responses-table">
+                        <thead>
+                          <tr>
+                            <th>First Name</th>
+                            <th>Last Name</th>
+                            <th>Email</th>
+                            <th>Country</th>
+                            <th>Company</th>
+                            <th>Submitted</th>
+                            <th>Message</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {webinarResponses.map((response) => {
+                            const expanded =
+                              expandedWebinarResponseId === response.id;
+
+                            return (
+                              <Fragment key={response.id}>
+                                <tr>
+                                  <td>{response.firstName || "—"}</td>
+                                  <td>{response.lastName || "—"}</td>
+                                  <td>{response.email || "—"}</td>
+                                  <td>{response.country || "—"}</td>
+                                  <td>{response.company || "—"}</td>
+                                  <td>{formatResourceDate(response.submittedAt)}</td>
+                                  <td>
+                                    <button
+                                      type="button"
+                                      className={`pub-response-message-btn ${
+                                        expanded ? "open" : ""
+                                      }`}
+                                      onClick={() =>
+                                        setExpandedWebinarResponseId(
+                                          expanded ? null : response.id
+                                        )
+                                      }
+                                      title={expanded ? "Hide message" : "Show message"}
+                                    >
+                                      <ChevronDown size={13} />
+                                    </button>
+                                  </td>
+                                </tr>
+
+                                {expanded && (
+                                  <tr className="pub-response-expanded">
+                                    <td colSpan={7}>
+                                      <div className="pub-response-message-panel">
+                                        <div className="pub-response-message-label">
+                                          <MessageSquareText size={11} />
+                                          Message
+                                        </div>
+                                        <div className="pub-response-message-copy">
+                                          {response.message?.trim() ||
+                                            "No message was provided with this response."}
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showLogoutModal && (
