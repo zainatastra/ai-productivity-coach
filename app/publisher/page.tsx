@@ -1931,24 +1931,36 @@ export default function PublisherDashboard() {
   const readPostGalleryMedia = (value: unknown): PostGalleryMedia[] => {
     if (!Array.isArray(value)) return [];
 
-    return value
-      .map((item) => {
-        if (!item || typeof item !== "object") return null;
-        const media = item as Record<string, unknown>;
-        const url = typeof media.url === "string" ? media.url : "";
-        if (!url) return null;
+    const galleryMedia: PostGalleryMedia[] = [];
 
-        return {
-          url,
-          contentType:
-            typeof media.contentType === "string" ? media.contentType : undefined,
-          size: typeof media.size === "number" ? media.size : undefined,
-          uploadedAt:
-            typeof media.uploadedAt === "string" ? media.uploadedAt : undefined,
-        } satisfies PostGalleryMedia;
-      })
-      .filter((item): item is PostGalleryMedia => item !== null)
-      .slice(0, 10);
+    for (const item of value) {
+      if (!item || typeof item !== "object") continue;
+
+      const media = item as Record<string, unknown>;
+      const url = typeof media.url === "string" ? media.url : "";
+
+      if (!url) continue;
+
+      const normalized: PostGalleryMedia = { url };
+
+      if (typeof media.contentType === "string") {
+        normalized.contentType = media.contentType;
+      }
+
+      if (typeof media.size === "number") {
+        normalized.size = media.size;
+      }
+
+      if (typeof media.uploadedAt === "string") {
+        normalized.uploadedAt = media.uploadedAt;
+      }
+
+      galleryMedia.push(normalized);
+
+      if (galleryMedia.length >= 10) break;
+    }
+
+    return galleryMedia;
   };
 
   const addProductFeature = () => {
