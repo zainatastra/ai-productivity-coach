@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
 import Header from "@/components/Header";
 import { useLanguage } from "@/services/LanguageContext";
 
@@ -19,10 +18,14 @@ const EMBED_BODY_CLASS = "ey-eric-providers-embedded";
  * origin before accepting these messages.
  */
 export default function ProviderEmbedBridge() {
-  const pathname = usePathname();
   const { setLanguage } = useLanguage();
   const [isEmbedded, setIsEmbedded] = useState<boolean | null>(null);
   const frameRef = useRef<number | null>(null);
+  const setLanguageRef = useRef(setLanguage);
+
+  useEffect(() => {
+    setLanguageRef.current = setLanguage;
+  }, [setLanguage]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -38,7 +41,7 @@ export default function ProviderEmbedBridge() {
     document.body.classList.add(EMBED_BODY_CLASS);
 
     if (requestedLanguage === "de" || requestedLanguage === "en") {
-      setLanguage(requestedLanguage);
+      setLanguageRef.current(requestedLanguage);
     }
 
     const targetOrigin = (() => {
@@ -99,11 +102,11 @@ export default function ProviderEmbedBridge() {
         window.cancelAnimationFrame(frameRef.current);
       }
     };
-  }, [pathname, setLanguage]);
+  }, []);
 
   // Avoid briefly rendering the EY-ERIC application header inside WordPress
   // while the browser determines whether this page is framed.
-  if (isEmbedded === null || isEmbedded) return null;
+  if (isEmbedded === null) return null;
 
-  return <Header />;
+  return <Header hideAuthActions={isEmbedded} />;
 }

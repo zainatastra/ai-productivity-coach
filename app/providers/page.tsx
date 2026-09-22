@@ -309,7 +309,7 @@ export default function ProvidersDirectory() {
 
         .prov-grid {
           display:grid;
-          grid-template-columns:repeat(auto-fill,minmax(0,282px));
+          grid-template-columns:repeat(4,minmax(0,1fr));
           justify-content:start;
           gap:15px;
         }
@@ -450,6 +450,14 @@ export default function ProvidersDirectory() {
           color:#929aa6;
           font-size:11px;
           line-height:1.7;
+        }
+
+        @media(max-width:980px){
+          .prov-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+        }
+
+        @media(max-width:760px){
+          .prov-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
         }
 
         @media(max-width:640px){

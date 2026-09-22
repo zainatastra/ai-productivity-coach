@@ -10,12 +10,14 @@ interface HeaderProps {
   setShowClearModal?: (value: boolean) => void;
   setMobileSidebarOpen?: (value: boolean) => void;
   onOpenAuthModal?: (mode: "login" | "signup") => void;
+  hideAuthActions?: boolean;
 }
 
 export default function Header({
   setShowClearModal,
   setMobileSidebarOpen,
   onOpenAuthModal,
+  hideAuthActions = false,
 }: HeaderProps) {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -241,7 +243,7 @@ export default function Header({
 
           <LanguageSwitcher />
 
-          {!loading && !user && (
+          {!hideAuthActions && !loading && !user && (
             <>
               <button
                 className="hdr-btn hdr-btn-outline"

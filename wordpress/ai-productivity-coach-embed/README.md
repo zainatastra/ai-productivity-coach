@@ -1,4 +1,4 @@
-# AI Productivity Coach Embed 1.1.0
+# AI Productivity Coach Embed 1.1.1
 
 This single WordPress plugin embeds both public EY-ERIC experiences.
 
@@ -23,6 +23,10 @@ Elementor Shortcode widget:
 
 The provider directory, company profiles, posts, whitepapers, webinars and
 their public forms navigate inside the same embedded area.
+
+The embedded provider header keeps the Providers control and German/English
+language switcher. Login and registration actions remain available on the
+standalone EY-ERIC site and are intentionally hidden inside WordPress.
 
 Optional attributes:
 
