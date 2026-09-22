@@ -106,7 +106,7 @@ export default function ProviderEmbedBridge() {
 
   // Avoid briefly rendering the EY-ERIC application header inside WordPress
   // while the browser determines whether this page is framed.
-  if (isEmbedded === null) return null;
+  if (isEmbedded === null || isEmbedded) return null;
 
-  return <Header hideAuthActions={isEmbedded} />;
+  return <Header />;
 }

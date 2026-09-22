@@ -2,7 +2,7 @@
 /**
  * Plugin Name: AI Productivity Coach Embed
  * Description: Embeds the EY-ERIC productivity coach and public provider experience in WordPress via shortcodes.
- * Version: 1.1.1
+ * Version: 1.1.2
  * Author: Zain
  */
 
