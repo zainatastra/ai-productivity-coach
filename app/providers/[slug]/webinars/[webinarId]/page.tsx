@@ -11,7 +11,7 @@ import {
   UserRound,
   Video,
 } from "lucide-react";
-import Header from "@/components/Header";
+import ProviderEmbedBridge from "@/components/ProviderEmbedBridge";
 import { API_BASE_URL } from "@/services/api";
 
 type WebinarPayload = {
@@ -683,7 +683,7 @@ export default function PublicWebinarPage() {
       `}</style>
 
       <div className="wb-root">
-        <Header />
+        <ProviderEmbedBridge />
 
         <main className="wb-shell">
           <button

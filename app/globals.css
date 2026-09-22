@@ -30,6 +30,21 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Public provider pages remove their viewport floor when hosted by WordPress.
+   This lets the parent plugin grow and shrink the iframe to the real content. */
+body.ey-eric-providers-embedded {
+  overflow-x: hidden;
+  background: #f5f6f8;
+}
+
+body.ey-eric-providers-embedded .prov-root,
+body.ey-eric-providers-embedded .pp-root,
+body.ey-eric-providers-embedded .pa-root,
+body.ey-eric-providers-embedded .wp-root,
+body.ey-eric-providers-embedded .wb-root {
+  min-height: 0 !important;
+}
+
 /* Headings */
 h1 {
   @apply text-2xl md:text-3xl font-bold tracking-tight text-gray-900;

@@ -11,7 +11,7 @@ import {
   Clock3,
   Newspaper,
 } from "lucide-react";
-import Header from "@/components/Header";
+import ProviderEmbedBridge from "@/components/ProviderEmbedBridge";
 import { API_BASE_URL } from "@/services/api";
 import { useLanguage } from "@/services/LanguageContext";
 
@@ -1001,7 +1001,7 @@ export default function ProviderPostPage() {
       `}</style>
 
       <div className="pa-root">
-        <Header />
+        <ProviderEmbedBridge />
 
         <main className="pa-shell">
           <button

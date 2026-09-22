@@ -22,7 +22,7 @@ import {
   Users,
   Video,
 } from "lucide-react";
-import Header from "@/components/Header";
+import ProviderEmbedBridge from "@/components/ProviderEmbedBridge";
 import { API_BASE_URL } from "@/services/api";
 import { useLanguage } from "@/services/LanguageContext";
 
@@ -1211,7 +1211,7 @@ export default function ProviderProfilePage() {
       `}</style>
 
       <div className="pp-root">
-        <Header />
+        <ProviderEmbedBridge />
 
         <main className="pp-shell">
           <button className="pp-back" onClick={() => router.push("/providers")}>

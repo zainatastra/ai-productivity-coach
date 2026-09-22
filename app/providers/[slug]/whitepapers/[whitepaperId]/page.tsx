@@ -13,7 +13,7 @@ import {
   Phone,
   Send,
 } from "lucide-react";
-import Header from "@/components/Header";
+import ProviderEmbedBridge from "@/components/ProviderEmbedBridge";
 import { API_BASE_URL } from "@/services/api";
 import { useLanguage } from "@/services/LanguageContext";
 
@@ -661,7 +661,7 @@ export default function PublicWhitepaperPage() {
       `}</style>
 
       <div className="wp-root">
-        <Header />
+        <ProviderEmbedBridge />
 
         <main className="wp-shell">
           <button
