@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using FirebaseAdmin.Auth;
+using Microsoft.AspNetCore.Authorization;
 
 namespace AiProductivityCoach.Api.Controllers
 {
     [ApiController]
     [Route("api/dev")]
+    [Authorize(Policy = "AdminOnly")]
     public class DevController : ControllerBase
     {
         [HttpPost("make-admin/{uid}")]

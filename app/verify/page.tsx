@@ -10,6 +10,7 @@ import {
 import { ArrowLeft, ShieldCheck } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { API_BASE_URL } from "@/services/api";
+import { getPendingPassword, clearPendingPassword } from "@/services/pendingSignup";
 import { app } from "@/services/firebase";
 
 export default function VerifyPage() {
@@ -104,6 +105,11 @@ export default function VerifyPage() {
       setLoading(true);
       setError("");
 
+      // Fail before the one-time code is consumed if the in-memory password is gone (e.g. page reload).
+      if (!getPendingPassword()) {
+        throw new Error("Your signup session expired. Please go back and sign up again.");
+      }
+
       const res = await fetch(`${API_BASE_URL}/api/auth/verify-otp`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
@@ -119,7 +125,7 @@ export default function VerifyPage() {
         );
       }
 
-      const password   = sessionStorage.getItem("verifyPassword")   ?? "";
+      const password   = getPendingPassword();
       const name       = sessionStorage.getItem("verifyName")       ?? "";
       const surname    = sessionStorage.getItem("verifySurname")    ?? "";
       const company    = sessionStorage.getItem("verifyCompany")    ?? "";
@@ -136,6 +142,7 @@ export default function VerifyPage() {
         body:    JSON.stringify({ name, surname, company, telephone, newsletter }),
       });
 
+      clearPendingPassword();
       sessionStorage.clear();
       router.replace("/");
     } catch (err: any) {

@@ -7,7 +7,9 @@ import AuthModal from "@/components/AuthModal";
 import { useLanguage } from "@/services/LanguageContext";
 import { useAuth } from "@/services/AuthContext";
 
-const MAIN_APP_URL = "https://ai-productivity-coach-zeta.vercel.app";
+const MAIN_APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
+  "https://ai-productivity-coach-zeta.vercel.app";
 
 type AuthModalState = {
   open: boolean;

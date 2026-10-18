@@ -284,11 +284,12 @@ Would you like to see what activities they spend their working week doing?
 
                 if (!response.IsSuccessStatusCode)
                 {
+                    Console.WriteLine($"[OpenAI] Error {(int)response.StatusCode}: {responseString}");
+
                     return StatusCode((int)response.StatusCode, new
                     {
                         success = false,
-                        message = "OpenAI API error",
-                        details = responseString
+                        message = "OpenAI API error"
                     });
                 }
 
@@ -305,7 +306,8 @@ Would you like to see what activities they spend their working week doing?
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                Console.WriteLine($"[Productivity] {ex}");
+                return StatusCode(500, new { success = false, message = "Unable to generate a response right now." });
             }
         }
     }

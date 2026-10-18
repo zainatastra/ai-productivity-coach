@@ -14,6 +14,7 @@ import { ArrowLeft, Eye, EyeOff, ShieldCheck, X } from "lucide-react";
 
 import { app } from "@/services/firebase";
 import { API_BASE_URL } from "@/services/api";
+import { setPendingPassword, getPendingPassword, clearPendingPassword } from "@/services/pendingSignup";
 import { useLanguage } from "@/services/LanguageContext";
 import ConfirmModal from "@/components/ConfirmModal";
 import FloatingInput from "@/components/FloatingInput";
@@ -272,7 +273,7 @@ export default function AuthModal({
       if (!res.ok) throw new Error("Failed to send OTP");
 
       sessionStorage.setItem("verifyEmail", email);
-      sessionStorage.setItem("verifyPassword", password);
+      setPendingPassword(password);
       sessionStorage.setItem("verifyName", name);
       sessionStorage.setItem("verifySurname", surname);
       sessionStorage.setItem("verifyCompany", company);
@@ -367,7 +368,7 @@ export default function AuthModal({
         );
       }
 
-      const verifyPassword = sessionStorage.getItem("verifyPassword") ?? password;
+      const verifyPassword = getPendingPassword() || password;
       const verifyName = sessionStorage.getItem("verifyName") ?? name;
       const verifySurname = sessionStorage.getItem("verifySurname") ?? surname;
       const verifyCompany = sessionStorage.getItem("verifyCompany") ?? company;
@@ -395,7 +396,7 @@ export default function AuthModal({
       });
 
       sessionStorage.removeItem("verifyEmail");
-      sessionStorage.removeItem("verifyPassword");
+      clearPendingPassword();
       sessionStorage.removeItem("verifyName");
       sessionStorage.removeItem("verifySurname");
       sessionStorage.removeItem("verifyCompany");
