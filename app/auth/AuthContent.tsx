@@ -21,6 +21,7 @@ import ConfirmModal from "@/components/ConfirmModal";
 import FloatingInput from "@/components/FloatingInput";
 
 import { API_BASE_URL } from "@/services/api";
+import { setPendingPassword } from "@/services/pendingSignup";
 
 // ✅ FIX HYDRATION ERROR
 const PhoneInput = dynamic(
@@ -222,7 +223,7 @@ if (!phone || !phone.startsWith("+")) {
 
     // ✅ STEP 2: Store everything in session
     sessionStorage.setItem("verifyEmail", email);
-    sessionStorage.setItem("verifyPassword", password);
+    setPendingPassword(password);
     sessionStorage.setItem("verifyName", name);
     sessionStorage.setItem("verifySurname", surname);
     sessionStorage.setItem("verifyCompany", company);

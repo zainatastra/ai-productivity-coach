@@ -98,10 +98,7 @@ namespace AiProductivityCoach.Api.Controllers
             // We intentionally query only published companies first, then match
             // against the slug stored inside approvedSnapshot.company.
             // This prevents draft/current company data from becoming public.
-            var snapshot = await _firestore
-                .Collection("companies")
-                .WhereEqualTo("status", "published")
-                .GetSnapshotAsync();
+            var snapshot = await GetPublishedCompaniesForSlugAsync(normalizedSlug);
 
             Response.Headers.CacheControl = "public,max-age=60,stale-while-revalidate=300";
 
@@ -176,10 +173,7 @@ namespace AiProductivityCoach.Api.Controllers
                 return BadRequest(new { message = "Provider slug and post slug are required." });
             }
 
-            var snapshot = await _firestore
-                .Collection("companies")
-                .WhereEqualTo("status", "published")
-                .GetSnapshotAsync();
+            var snapshot = await GetPublishedCompaniesForSlugAsync(normalizedSlug);
 
             Response.Headers.CacheControl = "public,max-age=60,stale-while-revalidate=300";
 
@@ -283,10 +277,7 @@ namespace AiProductivityCoach.Api.Controllers
                 });
             }
 
-            var snapshot = await _firestore
-                .Collection("companies")
-                .WhereEqualTo("status", "published")
-                .GetSnapshotAsync();
+            var snapshot = await GetPublishedCompaniesForSlugAsync(normalizedSlug);
 
             Response.Headers.CacheControl = "public,max-age=60,stale-while-revalidate=300";
 
@@ -375,10 +366,7 @@ namespace AiProductivityCoach.Api.Controllers
                 });
             }
 
-            var snapshot = await _firestore
-                .Collection("companies")
-                .WhereEqualTo("status", "published")
-                .GetSnapshotAsync();
+            var snapshot = await GetPublishedCompaniesForSlugAsync(normalizedSlug);
 
             Response.Headers.CacheControl = "public,max-age=60,stale-while-revalidate=300";
 
@@ -447,6 +435,29 @@ namespace AiProductivityCoach.Api.Controllers
         // =====================================================
         // 🔐 SNAPSHOT HELPERS
         // =====================================================
+        // Fast path: look up by the indexed approvedSlug written at approval time.
+        // Falls back to the full published scan for legacy documents without it,
+        // so results are identical; callers still verify the slug inside the snapshot.
+        private async Task<QuerySnapshot> GetPublishedCompaniesForSlugAsync(string normalizedSlug)
+        {
+            if (!string.IsNullOrWhiteSpace(normalizedSlug))
+            {
+                var fast = await _firestore
+                    .Collection("companies")
+                    .WhereEqualTo("status", "published")
+                    .WhereEqualTo("approvedSlug", normalizedSlug)
+                    .GetSnapshotAsync();
+
+                if (fast.Count > 0)
+                    return fast;
+            }
+
+            return await _firestore
+                .Collection("companies")
+                .WhereEqualTo("status", "published")
+                .GetSnapshotAsync();
+        }
+
         private static bool IsPubliclyVisible(Dictionary<string, object> data)
         {
             if (!string.Equals(

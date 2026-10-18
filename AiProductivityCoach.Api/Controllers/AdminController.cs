@@ -1546,8 +1546,18 @@ public async Task<IActionResult> SaveUIText([FromBody] Dictionary<string, Dictio
             int moderateUsers = 0;
             int inactiveUsers = 0;
 
-            foreach (var userDoc in usersSnapshot.Documents)
+            // Fetch every user's conversations in parallel instead of one-by-one.
+            var userDocs = usersSnapshot.Documents.ToList();
+            var conversationSnapshots = await Task.WhenAll(userDocs.Select(doc =>
+                _firestore
+                    .Collection("users")
+                    .Document(doc.Id)
+                    .Collection("conversations")
+                    .GetSnapshotAsync()));
+
+            for (var userIndex = 0; userIndex < userDocs.Count; userIndex++)
             {
+                var userDoc = userDocs[userIndex];
                 var userData = userDoc.ToDictionary();
 
                 DateTime? createdAt = null;
@@ -1561,11 +1571,7 @@ public async Task<IActionResult> SaveUIText([FromBody] Dictionary<string, Dictio
                 bool hasConversationLast30Days = false;
                 int promptsLast7Days = 0;
 
-                var convSnapshot = await _firestore
-                    .Collection("users")
-                    .Document(userDoc.Id)
-                    .Collection("conversations")
-                    .GetSnapshotAsync();
+                var convSnapshot = conversationSnapshots[userIndex];
 
                 totalResponses += convSnapshot.Count;
 

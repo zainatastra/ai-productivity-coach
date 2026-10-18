@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace AiProductivityCoach.Api.Controllers
 {
@@ -15,6 +17,7 @@ namespace AiProductivityCoach.Api.Controllers
     public class AuthController : ControllerBase
     {
         private readonly FirestoreDb _firestore;
+        private const int MaxVerifyAttempts = 5;
         private readonly IConfiguration _configuration;
 
         public AuthController(FirestoreDb firestore, IConfiguration configuration)
@@ -89,13 +92,14 @@ namespace AiProductivityCoach.Api.Controllers
             });
 
             // ================= GENERATE OTP =================
-            var otp    = new Random().Next(100000, 999999).ToString();
+            var otp    = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
             var otpRef = _firestore.Collection("email_otps").Document(email);
 
             await otpRef.SetAsync(new
             {
                 email     = email,
                 code      = otp,
+                attempts  = 0,
                 expiresAt = Timestamp.FromDateTime(DateTime.UtcNow.AddMinutes(5)),
             });
 
@@ -213,8 +217,26 @@ namespace AiProductivityCoach.Api.Controllers
                 return BadRequest("OTP expired. Please request a new code.");
             }
 
-            if (storedCode != request.Code)
+            // Limit wrong guesses per issued code (brute-force protection).
+            var attempts = snapshot.ContainsField("attempts")
+                ? snapshot.GetValue<long>("attempts")
+                : 0L;
+
+            if (attempts >= MaxVerifyAttempts)
+            {
+                await otpRef.DeleteAsync();
+                return BadRequest("Too many incorrect attempts. Please request a new code.");
+            }
+
+            var codesMatch = CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(storedCode ?? string.Empty),
+                Encoding.UTF8.GetBytes(request.Code.Trim()));
+
+            if (!codesMatch)
+            {
+                await otpRef.UpdateAsync("attempts", attempts + 1);
                 return BadRequest("Invalid OTP. Please check the code and try again.");
+            }
 
             // ✅ OTP verified — delete it so it can't be reused
             await otpRef.DeleteAsync();
