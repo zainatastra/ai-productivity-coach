@@ -117,7 +117,7 @@ type AdminToast = {
 
 export default function AdminDashboard() {
   const auth = getAuth(adminApp);
-  const { language } = useLanguage();
+  const { language, setLanguage } = useLanguage();
 
   const [data,                      setData]                      = useState<DashboardData | null>(null);
   const [loading,                   setLoading]                   = useState(true);
@@ -2571,6 +2571,7 @@ export default function AdminDashboard() {
                   <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
                     <AiPublishingWorkspace
                       language={language === "en" ? "en" : "de"}
+                      onLanguageChange={(next) => setLanguage(next)}
                       getToken={async () => (auth.currentUser ? auth.currentUser.getIdToken() : null)}
                     />
                   </div>
