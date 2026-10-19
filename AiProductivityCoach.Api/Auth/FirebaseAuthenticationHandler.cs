@@ -81,6 +81,16 @@ namespace AiProductivityCoach.Api.Auth
                 var role = ResolveTrustedRole(decodedToken, email);
                 claims.Add(new Claim(ClaimTypes.Role, role));
 
+                // Platform (eyeric | midrange) is trusted only when it comes from a
+                // server-set Firebase custom claim. Unknown values are ignored.
+                if (decodedToken.Claims.TryGetValue("platform", out var rawPlatform))
+                {
+                    var platform = rawPlatform?.ToString()?.Trim().ToLowerInvariant();
+
+                    if (AiProductivityCoach.Api.AiPublishing.Domain.Platforms.IsValid(platform))
+                        claims.Add(new Claim("platform", platform!));
+                }
+
                 // Publisher sessions have a hard 60-minute lifetime measured from
                 // Firebase's original auth_time claim. Refreshing the Firebase ID
                 // token does not extend this window. Missing/invalid auth_time fails

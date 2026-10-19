@@ -7,6 +7,7 @@ import { Eye } from "lucide-react";
 import { API_BASE_URL } from "@/services/api";
 import { useLanguage } from "@/services/LanguageContext";
 import { adminApp } from "@/services/firebase";
+import AiPublishingWorkspace from "@/components/ai-publishing/AiPublishingWorkspace";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid,
@@ -19,7 +20,7 @@ import {
   ClipboardCheck, Building2, CircleCheck, RotateCcw, Ban, Trash2,
   ExternalLink, Clock3, ShieldCheck, ChevronRight,
   History, Activity, Filter, RefreshCw, CalendarDays,
-  MoreVertical, KeyRound, ShieldOff,
+  MoreVertical, KeyRound, ShieldOff, Sparkles,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PieChart, Pie, Cell } from "recharts";
@@ -49,13 +50,14 @@ interface DashboardData {
   inactiveUsers: number;
 }
 
-type AdminMenu = "dashboard" | "users" | "access" | "reviews" | "audit" | "bugs" | "content" | "conversations" | "settings";
+type AdminMenu = "dashboard" | "users" | "access" | "reviews" | "aipublishing" | "audit" | "bugs" | "content" | "conversations" | "settings";
 
 const PAGE_TITLES: Record<AdminMenu, string> = {
   dashboard:     "Admin Dashboard",
   users:         "Users",
   access:        "Access Control",
   reviews:       "Provider Reviews",
+  aipublishing:  "KI-Publishing",
   audit:         "Audit Logs",
   bugs:          "Bug Reports",
   content:       "Content Management",
@@ -190,6 +192,7 @@ export default function AdminDashboard() {
     { key: "users",         label: "Users",         Icon: Users },
     { key: "access",        label: "Access Control", Icon: UserCog },
     { key: "reviews",       label: "Provider Reviews", Icon: ClipboardCheck },
+    { key: "aipublishing",  label: language === "en" ? "AI Publishing" : "KI-Publishing", Icon: Sparkles },
     { key: "audit",         label: "Audit Logs", Icon: History },
     { key: "bugs",          label: "Bug Reports",   Icon: Bug },
     { key: "content",       label: "Content",       Icon: FileText },
@@ -2560,6 +2563,16 @@ export default function AdminDashboard() {
                         </tbody>
                       </table>
                     </div>
+                  </div>
+                )}
+
+                {/* ══════════ AI PUBLISHING (shared engine, Phase 1) ══════════ */}
+                {activeMenu === "aipublishing" && (
+                  <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+                    <AiPublishingWorkspace
+                      language={language === "en" ? "en" : "de"}
+                      getToken={async () => (auth.currentUser ? auth.currentUser.getIdToken() : null)}
+                    />
                   </div>
                 )}
 
