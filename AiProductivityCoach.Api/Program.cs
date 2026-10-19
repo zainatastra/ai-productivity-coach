@@ -3,6 +3,9 @@ using Google.Apis.Auth.OAuth2;
 using Google.Cloud.Firestore;
 using AiProductivityCoach.Api.Auth;
 using AiProductivityCoach.Api.Services;
+using AiProductivityCoach.Api.AiPublishing.Jobs;
+using AiProductivityCoach.Api.AiPublishing.Security;
+using AiProductivityCoach.Api.AiPublishing.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -173,6 +176,18 @@ Console.WriteLine(
         ? "[Storage] Vercel Blob bridge registered; VERCEL_MEDIA_BASE_URL is not configured yet."
         : $"[Storage] Vercel Blob bridge registered (Frontend = {vercelMediaBaseUrl})"
 );
+
+// ==========================================
+// 🤖 AI PUBLISHING ENGINE (shared by EY ERIC + MIDRANGE)
+// Background jobs, audit trail, notifications, safe source fetching.
+// ==========================================
+
+builder.Services.AddSingleton<SafeHttpFetcher>();
+builder.Services.AddSingleton<AiAuditService>();
+builder.Services.AddSingleton<AiNotificationService>();
+builder.Services.AddSingleton<AiJobService>();
+builder.Services.AddSingleton<IAiJobHandler, SourceCheckJobHandler>();
+builder.Services.AddHostedService<AiJobWorker>();
 
 // ==========================================
 // 🔐 AUTHENTICATION
