@@ -64,13 +64,14 @@ type Notice = {
 interface Props {
   getToken: () => Promise<string | null>;
   language: Lang;
+  onLanguageChange?: (lang: Lang) => void;
 }
 
 const ACTIVE_JOB = ["queued", "researching", "indexing", "planning", "generating", "generating_media"];
 
 /* ───────────── component ───────────── */
 
-export default function AiPublishingWorkspace({ getToken, language }: Props) {
+export default function AiPublishingWorkspace({ getToken, language, onLanguageChange }: Props) {
   const lang: Lang = language === "en" ? "en" : "de";
   const t = (key: keyof typeof TEXT) => TEXT[key][lang];
 
@@ -127,6 +128,7 @@ export default function AiPublishingWorkspace({ getToken, language }: Props) {
     async (path: string, init?: RequestInit) => {
       try {
         const token = await getToken();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if (!token) return { ok: false, status: 401, data: null as any, code: "denied" };
 
         const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -142,6 +144,7 @@ export default function AiPublishingWorkspace({ getToken, language }: Props) {
         const data = res.status === 204 ? null : await res.json().catch(() => null);
         return { ok: res.ok, status: res.status, data, code: data?.code as string | undefined };
       } catch {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return { ok: false, status: 0, data: null as any, code: "network" };
       }
     },
@@ -429,7 +432,7 @@ export default function AiPublishingWorkspace({ getToken, language }: Props) {
 
   /* ───────────── render ───────────── */
   return (
-    <div className="aip-root">
+    <div className="aip-root" translate="no">
       <style>{CSS}</style>
 
       {/* ── header ── */}
@@ -438,6 +441,14 @@ export default function AiPublishingWorkspace({ getToken, language }: Props) {
           <h2 className="aip-title">{t("title")}</h2>
           <p className="aip-sub">{t("subtitle")}</p>
         </div>
+
+        <div className="aip-head-right">
+          {onLanguageChange && (
+            <div className="aip-lang" role="group" aria-label="Language">
+              <button className={lang === "de" ? "on" : ""} onClick={() => onLanguageChange("de")}>DE</button>
+              <button className={lang === "en" ? "on" : ""} onClick={() => onLanguageChange("en")}>EN</button>
+            </div>
+          )}
 
         <div className="aip-bell-wrap" ref={bellRef}>
           <button
@@ -473,7 +484,7 @@ export default function AiPublishingWorkspace({ getToken, language }: Props) {
                         : n.severity === "warning" ? <AlertTriangle size={15} color="#d97706" />
                         : <XCircle size={15} color="#dc2626" />}
                       <span>
-                        {lang === "de" ? n.messageDe : n.messageEn}
+                        <span>{lang === "de" ? n.messageDe : n.messageEn}</span>
                         <em>{fmt(n.createdAt)}</em>
                       </span>
                     </button>
@@ -486,6 +497,7 @@ export default function AiPublishingWorkspace({ getToken, language }: Props) {
               )}
             </div>
           )}
+        </div>
         </div>
       </div>
 
@@ -521,7 +533,7 @@ export default function AiPublishingWorkspace({ getToken, language }: Props) {
                     <div className="aip-logo"><Building2 size={22} /></div>
                     <div className="aip-provider-main">
                       <h3 className="aip-provider-name">
-                        {provider.name}
+                        <span>{provider.name}</span>
                         {archived && <span className="aip-pill gray">{t("archived")}</span>}
                       </h3>
                       <a className="aip-site" href={provider.website} target="_blank" rel="noreferrer">
@@ -561,7 +573,7 @@ export default function AiPublishingWorkspace({ getToken, language }: Props) {
                       disabled={archived || startingCheck || !!activeJob}
                     >
                       {activeJob ? <Loader2 size={14} className="aip-spin" /> : <RefreshCw size={14} />}
-                      {activeJob ? t("checking") : t("checkSources")}
+                      <span>{activeJob ? t("checking") : t("checkSources")}</span>
                     </button>
                     <span className="aip-hint">{t("checkHelp")}</span>
                   </div>
@@ -580,7 +592,7 @@ export default function AiPublishingWorkspace({ getToken, language }: Props) {
                         {step.status === "running" ? <Loader2 size={12} className="aip-spin" />
                           : step.status === "done" ? <CheckCircle2 size={12} color="#059669" />
                           : <span className="aip-dot" />}
-                        {lang === "de" ? step.labelDe : step.labelEn}
+                        <span>{lang === "de" ? step.labelDe : step.labelEn}</span>
                         {step.detail ? <em> · {step.detail}</em> : null}
                       </div>
                     ))}
@@ -635,7 +647,7 @@ export default function AiPublishingWorkspace({ getToken, language }: Props) {
                           <td>
                             <span className={`aip-pill ${source.status === "available" ? "green" : source.status === "unavailable" ? "red" : source.status === "checking" ? "amber" : "gray"}`}>
                               {source.status === "checking" && <Loader2 size={10} className="aip-spin" />}
-                              {tr(SOURCE_STATUS[source.status], lang, source.status)}
+                              <span>{tr(SOURCE_STATUS[source.status], lang, source.status)}</span>
                             </span>
                             {source.status === "unavailable" && source.errorCode && (
                               <div className="aip-reason">{tr(SOURCE_ERRORS[source.errorCode], lang, source.errorCode)}</div>
@@ -678,7 +690,7 @@ export default function AiPublishingWorkspace({ getToken, language }: Props) {
                           </span>
                           <div className="aip-meta">
                             {fmt(job.createdAt)}
-                            {(lang === "de" ? job.messageDe : job.messageEn) ? ` · ${lang === "de" ? job.messageDe : job.messageEn}` : ""}
+                            <span>{(lang === "de" ? job.messageDe : job.messageEn) ? ` · ${lang === "de" ? job.messageDe : job.messageEn}` : ""}</span>
                           </div>
                         </div>
                         {["failed", "partially_completed", "cancelled"].includes(job.status) && !archived && (
@@ -711,7 +723,7 @@ export default function AiPublishingWorkspace({ getToken, language }: Props) {
               </div>
               <button className="aip-btn aip-create-btn" type="submit" disabled={creating || !name.trim() || !website.trim()}>
                 {creating ? <Loader2 size={14} className="aip-spin" /> : <Plus size={14} />}
-                {creating ? t("creating") : t("create")}
+                <span>{creating ? t("creating") : t("create")}</span>
               </button>
             </div>
             {formError && <div className="aip-error-text">{formError}</div>}
@@ -766,13 +778,13 @@ export default function AiPublishingWorkspace({ getToken, language }: Props) {
       {confirm && (
         <div className="aip-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setConfirm(null); }}>
           <div className="aip-dialog">
-            <p>{confirm.kind === "source" ? t("confirmRemove") : t("confirmArchive")}</p>
+            <p><span>{confirm.kind === "source" ? t("confirmRemove") : t("confirmArchive")}</span></p>
             <div className="aip-row">
               <button
                 className="aip-btn danger"
                 onClick={() => (confirm.kind === "source" && confirm.id ? removeSource(confirm.id) : setArchived(true))}
               >
-                {confirm.kind === "source" ? t("remove") : t("archive")}
+                <span>{confirm.kind === "source" ? t("remove") : t("archive")}</span>
               </button>
               <button className="aip-btn ghost" onClick={() => setConfirm(null)}>{t("cancel")}</button>
             </div>
@@ -869,6 +881,10 @@ const CSS = `
 .aip-link.danger { color:#dc2626; }
 .aip-jobs { display:flex; flex-direction:column; gap:8px; }
 .aip-job { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 12px; border:1px solid #eef0f3; border-radius:14px; background:#fafbfc; font-size:13px; }
+.aip-head-right { display:flex; align-items:center; gap:10px; }
+.aip-lang { display:inline-flex; background:#f3f4f6; border-radius:999px; padding:3px; }
+.aip-lang button { border:none; background:transparent; font-family:inherit; font-size:11px; font-weight:800; color:#6b7280; padding:6px 11px; border-radius:999px; cursor:pointer; }
+.aip-lang button.on { background:#fff; color:#111; box-shadow:0 1px 4px rgba(0,0,0,.08); }
 .aip-bell-wrap { position:relative; }
 .aip-bell { position:relative; width:40px; height:40px; border-radius:999px; border:1px solid #e5e7eb; background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#374151; }
 .aip-bell:hover { background:#f5f5f5; }
