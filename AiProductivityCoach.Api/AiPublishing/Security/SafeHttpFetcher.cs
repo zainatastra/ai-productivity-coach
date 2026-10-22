@@ -17,6 +17,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Security
         int TextLength,
         string? ErrorCode);
 
+    public sealed record FetchedDocument(FetchResult Meta, string? Body);
+
     /// <summary>
     /// HTTP fetcher for admin-supplied source URLs.
     /// - Every connection is checked against the public-address rule at connect time
@@ -93,7 +95,27 @@ namespace AiProductivityCoach.Api.AiPublishing.Security
             throw new HttpRequestException("connect_failed", last);
         }
 
-        public async Task<FetchResult> FetchAsync(string url, CancellationToken cancellationToken)
+        /// <summary>Fetches a page and returns its HTML body together with the metadata.</summary>
+        public async Task<FetchedDocument> FetchDocumentAsync(string url, CancellationToken cancellationToken)
+        {
+            string? body = null;
+            var meta = await FetchAsync(url, cancellationToken, b => body = b);
+            return new FetchedDocument(meta, body);
+        }
+
+        /// <summary>Fetches a plain-text/XML resource (robots.txt, sitemap). Null when unavailable.</summary>
+        public async Task<string?> FetchTextAsync(string url, CancellationToken cancellationToken)
+        {
+            string? body = null;
+            var meta = await FetchAsync(url, cancellationToken, b => body = b, textual: true);
+            return meta.Ok ? body : null;
+        }
+
+        public async Task<FetchResult> FetchAsync(
+            string url,
+            CancellationToken cancellationToken,
+            Action<string>? onBody = null,
+            bool textual = false)
         {
             var current = url;
 
@@ -139,10 +161,11 @@ namespace AiProductivityCoach.Api.AiPublishing.Security
                         return new FetchResult(true, status, current, contentType, null, null, null, 0, null);
                     }
 
-                    if (contentType != null &&
-                        contentType != "text/html" &&
-                        contentType != "application/xhtml+xml" &&
-                        contentType != "text/plain")
+                    var allowed = textual
+                        ? new[] { "text/plain", "text/xml", "application/xml", "application/rss+xml", "text/html" }
+                        : new[] { "text/html", "application/xhtml+xml", "text/plain" };
+
+                    if (contentType != null && !allowed.Contains(contentType))
                     {
                         return Fail(current, status, "unsupported_content", contentType);
                     }
@@ -152,6 +175,14 @@ namespace AiProductivityCoach.Api.AiPublishing.Security
                         return Fail(current, status, "too_large", contentType);
 
                     var html = DecodeBody(body, response.Content.Headers.ContentType?.CharSet);
+                    onBody?.Invoke(html);
+
+                    if (textual)
+                    {
+                        return new FetchResult(true, status, current, contentType, null, null,
+                            Convert.ToHexString(SHA256.HashData(body)).ToLowerInvariant(), html.Length, null);
+                    }
+
                     var title = ExtractTitle(html);
                     var language = ExtractLanguage(html);
                     var textLength = ExtractTextLength(html);

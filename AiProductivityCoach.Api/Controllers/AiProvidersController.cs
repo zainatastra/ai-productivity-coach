@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using AiProductivityCoach.Api.AiPublishing.Domain;
 using AiProductivityCoach.Api.AiPublishing.Jobs;
+using AiProductivityCoach.Api.AiPublishing.Knowledge;
 using AiProductivityCoach.Api.AiPublishing.Security;
 using AiProductivityCoach.Api.AiPublishing.Services;
 
@@ -23,12 +24,14 @@ namespace AiProductivityCoach.Api.Controllers
         private readonly FirestoreDb _firestore;
         private readonly AiAuditService _audit;
         private readonly AiJobService _jobs;
+        private readonly KnowledgeStore _knowledge;
 
-        public AiProvidersController(FirestoreDb firestore, AiAuditService audit, AiJobService jobs)
+        public AiProvidersController(FirestoreDb firestore, AiAuditService audit, AiJobService jobs, KnowledgeStore knowledge)
         {
             _firestore = firestore;
             _audit = audit;
             _jobs = jobs;
+            _knowledge = knowledge;
         }
 
         public class CreateProviderDto
@@ -300,6 +303,7 @@ namespace AiProductivityCoach.Api.Controllers
 
             await sourceRef.SetAsync(NewSource(url.Normalized!, type, actor.UserId, isPrimary: false));
             await RecomputeSummaryAsync(provider.Reference);
+            await provider.Reference.UpdateAsync("knowledgeStale", true);
 
             await _audit.LogAsync(actor, AuditActions.SourceAdded, providerId, null, null,
                 new Dictionary<string, object> { ["url"] = url.Normalized!, ["type"] = type });
@@ -325,8 +329,11 @@ namespace AiProductivityCoach.Api.Controllers
             if (source.TryGetValue<bool>("isPrimary", out var primary) && primary)
                 return Error(409, "source_primary", "The provider website cannot be removed.");
 
+            // Everything learned from this source leaves the knowledge base with it.
+            await _knowledge.DeleteBySourceAsync(providerId, sourceId);
             await sourceRef.DeleteAsync();
             await RecomputeSummaryAsync(provider.Reference);
+            await provider.Reference.UpdateAsync("knowledgeStale", true);
 
             await _audit.LogAsync(actor, AuditActions.SourceRemoved, providerId, null, null,
                 new Dictionary<string, object> { ["url"] = FirestoreApi.GetString(source.ToDictionary(), "url") });

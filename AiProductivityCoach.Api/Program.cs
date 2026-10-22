@@ -3,7 +3,9 @@ using Google.Apis.Auth.OAuth2;
 using Google.Cloud.Firestore;
 using AiProductivityCoach.Api.Auth;
 using AiProductivityCoach.Api.Services;
+using AiProductivityCoach.Api.AiPublishing.Ai;
 using AiProductivityCoach.Api.AiPublishing.Jobs;
+using AiProductivityCoach.Api.AiPublishing.Knowledge;
 using AiProductivityCoach.Api.AiPublishing.Security;
 using AiProductivityCoach.Api.AiPublishing.Services;
 
@@ -186,7 +188,12 @@ builder.Services.AddSingleton<SafeHttpFetcher>();
 builder.Services.AddSingleton<AiAuditService>();
 builder.Services.AddSingleton<AiNotificationService>();
 builder.Services.AddSingleton<AiJobService>();
+builder.Services.AddSingleton<OpenAiClient>();
+builder.Services.AddSingleton<AiRunService>();
+builder.Services.AddSingleton<KnowledgeStore>();
+builder.Services.AddSingleton<KnowledgeSearchService>();
 builder.Services.AddSingleton<IAiJobHandler, SourceCheckJobHandler>();
+builder.Services.AddSingleton<IAiJobHandler, ResearchJobHandler>();
 builder.Services.AddHostedService<AiJobWorker>();
 
 // ==========================================

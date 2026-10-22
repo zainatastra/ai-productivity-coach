@@ -34,6 +34,9 @@ namespace AiProductivityCoach.Api.AiPublishing.Jobs
     public sealed class JobContext
     {
         private readonly AiJobService _jobs;
+        private int _lastProgress;
+        private int _dirty;
+        private int _writing;
 
         public JobContext(
             AiJobService jobs,
@@ -60,21 +63,91 @@ namespace AiProductivityCoach.Api.AiPublishing.Jobs
         public Dictionary<string, object> Payload { get; }
         public List<Dictionary<string, object>> Steps { get; }
 
-        public Task SetStatusAsync(string status) => _jobs.SetStatusAsync(JobId, status);
+        public async Task SetStatusAsync(string status)
+        {
+            // The status label is informational; a transient write conflict must not fail the job.
+            for (var attempt = 0; attempt < 2; attempt++)
+            {
+                try
+                {
+                    await _jobs.SetStatusAsync(JobId, status);
+                    return;
+                }
+                catch (Exception) when (attempt == 0)
+                {
+                    await Task.Delay(500);
+                }
+                catch (Exception)
+                {
+                    return;
+                }
+            }
+        }
 
+        /// <summary>
+        /// Reports progress. Many tasks may call this at once, so writes are coalesced: only one
+        /// write is in flight and it always carries the latest state. A failed progress write is
+        /// ignored - progress is a UI hint and must never be able to fail the job itself.
+        /// </summary>
         public async Task ReportAsync(int progress, string? stepKey = null, string? stepStatus = null, string? detail = null)
         {
             if (stepKey != null)
             {
-                var step = Steps.FirstOrDefault(s => s["key"]?.ToString() == stepKey);
-                if (step != null)
+                lock (Steps)
                 {
-                    if (stepStatus != null) step["status"] = stepStatus;
-                    if (detail != null) step["detail"] = detail;
+                    var step = Steps.FirstOrDefault(s => s["key"]?.ToString() == stepKey);
+                    if (step != null)
+                    {
+                        if (stepStatus != null) step["status"] = stepStatus;
+                        if (detail != null) step["detail"] = detail;
+                    }
                 }
             }
 
-            await _jobs.ReportProgressAsync(JobId, progress, Steps);
+            // Progress never moves backwards (e.g. when the number of planned pages grows).
+            int previous, next;
+            do
+            {
+                previous = _lastProgress;
+                next = Math.Max(previous, Math.Clamp(progress, 0, 100));
+            }
+            while (Interlocked.CompareExchange(ref _lastProgress, next, previous) != previous);
+
+            Volatile.Write(ref _dirty, 1);
+
+            while (true)
+            {
+                if (Interlocked.CompareExchange(ref _writing, 1, 0) != 0)
+                    return; // another caller is writing and will pick up this update
+
+                try
+                {
+                    while (Volatile.Read(ref _dirty) == 1)
+                    {
+                        Volatile.Write(ref _dirty, 0);
+
+                        List<Dictionary<string, object>> snapshot;
+                        lock (Steps)
+                            snapshot = Steps.Select(step => new Dictionary<string, object>(step)).ToList();
+
+                        try
+                        {
+                            await _jobs.ReportProgressAsync(JobId, _lastProgress, snapshot);
+                        }
+                        catch (Exception)
+                        {
+                            // Contention or a transient error: the next report carries the state again.
+                        }
+                    }
+                }
+                finally
+                {
+                    Volatile.Write(ref _writing, 0);
+                }
+
+                if (Volatile.Read(ref _dirty) == 0)
+                    return;
+            }
         }
 
         public Task<bool> IsCancelledAsync() => _jobs.IsCancelledAsync(JobId);

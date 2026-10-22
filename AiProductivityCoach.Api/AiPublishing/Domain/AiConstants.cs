@@ -56,6 +56,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Domain
     public static class JobTypes
     {
         public const string SourceCheck = "source.check";
+        public const string Research = "research";
     }
 
     public static class JobStatus
@@ -100,6 +101,10 @@ namespace AiProductivityCoach.Api.AiPublishing.Domain
         public const string JobCreated = "JOB_CREATED";
         public const string JobCancelled = "JOB_CANCELLED";
         public const string JobRetried = "JOB_RETRIED";
+        public const string ResearchStarted = "RESEARCH_STARTED";
+        public const string ResearchCompleted = "RESEARCH_COMPLETED";
+        public const string ResearchFailed = "RESEARCH_FAILED";
+        public const string KnowledgeUpdated = "KNOWLEDGE_BASE_UPDATED";
     }
 
     public static class AiCollections
@@ -109,5 +114,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Domain
         public const string Jobs = "ai_jobs";
         public const string Notifications = "ai_notifications";
         public const string AuditLogs = "ai_audit_logs";
+        public const string Runs = "ai_runs";
+        public const string Pages = "pages";
+        public const string Chunks = "knowledge_chunks";
     }
 }
