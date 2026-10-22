@@ -32,14 +32,15 @@ namespace AiProductivityCoach.Api.AiPublishing.Jobs
             Dictionary<string, object>? payload,
             List<Dictionary<string, object>> steps)
         {
-            // Idempotency: never run two jobs of the same type for the same provider.
+            // Idempotency: never run two jobs for the same provider at once.
             var existing = await Jobs
                 .WhereEqualTo("providerId", providerId)
                 .Limit(100)
                 .GetSnapshotAsync();
 
+            // One job at a time per provider: crawling, source checks and analysis all write
+            // the same sources/knowledge, so a second job is answered with the running one.
             var running = existing.Documents.FirstOrDefault(doc =>
-                doc.GetValue<string>("type") == type &&
                 JobStatus.IsRunnable(doc.GetValue<string>("status")));
 
             if (running != null)

@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle, ArchiveRestore, Archive, ArrowLeft, Bell, Building2, CheckCircle2,
-  ExternalLink, Globe, Link2, Loader2, Plus, RefreshCw, RotateCcw, Trash2, XCircle, Ban, X,
+  ExternalLink, Globe, Link2, Loader2, Plus, RefreshCw, RotateCcw, Search, Trash2, XCircle, Ban, X,
 } from "lucide-react";
 import { API_BASE_URL } from "@/services/api";
 import {
-  ERRORS, JOB_STATUS, JOB_TYPES, Lang, SOURCE_ERRORS, SOURCE_STATUS, SOURCE_TYPES, TEXT, tr,
+  ERRORS, EXTRA_ERRORS, JOB_STATUS, JOB_TYPES, JOB_TYPES_EXTRA, Lang, SOURCE_ERRORS, SOURCE_STATUS,
+  SOURCE_TYPES, TEXT, EXTRA_SOURCE_ERRORS, tr,
 } from "./aiPublishingText";
+import { KnowledgeData, PageRow, PagesCard, ProfileCard, ReadinessCard, SearchCard } from "./KnowledgePanels";
 
 /* ───────────── types ───────────── */
 
@@ -21,6 +23,7 @@ type Provider = {
   sourceCount?: number;
   sourceSummary?: { total: number; available: number; unavailable: number };
   lastSourceCheckAt?: string;
+  readiness?: { score: number };
   createdAt?: string;
 };
 
@@ -88,6 +91,9 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
   const [provider, setProvider] = useState<Provider | null>(null);
   const [sources, setSources] = useState<Source[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [knowledge, setKnowledge] = useState<KnowledgeData | null>(null);
+  const [pages, setPages] = useState<PageRow[]>([]);
+  const [startingResearch, setStartingResearch] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
 
@@ -154,7 +160,7 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
   const errorText = (res: { status: number; code?: string }) => {
     if (res.code === "network" || res.status === 0) return t("networkError");
     if (res.status === 401 || res.status === 403) return t("denied");
-    return tr(res.code ? ERRORS[res.code] : undefined, lang, t("genericError"));
+    return tr(res.code ? ERRORS[res.code] || EXTRA_ERRORS[res.code] : undefined, lang, t("genericError"));
   };
 
   /* ── loaders ── */
@@ -182,10 +188,12 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
     async (id: string, silent = false) => {
       if (!silent) setDetailLoading(true);
 
-      const [p, s, j] = await Promise.all([
+      const [p, s, j, k, pg] = await Promise.all([
         api(`/api/ai/providers/${id}`),
         api(`/api/ai/providers/${id}/sources`),
         api(`/api/ai/providers/${id}/jobs`),
+        api(`/api/ai/providers/${id}/knowledge`),
+        api(`/api/ai/providers/${id}/knowledge/pages`),
       ]);
 
       if (selectedRef.current !== id) return;
@@ -194,6 +202,8 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
         setProvider(p.data);
         setSources(s.ok ? s.data || [] : []);
         setJobs(j.ok ? j.data || [] : []);
+        setKnowledge(k.ok ? k.data : null);
+        setPages(pg.ok ? pg.data || [] : []);
         setDetailError("");
       } else {
         setDetailError(errorText(p));
@@ -279,6 +289,8 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
     setProvider(null);
     setSources([]);
     setJobs([]);
+    setKnowledge(null);
+    setPages([]);
     setEditing(false);
     setSourceError("");
     setSelectedId(id);
@@ -392,6 +404,27 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
     });
 
     setStartingCheck(false);
+
+    if (!res.ok) {
+      setSourceError(errorText(res));
+      return;
+    }
+
+    await loadDetail(provider.id, true);
+  };
+
+  const startResearch = async () => {
+    if (!provider || startingResearch) return;
+
+    setStartingResearch(true);
+    setSourceError("");
+
+    const res = await api(`/api/ai/providers/${provider.id}/research`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+
+    setStartingResearch(false);
 
     if (!res.ok) {
       setSourceError(errorText(res));
@@ -569,13 +602,20 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
                   <div className="aip-check">
                     <button
                       className="aip-btn"
+                      onClick={startResearch}
+                      disabled={archived || startingResearch || !!activeJob}
+                    >
+                      {activeJob ? <Loader2 size={14} className="aip-spin" /> : <Search size={14} />}
+                      <span>{activeJob ? t("researching") : t("research")}</span>
+                    </button>
+                    <span className="aip-hint">{t("researchHelp")}</span>
+                    <button
+                      className="aip-link"
                       onClick={startCheck}
                       disabled={archived || startingCheck || !!activeJob}
                     >
-                      {activeJob ? <Loader2 size={14} className="aip-spin" /> : <RefreshCw size={14} />}
-                      <span>{activeJob ? t("checking") : t("checkSources")}</span>
+                      <RefreshCw size={12} /> <span>{t("quickCheck")}</span>
                     </button>
-                    <span className="aip-hint">{t("checkHelp")}</span>
                   </div>
                 </div>
 
@@ -583,7 +623,7 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
                 {activeJob && (
                   <div className="aip-progress">
                     <div className="aip-progress-top">
-                      <span>{tr(JOB_TYPES[activeJob.type], lang, activeJob.type)} · {tr(JOB_STATUS[activeJob.status], lang)}</span>
+                      <span>{tr(JOB_TYPES[activeJob.type] || JOB_TYPES_EXTRA[activeJob.type], lang, activeJob.type)} · {tr(JOB_STATUS[activeJob.status], lang)}</span>
                       <span>{activeJob.progress}%</span>
                     </div>
                     <div className="aip-bar"><div style={{ width: `${activeJob.progress}%` }} /></div>
@@ -591,6 +631,7 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
                       <div key={step.key} className="aip-step">
                         {step.status === "running" ? <Loader2 size={12} className="aip-spin" />
                           : step.status === "done" ? <CheckCircle2 size={12} color="#059669" />
+                          : step.status === "failed" ? <XCircle size={12} color="#dc2626" />
                           : <span className="aip-dot" />}
                         <span>{lang === "de" ? step.labelDe : step.labelEn}</span>
                         {step.detail ? <em> · {step.detail}</em> : null}
@@ -650,7 +691,7 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
                               <span>{tr(SOURCE_STATUS[source.status], lang, source.status)}</span>
                             </span>
                             {source.status === "unavailable" && source.errorCode && (
-                              <div className="aip-reason">{tr(SOURCE_ERRORS[source.errorCode], lang, source.errorCode)}</div>
+                              <div className="aip-reason">{tr(SOURCE_ERRORS[source.errorCode] || EXTRA_SOURCE_ERRORS[source.errorCode], lang, source.errorCode)}</div>
                             )}
                           </td>
                           <td className="hide-mob aip-title-cell">{source.title || "—"}</td>
@@ -674,6 +715,12 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
                 )}
               </div>
 
+              {/* knowledge: readiness, AI findings, pages, search */}
+              <ReadinessCard lang={lang} knowledge={knowledge} />
+              <ProfileCard lang={lang} knowledge={knowledge} />
+              <PagesCard lang={lang} pages={pages} />
+              {knowledge?.readiness && <SearchCard lang={lang} providerId={provider.id} api={api} />}
+
               {/* job history */}
               <div className="aip-card">
                 <h3 className="aip-h3">{t("jobs")}</h3>
@@ -684,7 +731,7 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
                     {jobs.map((job) => (
                       <div key={job.id} className="aip-job">
                         <div>
-                          <strong>{tr(JOB_TYPES[job.type], lang, job.type)}</strong>
+                          <strong>{tr(JOB_TYPES[job.type] || JOB_TYPES_EXTRA[job.type], lang, job.type)}</strong>
                           <span className={`aip-pill ${job.status === "completed" ? "green" : job.status === "partially_completed" ? "amber" : job.status === "failed" ? "red" : job.status === "cancelled" ? "gray" : "blue"}`}>
                             {tr(JOB_STATUS[job.status], lang, job.status)}
                           </span>
@@ -758,7 +805,11 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
                       <span className="aip-pill gray">
                         {p.sourceCount ?? 0} {t("sources")}
                       </span>
-                      {p.lastSourceCheckAt ? (
+                      {p.readiness ? (
+                        <span className={`aip-pill ${p.readiness.score >= 70 ? "green" : p.readiness.score >= 40 ? "amber" : "red"}`}>
+                          {t("readinessLabel")} {p.readiness.score}%
+                        </span>
+                      ) : p.lastSourceCheckAt ? (
                         <span className={`aip-pill ${p.sourceSummary && p.sourceSummary.unavailable > 0 ? "amber" : "green"}`}>
                           {p.sourceSummary?.available ?? 0} {t("sourcesAvailable")}
                         </span>
@@ -901,6 +952,44 @@ const CSS = `
 .aip-overlay { position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:100; display:flex; align-items:center; justify-content:center; padding:16px; }
 .aip-dialog { background:#fff; border-radius:18px; padding:22px; max-width:380px; width:100%; box-shadow:0 24px 64px rgba(0,0,0,.25); }
 .aip-dialog p { font-size:14px; font-weight:600; color:#111827; margin:0 0 14px; line-height:1.5; }
+.aip-banner { display:flex; align-items:center; gap:8px; padding:10px 12px; border-radius:12px; font-size:12.5px; font-weight:600; margin-bottom:12px; }
+.aip-banner.warn { background:#fef3c7; color:#92400e; }
+.aip-ready-top { display:flex; align-items:center; gap:18px; flex-wrap:wrap; margin-bottom:16px; }
+.aip-ring { position:relative; width:86px; height:86px; flex-shrink:0; }
+.aip-ring-num { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:19px; font-weight:800; letter-spacing:-.03em; }
+.aip-ready-label { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#9ca3af; }
+.aip-ready-verdict { font-size:15px; font-weight:800; color:#0d1117; margin:2px 0 4px; }
+.aip-cats { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:6px; margin-bottom:14px; }
+.aip-cat { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:12px; background:#fafbfc; border:1px solid #eef0f3; font-size:12.5px; color:#4b5563; }
+.aip-cat.ok svg { color:#059669; } .aip-cat.partial svg { color:#d97706; } .aip-cat.missing svg { color:#cbd5e1; }
+.aip-cat-name { flex:1; font-weight:600; color:#1f2937; }
+.aip-cat-count { font-size:11px; font-weight:800; color:#6b7280; }
+.aip-recs { margin-bottom:14px; }
+.aip-rec { display:flex; gap:8px; align-items:flex-start; font-size:12.5px; color:#92400e; background:#fffbeb; border:1px solid #fde68a; border-radius:12px; padding:8px 10px; margin-top:6px; line-height:1.45; }
+.aip-rec svg { flex-shrink:0; margin-top:2px; }
+.aip-gate-row { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:8px; margin-top:6px; }
+.aip-gate { display:flex; flex-direction:column; gap:3px; padding:10px 12px; border-radius:14px; border:1px solid #e5e7eb; background:#fff; font-size:12.5px; }
+.aip-gate.ready { border-color:#bbf7d0; background:#f0fdf4; } .aip-gate.warn { border-color:#fde68a; background:#fffbeb; } .aip-gate.blocked { border-color:#fecaca; background:#fef2f2; }
+.aip-gate-state { display:inline-flex; align-items:center; gap:5px; font-weight:700; font-size:11.5px; }
+.aip-gate.ready .aip-gate-state { color:#166534; } .aip-gate.warn .aip-gate-state { color:#92400e; } .aip-gate.blocked .aip-gate-state { color:#991b1b; }
+.aip-gate small { color:#6b7280; font-size:11px; line-height:1.35; }
+.aip-soon { font-style:normal; font-size:10px; font-weight:800; color:#075985; background:#e0f2fe; border-radius:999px; padding:2px 7px; width:fit-content; }
+.aip-profile { display:flex; flex-direction:column; gap:14px; }
+.aip-profile-text { font-size:13.5px; line-height:1.65; color:#374151; margin:0; }
+.aip-products { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:8px; }
+.aip-product { display:flex; flex-direction:column; gap:3px; padding:10px 12px; border:1px solid #eef0f3; border-radius:14px; background:#fafbfc; font-size:12.5px; }
+.aip-product strong { color:#0d1117; font-size:13px; } .aip-product-sum { color:#6b7280; line-height:1.45; }
+.aip-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.aip-chip { display:inline-flex; align-items:center; padding:5px 11px; border-radius:999px; background:#f0f9ff; border:1px solid #bae6fd; color:#075985; font-size:12px; font-weight:600; }
+.aip-chip.sm { padding:2px 8px; font-size:10.5px; background:#f3f4f6; border-color:#e5e7eb; color:#4b5563; }
+.aip-contact { display:flex; flex-wrap:wrap; gap:14px; font-size:13px; color:#374151; }
+.aip-contact > span { display:inline-flex; align-items:center; gap:6px; }
+.aip-hits { display:flex; flex-direction:column; gap:10px; margin-top:12px; }
+.aip-hit { border:1px solid #eef0f3; border-radius:14px; background:#fafbfc; padding:12px 14px; }
+.aip-hit-top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+.aip-hit-url { font-size:11px; color:#9ca3af; margin:2px 0 6px; }
+.aip-hit-text { font-size:12.5px; line-height:1.6; color:#374151; margin:0; white-space:pre-line; }
+.aip-link:disabled { opacity:.45; cursor:not-allowed; }
 .aip-spin { animation:aip-spin 1s linear infinite; }
 @keyframes aip-spin { to { transform:rotate(360deg); } }
 @media (max-width: 760px) {
