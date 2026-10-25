@@ -35,6 +35,43 @@ namespace AiProductivityCoach.Api.AiPublishing.Services
                 ["readBy"] = new List<string>(),
                 ["createdAt"] = Timestamp.GetCurrentTimestamp()
             });
+
+            Invalidate();
+        }
+
+        // The admin screen asks for notifications regularly. The list is cached briefly (and dropped
+        // whenever this server creates or marks a notification) so the database is not read per request.
+        private static readonly TimeSpan CacheLifetime = TimeSpan.FromSeconds(90);
+        private readonly object _cacheLock = new();
+        private QuerySnapshot? _cached;
+        private DateTime _cachedAt = DateTime.MinValue;
+
+        private void Invalidate()
+        {
+            lock (_cacheLock) _cached = null;
+        }
+
+        private async Task<QuerySnapshot> LoadAdminNotificationsAsync()
+        {
+            lock (_cacheLock)
+            {
+                if (_cached != null && DateTime.UtcNow - _cachedAt < CacheLifetime)
+                    return _cached;
+            }
+
+            var fresh = await _firestore
+                .Collection(AiCollections.Notifications)
+                .WhereEqualTo("audience", AiRoles.Admin)
+                .Limit(150)
+                .GetSnapshotAsync();
+
+            lock (_cacheLock)
+            {
+                _cached = fresh;
+                _cachedAt = DateTime.UtcNow;
+            }
+
+            return fresh;
         }
 
         public async Task<(List<Dictionary<string, object?>> Items, int Unread)> ListForAdminAsync(
@@ -42,11 +79,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Services
             bool unreadOnly,
             int limit)
         {
-            var snapshot = await _firestore
-                .Collection(AiCollections.Notifications)
-                .WhereEqualTo("audience", AiRoles.Admin)
-                .Limit(300)
-                .GetSnapshotAsync();
+            var snapshot = await LoadAdminNotificationsAsync();
 
             var rows = snapshot.Documents
                 .Select(doc =>
@@ -71,19 +104,22 @@ namespace AiProductivityCoach.Api.AiPublishing.Services
 
         public async Task MarkReadAsync(string adminUid, IReadOnlyCollection<string>? ids)
         {
-            var snapshot = await _firestore
-                .Collection(AiCollections.Notifications)
-                .WhereEqualTo("audience", AiRoles.Admin)
-                .Limit(300)
-                .GetSnapshotAsync();
+            var snapshot = await LoadAdminNotificationsAsync();
 
             foreach (var doc in snapshot.Documents)
             {
                 if (ids != null && ids.Count > 0 && !ids.Contains(doc.Id))
                     continue;
 
+                // Skip what this admin already read: no write needed.
+                var readBy = doc.TryGetValue<List<string>>("readBy", out var list) ? list : new List<string>();
+                if (readBy.Contains(adminUid))
+                    continue;
+
                 await doc.Reference.UpdateAsync("readBy", FieldValue.ArrayUnion(adminUid));
             }
+
+            Invalidate();
         }
     }
 }

@@ -155,7 +155,32 @@ namespace AiProductivityCoach.Api.Auth
             }
         }
 
+        // Every API call checks the account status; a short cache avoids one database read per call.
+        // Only "active" is cached, so a suspension takes effect within StatusCacheLifetime at the latest.
+        private static readonly TimeSpan StatusCacheLifetime = TimeSpan.FromSeconds(30);
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> ActiveUntil = new();
+
         private async Task<string> ResolveAccountStatusAsync(string uid)
+        {
+            if (ActiveUntil.TryGetValue(uid, out var until) && until > DateTime.UtcNow)
+                return "active";
+
+            var status = await ReadAccountStatusAsync(uid);
+
+            if (status == "active")
+            {
+                if (ActiveUntil.Count > 5000) ActiveUntil.Clear();
+                ActiveUntil[uid] = DateTime.UtcNow.Add(StatusCacheLifetime);
+            }
+            else
+            {
+                ActiveUntil.TryRemove(uid, out _);
+            }
+
+            return status;
+        }
+
+        private async Task<string> ReadAccountStatusAsync(string uid)
         {
             var userSnapshot = await _firestore
                 .Collection("users")

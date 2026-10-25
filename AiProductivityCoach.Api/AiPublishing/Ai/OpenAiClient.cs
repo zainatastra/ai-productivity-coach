@@ -30,6 +30,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Ai
 
         private readonly HttpClient _http;
         private readonly string? _apiKey;
+        private readonly string _writingModel;
         private readonly ILogger<OpenAiClient> _logger;
 
         public OpenAiClient(IConfiguration configuration, ILogger<OpenAiClient> logger)
@@ -39,6 +40,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Ai
 
             EmbeddingModel = configuration["OpenAI:EmbeddingModel"] ?? "text-embedding-3-small";
             AnalysisModel = configuration["OpenAI:AnalysisModel"] ?? configuration["OpenAI:Model"] ?? "gpt-4o-mini";
+            _writingModel = configuration["OpenAI:WritingModel"] ?? AnalysisModel;
 
             _http = new HttpClient { BaseAddress = new Uri("https://api.openai.com/v1/"), Timeout = TimeSpan.FromSeconds(90) };
         }
@@ -103,6 +105,44 @@ namespace AiProductivityCoach.Api.AiPublishing.Ai
 
             return new ChatResult(content, usage.GetProperty("prompt_tokens").GetInt32(), usage.GetProperty("completion_tokens").GetInt32());
         }
+
+        /// <summary>General chat completion (used as the fallback writer when no Claude key is set).</summary>
+        public async Task<ChatResult> ChatAsync(
+            string model,
+            string system,
+            string user,
+            int maxTokens,
+            bool json,
+            CancellationToken cancellationToken)
+        {
+            var body = new Dictionary<string, object>
+            {
+                ["model"] = model,
+                ["temperature"] = 0.4,
+                ["max_tokens"] = maxTokens,
+                ["messages"] = new object[]
+                {
+                    new { role = "system", content = system },
+                    new { role = "user", content = user }
+                }
+            };
+
+            if (json)
+                body["response_format"] = new { type = "json_object" };
+
+            using var doc = await PostAsync("chat/completions", body, cancellationToken);
+
+            var choice = doc.RootElement.GetProperty("choices")[0];
+            var content = choice.GetProperty("message").GetProperty("content").GetString() ?? string.Empty;
+            var usage = doc.RootElement.GetProperty("usage");
+
+            if (choice.TryGetProperty("finish_reason", out var reason) && reason.GetString() == "length")
+                throw new LlmTruncatedException("The model stopped because the output limit was reached.");
+
+            return new ChatResult(content, usage.GetProperty("prompt_tokens").GetInt32(), usage.GetProperty("completion_tokens").GetInt32());
+        }
+
+        public string WritingModel => _writingModel;
 
         private async Task<JsonDocument> PostAsync(string path, object body, CancellationToken cancellationToken)
         {

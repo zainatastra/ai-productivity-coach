@@ -12,14 +12,19 @@ namespace AiProductivityCoach.Api.AiPublishing.Jobs
     public sealed class AiJobWorker : BackgroundService
     {
         private const int MaxConcurrentJobs = 2;
-        private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(3);
-        private static readonly TimeSpan RecoveryInterval = TimeSpan.FromSeconds(60);
+        // Firestore bills every read. A busy worker polls often; an idle one rarely and is woken
+        // at once by AiJobSignal when a job is queued on this server.
+        private static readonly TimeSpan BusyPollInterval = TimeSpan.FromSeconds(3);
+        private static readonly TimeSpan IdlePollInterval = TimeSpan.FromSeconds(45);
+        private static readonly TimeSpan QuotaBackoff = TimeSpan.FromMinutes(10);
+        private static readonly TimeSpan RecoveryInterval = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(20);
 
         private readonly AiJobService _jobs;
         private readonly AiAuditService _audit;
         private readonly AiNotificationService _notifications;
         private readonly Dictionary<string, IAiJobHandler> _handlers;
+        private readonly AiJobSignal _signal;
         private readonly ILogger<AiJobWorker> _logger;
         private readonly string _instanceId = $"{Environment.MachineName}-{Guid.NewGuid():N}"[..24];
         private readonly List<Task> _running = new();
@@ -29,8 +34,10 @@ namespace AiProductivityCoach.Api.AiPublishing.Jobs
             AiAuditService audit,
             AiNotificationService notifications,
             IEnumerable<IAiJobHandler> handlers,
+            AiJobSignal signal,
             ILogger<AiJobWorker> logger)
         {
+            _signal = signal;
             _jobs = jobs;
             _audit = audit;
             _notifications = notifications;
@@ -56,6 +63,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Jobs
 
             while (!stoppingToken.IsCancellationRequested)
             {
+                var wait = IdlePollInterval;
+
                 try
                 {
                     if (DateTime.UtcNow - lastRecovery > RecoveryInterval)
@@ -77,6 +86,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Jobs
 
                         if (job == null) break;
 
+                        wait = BusyPollInterval;
+
                         var task = Task.Run(() => RunJobAsync(job, stoppingToken), CancellationToken.None);
 
                         lock (_running)
@@ -87,14 +98,24 @@ namespace AiProductivityCoach.Api.AiPublishing.Jobs
                 {
                     break;
                 }
+                catch (Grpc.Core.RpcException ex) when (ex.StatusCode == Grpc.Core.StatusCode.ResourceExhausted)
+                {
+                    // The daily Firestore quota is used up: polling again only makes it worse.
+                    _logger.LogWarning("[AiJobWorker] Firestore quota exceeded; pausing the job worker for {Minutes} minutes.", QuotaBackoff.TotalMinutes);
+                    wait = QuotaBackoff;
+                }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "[AiJobWorker] Poll loop error.");
+                    wait = TimeSpan.FromSeconds(30);
                 }
+
+                if (CountRunning() > 0 && wait < BusyPollInterval * 2)
+                    wait = BusyPollInterval;
 
                 try
                 {
-                    await Task.Delay(PollInterval, stoppingToken);
+                    await _signal.WaitAsync(wait, stoppingToken);
                 }
                 catch (OperationCanceledException)
                 {

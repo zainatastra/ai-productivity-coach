@@ -1,9 +1,11 @@
+using AiProductivityCoach.Api.AiPublishing.Media;
 using FirebaseAdmin;
 using Google.Apis.Auth.OAuth2;
 using Google.Cloud.Firestore;
 using AiProductivityCoach.Api.Auth;
 using AiProductivityCoach.Api.Services;
 using AiProductivityCoach.Api.AiPublishing.Ai;
+using AiProductivityCoach.Api.AiPublishing.Content;
 using AiProductivityCoach.Api.AiPublishing.Jobs;
 using AiProductivityCoach.Api.AiPublishing.Knowledge;
 using AiProductivityCoach.Api.AiPublishing.Security;
@@ -179,6 +181,10 @@ Console.WriteLine(
         : $"[Storage] Vercel Blob bridge registered (Frontend = {vercelMediaBaseUrl})"
 );
 
+if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("VERCEL_MEDIA_INTERNAL_SECRET")) &&
+    string.IsNullOrWhiteSpace(builder.Configuration["VercelMedia:InternalSecret"]))
+    Console.WriteLine("[Storage] ⚠️ VercelMedia:InternalSecret is not set - media uploads and AI images will not work.");
+
 // ==========================================
 // 🤖 AI PUBLISHING ENGINE (shared by EY ERIC + MIDRANGE)
 // Background jobs, audit trail, notifications, safe source fetching.
@@ -187,11 +193,26 @@ Console.WriteLine(
 builder.Services.AddSingleton<SafeHttpFetcher>();
 builder.Services.AddSingleton<AiAuditService>();
 builder.Services.AddSingleton<AiNotificationService>();
+builder.Services.AddSingleton<AiJobSignal>();
 builder.Services.AddSingleton<AiJobService>();
 builder.Services.AddSingleton<OpenAiClient>();
 builder.Services.AddSingleton<AiRunService>();
+builder.Services.AddSingleton<IAiRunRecorder>(sp => sp.GetRequiredService<AiRunService>());
 builder.Services.AddSingleton<KnowledgeStore>();
 builder.Services.AddSingleton<KnowledgeSearchService>();
+builder.Services.AddSingleton<ClaudeLlmClient>();
+builder.Services.AddSingleton<OpenAiLlmClient>();
+builder.Services.AddSingleton<ILlmClient, LlmRouter>();
+builder.Services.AddSingleton<ContentStore>();
+builder.Services.AddSingleton<ContentPlanService>();
+builder.Services.AddSingleton<DocumentWriter>();
+builder.Services.AddSingleton<ContentGenerationService>();
+builder.Services.AddSingleton<MediaStore>();
+builder.Services.AddSingleton<IImageClient, OpenAiImageClient>();
+builder.Services.AddHttpClient<GeneratedMediaStorage>();
+builder.Services.AddSingleton<MediaGenerationService>();
+builder.Services.AddSingleton<IAiJobHandler, MediaJobHandler>();
+builder.Services.AddSingleton<IAiJobHandler, GenerationJobHandler>();
 builder.Services.AddSingleton<IAiJobHandler, SourceCheckJobHandler>();
 builder.Services.AddSingleton<IAiJobHandler, ResearchJobHandler>();
 builder.Services.AddHostedService<AiJobWorker>();
