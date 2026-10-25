@@ -57,6 +57,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Domain
     {
         public const string SourceCheck = "source.check";
         public const string Research = "research";
+        public const string Generate = "content.generate";
+        public const string GenerateMedia = "media.generate";
     }
 
     public static class JobStatus
@@ -105,6 +107,18 @@ namespace AiProductivityCoach.Api.AiPublishing.Domain
         public const string ResearchCompleted = "RESEARCH_COMPLETED";
         public const string ResearchFailed = "RESEARCH_FAILED";
         public const string KnowledgeUpdated = "KNOWLEDGE_BASE_UPDATED";
+        public const string ContentPlanGenerated = "CONTENT_PLAN_GENERATED";
+        public const string ContentPlanUpdated = "CONTENT_PLAN_UPDATED";
+        public const string ContentPlanApproved = "CONTENT_PLAN_APPROVED";
+        public const string ContentGenerationStarted = "CONTENT_GENERATION_STARTED";
+        public const string ContentGenerated = "CONTENT_GENERATED";
+        public const string ContentGenerationFailed = "CONTENT_GENERATION_FAILED";
+        public const string ContentDeleted = "CONTENT_DELETED";
+        public const string MediaGenerationStarted = "MEDIA_GENERATION_STARTED";
+        public const string MediaGenerated = "MEDIA_GENERATED";
+        public const string MediaGenerationFailed = "MEDIA_GENERATION_FAILED";
+        public const string MediaDeleted = "MEDIA_DELETED";
+        public const string MediaCoverChanged = "MEDIA_COVER_CHANGED";
     }
 
     public static class AiCollections
@@ -117,5 +131,9 @@ namespace AiProductivityCoach.Api.AiPublishing.Domain
         public const string Runs = "ai_runs";
         public const string Pages = "pages";
         public const string Chunks = "knowledge_chunks";
+        public const string ContentPlan = "content_plan";
+        public const string Content = "ai_content";
+        public const string ContentVersions = "versions";
+        public const string ContentMedia = "media";
     }
 }

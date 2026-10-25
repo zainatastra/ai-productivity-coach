@@ -14,10 +14,12 @@ namespace AiProductivityCoach.Api.AiPublishing.Jobs
         public static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(2);
 
         private readonly FirestoreDb _firestore;
+        private readonly AiJobSignal _signal;
 
-        public AiJobService(FirestoreDb firestore)
+        public AiJobService(FirestoreDb firestore, AiJobSignal signal)
         {
             _firestore = firestore;
+            _signal = signal;
         }
 
         private CollectionReference Jobs => _firestore.Collection(AiCollections.Jobs);
@@ -68,6 +70,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Jobs
                 ["runAfter"] = now
             });
 
+            _signal.Notify();
+
             return (docRef.Id, false);
         }
 
@@ -117,6 +121,13 @@ namespace AiProductivityCoach.Api.AiPublishing.Jobs
         }
 
         public async Task<bool> RetryAsync(string jobId)
+        {
+            var retried = await RetryCoreAsync(jobId);
+            if (retried) _signal.Notify();
+            return retried;
+        }
+
+        private async Task<bool> RetryCoreAsync(string jobId)
         {
             var docRef = Jobs.Document(jobId);
 

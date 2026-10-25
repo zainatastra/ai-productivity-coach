@@ -7,10 +7,11 @@ import {
 } from "lucide-react";
 import { API_BASE_URL } from "@/services/api";
 import {
-  ERRORS, EXTRA_ERRORS, JOB_STATUS, JOB_TYPES, JOB_TYPES_EXTRA, Lang, SOURCE_ERRORS, SOURCE_STATUS,
+  ERRORS, EXTRA_ERRORS, JOB_STATUS, JOB_TYPES, JOB_TYPES_EXTRA, JOB_TYPES_P3, Lang, SOURCE_ERRORS, SOURCE_STATUS,
   SOURCE_TYPES, TEXT, EXTRA_SOURCE_ERRORS, tr,
 } from "./aiPublishingText";
 import { KnowledgeData, PageRow, PagesCard, ProfileCard, ReadinessCard, SearchCard } from "./KnowledgePanels";
+import ContentPanels from "./ContentPanels";
 
 /* ───────────── types ───────────── */
 
@@ -222,7 +223,10 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
 
   useEffect(() => {
     loadNotifications();
-    const timer = setInterval(loadNotifications, 30000);
+    // Every refresh reads the database: poll slowly and only while this tab is visible.
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") loadNotifications();
+    }, 120000);
     return () => clearInterval(timer);
   }, [loadNotifications]);
 
@@ -233,16 +237,38 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
   /* ── poll while a job is running ── */
   const activeJob = jobs.find((job) => ACTIVE_JOB.includes(job.status));
 
+  // While a job runs only the data that job changes is reloaded (every call reads the database).
+  const loadLive = useCallback(
+    async (id: string, jobType: string) => {
+      const needsSources = jobType === "source.check" || jobType === "research";
+
+      const [j, s, k] = await Promise.all([
+        api(`/api/ai/providers/${id}/jobs`),
+        needsSources ? api(`/api/ai/providers/${id}/sources`) : Promise.resolve(null),
+        needsSources ? api(`/api/ai/providers/${id}/knowledge`) : Promise.resolve(null),
+      ]);
+
+      if (selectedRef.current !== id) return;
+
+      if (j.ok) setJobs(j.data || []);
+      if (s?.ok) setSources(s.data || []);
+      if (k?.ok) setKnowledge(k.data);
+    },
+    [api],
+  );
+
   useEffect(() => {
     if (!selectedId || !activeJob) return;
 
+    const jobType = activeJob.type;
+
     const timer = setInterval(async () => {
-      await loadDetail(selectedId, true);
-      loadNotifications();
-    }, 2000);
+      if (document.visibilityState !== "visible") return;
+      await loadLive(selectedId, jobType);
+    }, 4000);
 
     return () => clearInterval(timer);
-  }, [selectedId, activeJob?.id, activeJob?.status, loadDetail, loadNotifications]);
+  }, [selectedId, activeJob?.id, activeJob?.status, activeJob?.type, loadLive]);
 
   /* ── when a job ends, refresh once more so final source states are shown ── */
   const prevActiveJobRef = useRef<string | undefined>(undefined);
@@ -253,10 +279,13 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
     prevActiveJobRef.current = current;
 
     if (previous && !current && selectedId) {
-      const timer = setTimeout(() => loadDetail(selectedId, true), 1500);
+      const timer = setTimeout(() => {
+        void loadDetail(selectedId, true);
+        loadNotifications();
+      }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [activeJob?.id, selectedId, loadDetail]);
+  }, [activeJob?.id, selectedId, loadDetail, loadNotifications]);
 
   /* ── actions ── */
   const handleCreate = async (e: React.FormEvent) => {
@@ -623,7 +652,7 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
                 {activeJob && (
                   <div className="aip-progress">
                     <div className="aip-progress-top">
-                      <span>{tr(JOB_TYPES[activeJob.type] || JOB_TYPES_EXTRA[activeJob.type], lang, activeJob.type)} · {tr(JOB_STATUS[activeJob.status], lang)}</span>
+                      <span>{tr(JOB_TYPES[activeJob.type] || JOB_TYPES_EXTRA[activeJob.type] || JOB_TYPES_P3[activeJob.type], lang, activeJob.type)} · {tr(JOB_STATUS[activeJob.status], lang)}</span>
                       <span>{activeJob.progress}%</span>
                     </div>
                     <div className="aip-bar"><div style={{ width: `${activeJob.progress}%` }} /></div>
@@ -721,6 +750,19 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
               <PagesCard lang={lang} pages={pages} />
               {knowledge?.readiness && <SearchCard lang={lang} providerId={provider.id} api={api} />}
 
+              {/* Phase 3: content plan, drafts and viewer */}
+              {knowledge?.readiness && (
+                <ContentPanels
+                  lang={lang}
+                  providerId={provider.id}
+                  api={api}
+                  archived={archived}
+                  generationRunning={!!activeJob && (activeJob.type === "content.generate" || activeJob.type === "media.generate")}
+                  refreshKey={`${jobs[0]?.id ?? ""}-${jobs[0]?.status ?? ""}`}
+                  onJobStarted={() => loadDetail(provider.id, true)}
+                />
+              )}
+
               {/* job history */}
               <div className="aip-card">
                 <h3 className="aip-h3">{t("jobs")}</h3>
@@ -731,7 +773,7 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
                     {jobs.map((job) => (
                       <div key={job.id} className="aip-job">
                         <div>
-                          <strong>{tr(JOB_TYPES[job.type] || JOB_TYPES_EXTRA[job.type], lang, job.type)}</strong>
+                          <strong>{tr(JOB_TYPES[job.type] || JOB_TYPES_EXTRA[job.type] || JOB_TYPES_P3[job.type], lang, job.type)}</strong>
                           <span className={`aip-pill ${job.status === "completed" ? "green" : job.status === "partially_completed" ? "amber" : job.status === "failed" ? "red" : job.status === "cancelled" ? "gray" : "blue"}`}>
                             {tr(JOB_STATUS[job.status], lang, job.status)}
                           </span>
@@ -990,6 +1032,48 @@ const CSS = `
 .aip-hit-url { font-size:11px; color:#9ca3af; margin:2px 0 6px; }
 .aip-hit-text { font-size:12.5px; line-height:1.6; color:#374151; margin:0; white-space:pre-line; }
 .aip-link:disabled { opacity:.45; cursor:not-allowed; }
+.aip-engine { display:flex; flex-direction:column; align-items:flex-end; gap:5px; }
+.aip-ok-text { color:#059669; font-size:12.5px; font-weight:700; display:flex; align-items:center; gap:6px; margin-bottom:10px; }
+.aip-plan-bar { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+.aip-plan-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; align-items:start; }
+.aip-plan-card { border:1px solid #e8eaee; border-radius:18px; background:#fafbfc; padding:16px; }
+.aip-plan-card.removed { opacity:.65; background:#f3f4f6; }
+.aip-plan-card.soon { background:#f8fafc; border-style:dashed; }
+.aip-plan-head { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:12px; }
+.aip-plan-type { display:inline-flex; align-items:center; gap:7px; font-size:13px; font-weight:800; color:#0d1117; }
+.aip-plan-card .aip-label { margin-top:10px; }
+.aip-area { height:auto; padding:10px 14px; resize:vertical; line-height:1.5; }
+.aip-wish { display:flex; flex-direction:column; gap:8px; margin-top:12px; padding:12px; border-radius:14px; background:#f0f9ff; border:1px solid #bae6fd; }
+.aip-wish .aip-btn { align-self:flex-start; }
+.aip-images { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; }
+.aip-image { margin:0; border:1px solid #e5e7eb; border-radius:14px; overflow:hidden; background:#fff; }
+.aip-image.cover { border-color:#86efac; box-shadow:0 0 0 2px #dcfce7; }
+.aip-image img { display:block; width:100%; aspect-ratio:3/2; object-fit:cover; background:#f3f4f6; }
+.aip-image figcaption { padding:10px 12px 12px; }
+.aip-doc-top { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
+.aip-doc-title { font-size:24px; font-weight:800; letter-spacing:-.035em; line-height:1.2; color:#0d1117; margin:0 0 6px; }
+.aip-doc-sub { font-size:15px; color:#4b5563; margin:0 0 8px; line-height:1.5; }
+.aip-doc-section { margin:0 0 18px; }
+.aip-doc-excerpt { font-size:14px; color:#374151; line-height:1.65; margin:4px 0 0; }
+.aip-doc-body { max-width:760px; font-size:14.5px; line-height:1.75; color:#1f2937; }
+.aip-doc-body h4 { font-size:18px; font-weight:800; letter-spacing:-.02em; margin:26px 0 8px; color:#0d1117; }
+.aip-doc-body h5 { font-size:15px; font-weight:800; margin:18px 0 6px; color:#111827; }
+.aip-doc-body p { font-size:14.5px; line-height:1.75; color:#1f2937; margin:0 0 12px; }
+.aip-doc-body ul, .aip-doc-body ol { margin:0 0 14px; padding-left:22px; }
+.aip-doc-body li { margin:0 0 5px; }
+.aip-doc-body blockquote { margin:0 0 14px; padding:8px 16px; border-left:3px solid #78d2f5; background:#f0f9ff; color:#374151; }
+.aip-doc-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:18px; margin-top:22px; padding-top:18px; border-top:1px solid #eef0f3; }
+.aip-doc-grid .wide { grid-column:1 / -1; }
+.aip-doc-list { margin:4px 0 0; padding-left:20px; font-size:13.5px; line-height:1.65; color:#374151; }
+.aip-agenda { display:flex; flex-direction:column; gap:8px; margin-top:6px; }
+.aip-agenda-row { display:flex; gap:12px; align-items:flex-start; padding:10px 12px; border:1px solid #eef0f3; border-radius:14px; background:#fafbfc; font-size:13px; }
+.aip-seo { font-size:15px; color:#1a0dab; margin-top:4px; }
+.aip-seo-desc { font-size:13px; color:#4b5563; margin-top:2px; line-height:1.5; }
+.aip-sources { display:flex; flex-direction:column; gap:6px; }
+.aip-source { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:12px; background:#fafbfc; border:1px solid #eef0f3; font-size:12.5px; }
+.aip-source.used { background:#f0fdf4; border-color:#bbf7d0; }
+.aip-btn.danger-text { color:#dc2626; border-color:#fecaca; }
+.aip-btn.danger-text:hover:not(:disabled) { background:#fef2f2; }
 .aip-spin { animation:aip-spin 1s linear infinite; }
 @keyframes aip-spin { to { transform:rotate(360deg); } }
 @media (max-width: 760px) {

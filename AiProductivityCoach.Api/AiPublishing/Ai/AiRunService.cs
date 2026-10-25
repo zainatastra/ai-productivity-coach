@@ -7,7 +7,25 @@ namespace AiProductivityCoach.Api.AiPublishing.Ai
     /// Records every AI execution (spec section 39) with its token usage, and keeps a
     /// running usage total per provider so costs stay visible.
     /// </summary>
-    public sealed class AiRunService
+    public interface IAiRunRecorder
+    {
+        Task<string> RecordAsync(
+            string providerId,
+            string? jobId,
+            string operation,
+            string model,
+            string status,
+            DateTime startedAtUtc,
+            int promptTokens,
+            int completionTokens,
+            int items,
+            string? error = null,
+            string? llmProvider = null,
+            int cacheReadTokens = 0,
+            string? contentId = null);
+    }
+
+    public sealed class AiRunService : IAiRunRecorder
     {
         private readonly FirestoreDb _firestore;
         private readonly ILogger<AiRunService> _logger;
@@ -28,7 +46,10 @@ namespace AiProductivityCoach.Api.AiPublishing.Ai
             int promptTokens,
             int completionTokens,
             int items,
-            string? error = null)
+            string? error = null,
+            string? llmProvider = null,
+            int cacheReadTokens = 0,
+            string? contentId = null)
         {
             try
             {
@@ -46,6 +67,9 @@ namespace AiProductivityCoach.Api.AiPublishing.Ai
                     ["totalTokens"] = promptTokens + completionTokens,
                     ["items"] = items,
                     ["error"] = error ?? string.Empty,
+                    ["provider"] = llmProvider ?? string.Empty,
+                    ["cacheReadTokens"] = cacheReadTokens,
+                    ["contentId"] = contentId ?? string.Empty,
                     ["startedAt"] = Timestamp.FromDateTime(startedAtUtc),
                     ["completedAt"] = Timestamp.GetCurrentTimestamp()
                 });
