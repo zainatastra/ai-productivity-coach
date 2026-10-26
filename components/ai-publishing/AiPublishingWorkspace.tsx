@@ -1,5 +1,7 @@
 "use client";
 
+import { FormSkeleton, ListSkeleton, SkeletonSurface } from "@/components/loading/Skeleton";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle, ArchiveRestore, Archive, ArrowLeft, Bell, Building2, CheckCircle2,
@@ -109,6 +111,7 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
   const [addingSource, setAddingSource] = useState(false);
   const [startingCheck, setStartingCheck] = useState(false);
   const [confirm, setConfirm] = useState<null | { kind: "source" | "archive"; id?: string }>(null);
+  const [deleteDialog, setDeleteDialog] = useState<null | { typed: string; busy: boolean; error: string }>(null);
 
   const [notices, setNotices] = useState<Notice[]>([]);
   const [unread, setUnread] = useState(0);
@@ -270,6 +273,35 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
     return () => clearInterval(timer);
   }, [selectedId, activeJob?.id, activeJob?.status, activeJob?.type, loadLive]);
 
+  /* ── guide the admin: scroll to the relevant section and flash it for 2 seconds ── */
+  const jobsRef = useRef<Job[]>([]);
+  useEffect(() => { jobsRef.current = jobs; }, [jobs]);
+
+  const pendingFocus = useRef<"documents" | "image" | null>(null);
+
+  const focusSection = useCallback((id: string, tone: "info" | "ok" | "error") => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+
+    // Restart the animation even when the same section is flashed twice in a row.
+    el.classList.remove("aip-glow-info", "aip-glow-ok", "aip-glow-error");
+    void el.offsetWidth;
+    el.classList.add(`aip-glow-${tone}`);
+    window.setTimeout(() => el.classList.remove(`aip-glow-${tone}`), 2100);
+  }, []);
+
+  // Job started by the admin -> show where the progress is.
+  const activeId = activeJob?.id;
+  useEffect(() => {
+    if (!activeId || pendingFocus.current !== "documents") return;
+    pendingFocus.current = null;
+    const timer = setTimeout(() => focusSection("aip-progress", "info"), 150);
+    return () => clearTimeout(timer);
+  }, [activeId, focusSection]);
+
   /* ── when a job ends, refresh once more so final source states are shown ── */
   const prevActiveJobRef = useRef<string | undefined>(undefined);
 
@@ -278,6 +310,20 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
     const previous = prevActiveJobRef.current;
     prevActiveJobRef.current = current;
 
+    // A document or image job just ended -> scroll to the result or to the error.
+    if (previous && !current) {
+      const finished = jobsRef.current.find((job) => job.id === previous);
+
+      if (finished && (finished.type === "content.generate" || finished.type === "media.generate")) {
+        const failed = finished.status === "failed" || finished.status === "partially_completed";
+        const target = failed
+          ? `aip-job-${finished.id}`
+          : finished.type === "media.generate" ? "aip-images" : "aip-docs";
+
+        setTimeout(() => focusSection(target, failed ? "error" : "ok"), 700);
+      }
+    }
+
     if (previous && !current && selectedId) {
       const timer = setTimeout(() => {
         void loadDetail(selectedId, true);
@@ -285,7 +331,7 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [activeJob?.id, selectedId, loadDetail, loadNotifications]);
+  }, [activeJob?.id, selectedId, loadDetail, loadNotifications, focusSection]);
 
   /* ── actions ── */
   const handleCreate = async (e: React.FormEvent) => {
@@ -363,6 +409,25 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
 
     setEditing(false);
     await loadDetail(provider.id, true);
+  };
+
+  const deleteProvider = async () => {
+    if (!provider || !deleteDialog || deleteDialog.busy) return;
+
+    setDeleteDialog({ ...deleteDialog, busy: true, error: "" });
+
+    const res = await api(`/api/ai/providers/${provider.id}`, {
+      method: "DELETE",
+      body: JSON.stringify({ name: deleteDialog.typed }),
+    });
+
+    if (!res.ok) {
+      setDeleteDialog({ typed: deleteDialog.typed, busy: false, error: errorText(res) });
+      return;
+    }
+
+    setDeleteDialog(null);
+    closeProvider();
   };
 
   const setArchived = async (archive: boolean) => {
@@ -494,7 +559,7 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
 
   /* ───────────── render ───────────── */
   return (
-    <div className="aip-root" translate="no">
+    <SkeletonSurface loading={listLoading && !selectedId} className="aip-root" translate="no">
       <style>{CSS}</style>
 
       {/* ── header ── */}
@@ -519,8 +584,8 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
             aria-label={t("notifications")}
           >
             <Bell size={16} />
-            {unread > 0 && <span className="aip-badge">{unread > 9 ? "9+" : unread}</span>}
           </button>
+          {unread > 0 && <span className="aip-badge">{unread > 9 ? "9+" : unread}</span>}
 
           {bellOpen && (
             <div className="aip-pop">
@@ -571,7 +636,7 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
           </button>
 
           {detailLoading && !provider ? (
-            <div className="aip-card aip-muted">{t("loading")}</div>
+            <FormSkeleton />
           ) : detailError && !provider ? (
             <div className="aip-card aip-error">{detailError}</div>
           ) : provider ? (
@@ -614,6 +679,13 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
                           <Archive size={14} /> {t("archive")}
                         </button>
                       )}
+                      <button
+                        className="aip-btn ghost danger-text"
+                        onClick={() => setDeleteDialog({ typed: "", busy: false, error: "" })}
+                        disabled={!!activeJob}
+                      >
+                        <Trash2 size={14} /> {t("deleteProvider")}
+                      </button>
                     </div>
                   </div>
                 )}
@@ -650,7 +722,7 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
 
                 {/* active job progress */}
                 {activeJob && (
-                  <div className="aip-progress">
+                  <div className="aip-progress aip-focus-target" id="aip-progress">
                     <div className="aip-progress-top">
                       <span>{tr(JOB_TYPES[activeJob.type] || JOB_TYPES_EXTRA[activeJob.type] || JOB_TYPES_P3[activeJob.type], lang, activeJob.type)} · {tr(JOB_STATUS[activeJob.status], lang)}</span>
                       <span>{activeJob.progress}%</span>
@@ -759,7 +831,7 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
                   archived={archived}
                   generationRunning={!!activeJob && (activeJob.type === "content.generate" || activeJob.type === "media.generate")}
                   refreshKey={`${jobs[0]?.id ?? ""}-${jobs[0]?.status ?? ""}`}
-                  onJobStarted={() => loadDetail(provider.id, true)}
+                  onJobStarted={(kind) => { pendingFocus.current = kind ?? null; void loadDetail(provider.id, true); }}
                 />
               )}
 
@@ -771,7 +843,7 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
                 ) : (
                   <div className="aip-jobs">
                     {jobs.map((job) => (
-                      <div key={job.id} className="aip-job">
+                      <div key={job.id} id={`aip-job-${job.id}`} className="aip-job aip-focus-target">
                         <div>
                           <strong>{tr(JOB_TYPES[job.type] || JOB_TYPES_EXTRA[job.type] || JOB_TYPES_P3[job.type], lang, job.type)}</strong>
                           <span className={`aip-pill ${job.status === "completed" ? "green" : job.status === "partially_completed" ? "amber" : job.status === "failed" ? "red" : job.status === "cancelled" ? "gray" : "blue"}`}>
@@ -831,7 +903,7 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
             {pageError && <div className="aip-error-text">{pageError}</div>}
 
             {listLoading ? (
-              <div className="aip-muted">{t("loading")}</div>
+              <ListSkeleton />
             ) : providers.length === 0 ? (
               <div className="aip-muted">{filter === "created" ? t("noProviders") : t("noArchived")}</div>
             ) : (
@@ -867,6 +939,37 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
         </>
       )}
 
+      {/* ── delete provider dialog ── */}
+      {deleteDialog && provider && (
+        <div className="aip-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget && !deleteDialog.busy) setDeleteDialog(null); }}>
+          <div className="aip-dialog" style={{ maxWidth: 460 }}>
+            <p><strong>{t("deleteProviderTitle")}</strong></p>
+            <p style={{ fontWeight: 500, color: "#4b5563" }}><span>{t("deleteProviderWarning")}</span></p>
+            <p style={{ marginBottom: 6 }}><span>{t("deleteProviderType")} <strong>{provider.name}</strong></span></p>
+            <input
+              className="aip-input"
+              style={{ width: "100%", marginBottom: 12 }}
+              value={deleteDialog.typed}
+              autoFocus
+              disabled={deleteDialog.busy}
+              onChange={(e) => setDeleteDialog({ ...deleteDialog, typed: e.target.value, error: "" })}
+            />
+            {deleteDialog.error && <div className="aip-error-text" style={{ marginBottom: 10 }}>{deleteDialog.error}</div>}
+            <div className="aip-row">
+              <button
+                className="aip-btn danger"
+                disabled={deleteDialog.busy || deleteDialog.typed.trim() !== provider.name.trim()}
+                onClick={deleteProvider}
+              >
+                {deleteDialog.busy ? <Loader2 size={13} className="aip-spin" /> : <Trash2 size={13} />}
+                <span>{deleteDialog.busy ? t("deletingProvider") : t("deleteProviderConfirm")}</span>
+              </button>
+              <button className="aip-btn ghost" disabled={deleteDialog.busy} onClick={() => setDeleteDialog(null)}>{t("cancel")}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── confirm dialog ── */}
       {confirm && (
         <div className="aip-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setConfirm(null); }}>
@@ -884,14 +987,14 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
           </div>
         </div>
       )}
-    </div>
+    </SkeletonSurface>
   );
 }
 
 /* ───────────── styles (scoped by the aip- prefix) ───────────── */
 
 const CSS = `
-.aip-root { font-family: "Plus Jakarta Sans", sans-serif; color:#111827; max-width: 1080px; width:100%; margin:0 auto; padding-bottom:40px; }
+.aip-root { font-family: "Plus Jakarta Sans", sans-serif; color:#111827; max-width: 1080px; width:100%; margin:0 auto; padding-top:14px; padding-bottom:40px; }
 .aip-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:18px; }
 .aip-title { font-size:22px; font-weight:800; letter-spacing:-.03em; margin:0; color:#0d1117; }
 .aip-sub { font-size:12.5px; color:#6b7280; margin:4px 0 0; line-height:1.5; }
@@ -972,16 +1075,24 @@ const CSS = `
 .aip-dot { width:8px; height:8px; border-radius:50%; background:#cbd5e1; display:inline-block; margin:0 2px; }
 .aip-link { display:inline-flex; align-items:center; gap:5px; border:none; background:none; font-family:inherit; font-size:12px; font-weight:700; color:#0369a1; cursor:pointer; padding:8px 0 0; }
 .aip-link.danger { color:#dc2626; }
+.aip-focus-target { scroll-margin-top: 90px; }
+@keyframes aipGlowInfo { 0% { box-shadow:0 0 0 0 rgba(37,99,235,0); } 15% { box-shadow:0 0 0 4px rgba(37,99,235,.35), 0 0 36px rgba(37,99,235,.45); background-color:#eff6ff; } 70% { box-shadow:0 0 0 4px rgba(37,99,235,.2), 0 0 28px rgba(37,99,235,.28); background-color:#eff6ff; } 100% { box-shadow:0 0 0 0 rgba(37,99,235,0); } }
+@keyframes aipGlowOk { 0% { box-shadow:0 0 0 0 rgba(22,163,74,0); } 15% { box-shadow:0 0 0 4px rgba(22,163,74,.35), 0 0 36px rgba(22,163,74,.45); background-color:#f0fdf4; } 70% { box-shadow:0 0 0 4px rgba(22,163,74,.2), 0 0 28px rgba(22,163,74,.28); background-color:#f0fdf4; } 100% { box-shadow:0 0 0 0 rgba(22,163,74,0); } }
+@keyframes aipGlowError { 0% { box-shadow:0 0 0 0 rgba(220,38,38,0); } 15% { box-shadow:0 0 0 4px rgba(220,38,38,.35), 0 0 36px rgba(220,38,38,.45); background-color:#fef2f2; } 70% { box-shadow:0 0 0 4px rgba(220,38,38,.2), 0 0 28px rgba(220,38,38,.28); background-color:#fef2f2; } 100% { box-shadow:0 0 0 0 rgba(220,38,38,0); } }
+.aip-glow-info { animation: aipGlowInfo 2s ease-out; }
+.aip-glow-ok { animation: aipGlowOk 2s ease-out; }
+.aip-glow-error { animation: aipGlowError 2s ease-out; }
+@media (prefers-reduced-motion: reduce) { .aip-glow-info, .aip-glow-ok, .aip-glow-error { animation-duration: .01s; } }
 .aip-jobs { display:flex; flex-direction:column; gap:8px; }
 .aip-job { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 12px; border:1px solid #eef0f3; border-radius:14px; background:#fafbfc; font-size:13px; }
-.aip-head-right { display:flex; align-items:center; gap:10px; }
+.aip-head-right { display:flex; align-items:center; gap:10px; overflow:visible; padding-right:6px; }
 .aip-lang { display:inline-flex; background:#f3f4f6; border-radius:999px; padding:3px; }
 .aip-lang button { border:none; background:transparent; font-family:inherit; font-size:11px; font-weight:800; color:#6b7280; padding:6px 11px; border-radius:999px; cursor:pointer; }
 .aip-lang button.on { background:#fff; color:#111; box-shadow:0 1px 4px rgba(0,0,0,.08); }
-.aip-bell-wrap { position:relative; }
+.aip-bell-wrap { position:relative; overflow:visible; z-index:30; }
 .aip-bell { position:relative; width:40px; height:40px; border-radius:999px; border:1px solid #e5e7eb; background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#374151; }
 .aip-bell:hover { background:#f5f5f5; }
-.aip-badge { position:absolute; top:-4px; right:-4px; min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:#dc2626; color:#fff; font-size:10px; font-weight:800; display:flex; align-items:center; justify-content:center; }
+.aip-badge { position:absolute; top:-6px; right:-6px; z-index:40; pointer-events:none; box-sizing:border-box; min-width:20px; height:20px; padding:0 5px; border:2px solid #fff; border-radius:999px; background:#dc2626; color:#fff; font-size:10px; font-weight:800; display:flex; align-items:center; justify-content:center; }
 .aip-pop { position:absolute; right:0; top:48px; width:340px; max-width:calc(100vw - 32px); background:#fff; border:1px solid #e5e7eb; border-radius:16px; box-shadow:0 18px 48px rgba(15,23,42,.16); z-index:60; padding:12px; }
 .aip-pop-head { display:flex; justify-content:space-between; align-items:center; font-size:13px; margin-bottom:8px; }
 .aip-x { border:none; background:none; cursor:pointer; color:#9ca3af; }
@@ -992,7 +1103,7 @@ const CSS = `
 .aip-notice.unread { background:#f0f9ff; }
 .aip-notice em { display:block; font-style:normal; font-size:11px; color:#9ca3af; margin-top:3px; }
 .aip-overlay { position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:100; display:flex; align-items:center; justify-content:center; padding:16px; }
-.aip-dialog { background:#fff; border-radius:18px; padding:22px; max-width:380px; width:100%; box-shadow:0 24px 64px rgba(0,0,0,.25); }
+.aip-dialog { max-height:calc(100dvh - 32px); overflow-y:auto; background:#fff; border-radius:18px; padding:22px; max-width:380px; width:100%; box-shadow:0 24px 64px rgba(0,0,0,.25); }
 .aip-dialog p { font-size:14px; font-weight:600; color:#111827; margin:0 0 14px; line-height:1.5; }
 .aip-banner { display:flex; align-items:center; gap:8px; padding:10px 12px; border-radius:12px; font-size:12.5px; font-weight:600; margin-bottom:12px; }
 .aip-banner.warn { background:#fef3c7; color:#92400e; }
@@ -1001,7 +1112,7 @@ const CSS = `
 .aip-ring-num { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:19px; font-weight:800; letter-spacing:-.03em; }
 .aip-ready-label { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#9ca3af; }
 .aip-ready-verdict { font-size:15px; font-weight:800; color:#0d1117; margin:2px 0 4px; }
-.aip-cats { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:6px; margin-bottom:14px; }
+.aip-cats { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr)); gap:6px; margin-bottom:14px; }
 .aip-cat { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:12px; background:#fafbfc; border:1px solid #eef0f3; font-size:12.5px; color:#4b5563; }
 .aip-cat.ok svg { color:#059669; } .aip-cat.partial svg { color:#d97706; } .aip-cat.missing svg { color:#cbd5e1; }
 .aip-cat-name { flex:1; font-weight:600; color:#1f2937; }
@@ -1009,7 +1120,7 @@ const CSS = `
 .aip-recs { margin-bottom:14px; }
 .aip-rec { display:flex; gap:8px; align-items:flex-start; font-size:12.5px; color:#92400e; background:#fffbeb; border:1px solid #fde68a; border-radius:12px; padding:8px 10px; margin-top:6px; line-height:1.45; }
 .aip-rec svg { flex-shrink:0; margin-top:2px; }
-.aip-gate-row { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:8px; margin-top:6px; }
+.aip-gate-row { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,180px),1fr)); gap:8px; margin-top:6px; }
 .aip-gate { display:flex; flex-direction:column; gap:3px; padding:10px 12px; border-radius:14px; border:1px solid #e5e7eb; background:#fff; font-size:12.5px; }
 .aip-gate.ready { border-color:#bbf7d0; background:#f0fdf4; } .aip-gate.warn { border-color:#fde68a; background:#fffbeb; } .aip-gate.blocked { border-color:#fecaca; background:#fef2f2; }
 .aip-gate-state { display:inline-flex; align-items:center; gap:5px; font-weight:700; font-size:11.5px; }
@@ -1018,7 +1129,7 @@ const CSS = `
 .aip-soon { font-style:normal; font-size:10px; font-weight:800; color:#075985; background:#e0f2fe; border-radius:999px; padding:2px 7px; width:fit-content; }
 .aip-profile { display:flex; flex-direction:column; gap:14px; }
 .aip-profile-text { font-size:13.5px; line-height:1.65; color:#374151; margin:0; }
-.aip-products { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:8px; }
+.aip-products { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr)); gap:8px; }
 .aip-product { display:flex; flex-direction:column; gap:3px; padding:10px 12px; border:1px solid #eef0f3; border-radius:14px; background:#fafbfc; font-size:12.5px; }
 .aip-product strong { color:#0d1117; font-size:13px; } .aip-product-sum { color:#6b7280; line-height:1.45; }
 .aip-chips { display:flex; flex-wrap:wrap; gap:6px; }
@@ -1035,7 +1146,7 @@ const CSS = `
 .aip-engine { display:flex; flex-direction:column; align-items:flex-end; gap:5px; }
 .aip-ok-text { color:#059669; font-size:12.5px; font-weight:700; display:flex; align-items:center; gap:6px; margin-bottom:10px; }
 .aip-plan-bar { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
-.aip-plan-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; align-items:start; }
+.aip-plan-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr)); gap:14px; align-items:start; }
 .aip-plan-card { border:1px solid #e8eaee; border-radius:18px; background:#fafbfc; padding:16px; }
 .aip-plan-card.removed { opacity:.65; background:#f3f4f6; }
 .aip-plan-card.soon { background:#f8fafc; border-style:dashed; }
@@ -1045,7 +1156,7 @@ const CSS = `
 .aip-area { height:auto; padding:10px 14px; resize:vertical; line-height:1.5; }
 .aip-wish { display:flex; flex-direction:column; gap:8px; margin-top:12px; padding:12px; border-radius:14px; background:#f0f9ff; border:1px solid #bae6fd; }
 .aip-wish .aip-btn { align-self:flex-start; }
-.aip-images { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; }
+.aip-images { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr)); gap:14px; }
 .aip-image { margin:0; border:1px solid #e5e7eb; border-radius:14px; overflow:hidden; background:#fff; }
 .aip-image.cover { border-color:#86efac; box-shadow:0 0 0 2px #dcfce7; }
 .aip-image img { display:block; width:100%; aspect-ratio:3/2; object-fit:cover; background:#f3f4f6; }
@@ -1062,7 +1173,7 @@ const CSS = `
 .aip-doc-body ul, .aip-doc-body ol { margin:0 0 14px; padding-left:22px; }
 .aip-doc-body li { margin:0 0 5px; }
 .aip-doc-body blockquote { margin:0 0 14px; padding:8px 16px; border-left:3px solid #78d2f5; background:#f0f9ff; color:#374151; }
-.aip-doc-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:18px; margin-top:22px; padding-top:18px; border-top:1px solid #eef0f3; }
+.aip-doc-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr)); gap:18px; margin-top:22px; padding-top:18px; border-top:1px solid #eef0f3; }
 .aip-doc-grid .wide { grid-column:1 / -1; }
 .aip-doc-list { margin:4px 0 0; padding-left:20px; font-size:13.5px; line-height:1.65; color:#374151; }
 .aip-agenda { display:flex; flex-direction:column; gap:8px; margin-top:6px; }
@@ -1077,6 +1188,15 @@ const CSS = `
 .aip-spin { animation:aip-spin 1s linear infinite; }
 @keyframes aip-spin { to { transform:rotate(360deg); } }
 @media (max-width: 760px) {
+  .aip-root, .aip-root * { min-width:0; }
+  .aip-root { overflow-wrap:anywhere; }
+  .aip-card { padding:16px; }
+  .aip-head, .aip-row, .aip-job, .aip-progress-top, .aip-plan-head, .aip-hit-top { flex-wrap:wrap; }
+  .aip-provider-main { min-width:0; flex-basis:100%; }
+  .aip-add .aip-input:first-child { min-width:0; flex-basis:100%; }
+  .aip-tabs { display:flex; flex-wrap:wrap; border-radius:16px; }
+  .aip-btn { max-width:100%; white-space:normal; height:auto; min-height:38px; padding-top:8px; padding-bottom:8px; }
+  .aip-input { min-width:0; max-width:100%; }
   .aip-create-grid { grid-template-columns:1fr; }
   .aip-create-btn { width:100%; }
   .aip-check { align-items:flex-start; }

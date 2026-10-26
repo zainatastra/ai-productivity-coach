@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "@/app/globals.css";
+import "@/components/loading/skeleton.css";
+import "@/app/responsive.css";
 import { AuthProvider } from "@/services/AuthContext";
 import { LanguageProvider } from "@/services/LanguageContext";
 

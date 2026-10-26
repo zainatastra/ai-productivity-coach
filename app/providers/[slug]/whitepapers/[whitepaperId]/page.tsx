@@ -1,5 +1,7 @@
 "use client";
 
+import { DetailSkeleton } from "@/components/loading/Skeleton";
+
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -673,7 +675,7 @@ export default function PublicWhitepaperPage() {
           </button>
 
           {loading ? (
-            <div className="wp-loading">{uiText.loadingWhitepaper}</div>
+            <DetailSkeleton kind="whitepaper" />
           ) : loadError || !payload ? (
             <div className="wp-not-found">
               {loadError || uiText.whitepaperNotFound}

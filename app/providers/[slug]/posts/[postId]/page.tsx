@@ -1,5 +1,7 @@
 "use client";
 
+import { DetailSkeleton } from "@/components/loading/Skeleton";
+
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -1013,7 +1015,7 @@ export default function ProviderPostPage() {
           </button>
 
           {loading ? (
-            <div className="pa-loading">{uiText.loadingPost}</div>
+            <DetailSkeleton kind="post" />
           ) : error || !payload ? (
             <div className="pa-error">{error || uiText.postNotFound}</div>
           ) : (

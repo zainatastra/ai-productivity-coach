@@ -1,5 +1,7 @@
 "use client";
 
+import { DetailSkeleton } from "@/components/loading/Skeleton";
+
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -1220,7 +1222,7 @@ export default function ProviderProfilePage() {
           </button>
 
           {loading ? (
-            <div className="pp-loading">{uiText.loadingProfile}</div>
+            <DetailSkeleton kind="profile" />
           ) : error || !profile ? (
             <div className="pp-content-card">
               <div className="pp-empty">{error || uiText.profileNotFound}</div>

@@ -33,6 +33,15 @@ export const TEXT = {
   open: { de: "Öffnen", en: "Open" },
   back: { de: "Zurück zur Übersicht", en: "Back to overview" },
   archive: { de: "Archivieren", en: "Archive" },
+  deleteProvider: { de: "Löschen", en: "Delete" },
+  deleteProviderTitle: { de: "Anbieterprofil endgültig löschen?", en: "Delete this provider profile permanently?" },
+  deleteProviderWarning: {
+    de: "Dabei werden alle Quellen, gelesene Seiten, die Wissensbasis, der Inhaltsplan, alle Entwürfe mit Versionen und Bildern sowie alle Aufträge dieses Anbieters unwiderruflich gelöscht. Das kann nicht rückgängig gemacht werden. Tipp: „Archivieren“ blendet den Anbieter nur aus.",
+    en: "This permanently deletes all sources, pages read, the knowledge base, the content plan, all drafts with versions and images, and all jobs of this provider. This cannot be undone. Tip: “Archive” only hides the provider.",
+  },
+  deleteProviderType: { de: "Zur Bestätigung den Namen eingeben:", en: "Type the name to confirm:" },
+  deleteProviderConfirm: { de: "Endgültig löschen", en: "Delete permanently" },
+  deletingProvider: { de: "Wird gelöscht …", en: "Deleting …" },
   restore: { de: "Wiederherstellen", en: "Restore" },
   edit: { de: "Bearbeiten", en: "Edit" },
   save: { de: "Speichern", en: "Save" },
@@ -299,6 +308,8 @@ export const JOB_TYPES: Record<string, Pair> = {
 
 // Error codes returned by the backend ({ code, message }).
 export const ERRORS: Record<string, Pair> = {
+  provider_name_mismatch: { de: "Der eingegebene Name stimmt nicht überein.", en: "The name you typed does not match." },
+  provider_busy: { de: "Für diesen Anbieter läuft noch ein Auftrag. Bitte warten oder zuerst abbrechen.", en: "A job is still running for this provider. Wait for it or cancel it first." },
   url_required: { de: "Bitte eine URL eingeben.", en: "Please enter a URL." },
   url_invalid: { de: "Die URL ist ungültig.", en: "The URL is not valid." },
   url_too_long: { de: "Die URL ist zu lang.", en: "The URL is too long." },
