@@ -1,5 +1,8 @@
 "use client";
 
+import { ImageWithSkeleton } from "@/components/loading/ImageWithSkeleton";
+import { Skeleton, ProviderCardSkeleton, SkeletonSurface } from "@/components/loading/Skeleton";
+
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -475,7 +478,7 @@ export default function ProvidersDirectory() {
 
       <div className="prov-root">
         <ProviderEmbedBridge />
-        <main className="prov-shell">
+        <SkeletonSurface as="main" className="prov-shell" loading={loading}>
           <section className="prov-filter-card">
             <div className="prov-filter-top">
               <div className="prov-filter-heading">
@@ -529,7 +532,7 @@ export default function ProvidersDirectory() {
             <div className="prov-results-title">{uiText.approvedProviders}</div>
             <div className="prov-results-count">
               {loading
-                ? uiText.loading
+                ? <Skeleton style={{ width: 80 }} />
                 : `${filtered.length} ${
                     filtered.length === 1
                       ? uiText.providerSingular
@@ -538,11 +541,9 @@ export default function ProvidersDirectory() {
             </div>
           </div>
 
-          <section className="prov-grid">
+          <section className="prov-grid" aria-busy={loading} aria-label={loading ? uiText.loading : undefined}>
             {loading ? (
-              Array.from({ length: 6 }).map((_, index) => (
-                <div className="prov-card" key={index} style={{ minHeight: 285, opacity: .55 }} />
-              ))
+              Array.from({ length: 8 }).map((_, index) => <ProviderCardSkeleton key={index} />)
             ) : error ? (
               <div className="prov-empty">{error}</div>
             ) : filtered.length === 0 ? (
@@ -550,22 +551,26 @@ export default function ProvidersDirectory() {
                 No approved providers match your current search and filters.
               </div>
             ) : (
-              filtered.map((provider) => (
+              filtered.map((provider, index) => (
                 <motion.article
                   key={provider.id}
                   className="prov-card"
                   onClick={() => router.push(`/providers/${provider.slug}`)}
                   whileTap={{ scale: .99 }}
                 >
-                  <div className="prov-card-banner">
-                    {provider.logoUrl ? (
-                      <img src={provider.logoUrl} alt={`${provider.name} logo`} />
-                    ) : (
-                      <div className="prov-card-banner-fallback">
-                        <Building2 size={24} />
-                      </div>
-                    )}
-                  </div>
+                  {provider.logoUrl ? (
+                    <ImageWithSkeleton
+                      src={provider.logoUrl}
+                      alt={`${provider.name} logo`}
+                      className="prov-card-banner"
+                      priority={index < 4}
+                      fallback={<div className="prov-card-banner-fallback"><Building2 size={24} /></div>}
+                    />
+                  ) : (
+                    <div className="prov-card-banner">
+                      <div className="prov-card-banner-fallback"><Building2 size={24} /></div>
+                    </div>
+                  )}
 
                   <div className="prov-card-body">
                     <div className="prov-card-title-row">
@@ -582,7 +587,7 @@ export default function ProvidersDirectory() {
               ))
             )}
           </section>
-        </main>
+        </SkeletonSurface>
       </div>
     </>
   );

@@ -211,6 +211,7 @@ builder.Services.AddSingleton<MediaStore>();
 builder.Services.AddSingleton<IImageClient, OpenAiImageClient>();
 builder.Services.AddHttpClient<GeneratedMediaStorage>();
 builder.Services.AddSingleton<MediaGenerationService>();
+builder.Services.AddSingleton<ProviderPurgeService>();
 builder.Services.AddSingleton<IAiJobHandler, MediaJobHandler>();
 builder.Services.AddSingleton<IAiJobHandler, GenerationJobHandler>();
 builder.Services.AddSingleton<IAiJobHandler, SourceCheckJobHandler>();

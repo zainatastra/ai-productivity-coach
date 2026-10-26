@@ -1,5 +1,7 @@
 "use client";
 
+import { DetailSkeleton } from "@/components/loading/Skeleton";
+
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -697,7 +699,7 @@ export default function PublicWebinarPage() {
           </button>
 
           {loading ? (
-            <div className="wb-loading">Loading approved webinar…</div>
+            <DetailSkeleton kind="webinar" />
           ) : loadError || !payload ? (
             <div className="wb-not-found">
               {loadError || "Webinar not found."}

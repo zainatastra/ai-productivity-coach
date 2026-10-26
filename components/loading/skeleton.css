@@ -1,0 +1,44 @@
+/* Shared skeleton tokens and animation. Geometry inherits the containing layout. */
+.ey-skeleton { display:block; max-width:100%; width:100%; height:12px; border-radius:6px; background:#e8ebef; position:relative; overflow:hidden; isolation:isolate; }
+.ey-skeleton::after { content:""; position:absolute; inset:0; background:linear-gradient(100deg,transparent 15%,rgba(255,255,255,.65) 50%,transparent 85%); transform:translateX(-100%); animation:ey-skeleton-shimmer 1.6s ease-in-out infinite; }
+@keyframes ey-skeleton-shimmer { to { transform:translateX(100%); } }
+.ey-skeleton-region { width:100%; min-width:0; }
+.ey-skeleton-region > div { min-width:0; }
+.ey-skeleton-heading { width:55%; height:24px; margin-bottom:20px; }
+.ey-skeleton-title { width:85%; height:clamp(40px,6vw,80px); margin:24px 0; }
+.ey-skeleton-avatar { width:42px; height:42px; border-radius:12px; flex-shrink:0; }
+.ey-skeleton-grow { flex:1; min-width:0; }
+.ey-skeleton-lines { display:grid; gap:12px; margin:18px 0; }
+.ey-skeleton-cover { height:auto; aspect-ratio: 16 / 7; border-radius:inherit; }
+.ey-skeleton-panel { padding:clamp(16px,3vw,28px); background:#fff; border:1px solid #e5e7eb; border-radius:18px; min-width:0; }
+.ey-skeleton-row { display:flex; align-items:center; gap:14px; padding:18px 12px; border-bottom:1px solid #eef0f3; min-width:0; }
+.ey-skeleton-list { width:100%; }
+.ey-skeleton-form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr)); gap:20px; margin:24px 0; }
+.ey-skeleton-page { min-height:100dvh; background:#f6f7f9; }
+.ey-skeleton-app { display:flex; min-height:100dvh; }
+.ey-skeleton-sidebar { width:240px; flex-shrink:0; padding:24px 16px; background:#fff; border-right:1px solid #e5e7eb; }
+.ey-skeleton-main { flex:1; min-width:0; }
+.ey-skeleton-topbar { display:flex; justify-content:space-between; align-items:center; gap:20px; padding:18px 28px; background:#fff; border-bottom:1px solid #e5e7eb; }
+.ey-skeleton-content { padding:clamp(16px,3vw,32px); }
+.ey-skeleton-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr)); gap:16px; margin-bottom:24px; }
+.ey-skeleton-auth { min-height:100dvh; display:grid; place-items:center; padding:20px; }
+.ey-skeleton-auth > * { width:min(100%,460px); }
+@media(max-width:767px) { .ey-skeleton-sidebar { display:none; } .ey-skeleton-topbar { padding:16px; } }
+@media(prefers-reduced-motion:reduce) { .ey-skeleton::after { animation:none; transform:none; opacity:.35; } }
+@media(forced-colors:active) { .ey-skeleton { background:GrayText; } .ey-skeleton::after { display:none; } }
+
+/* SkeletonSurface paints the existing DOM rather than a second layout. */
+[data-skeleton-surface] { pointer-events:none; user-select:none; }
+[data-skeleton-surface] :where(h1,h2,h3,h4,p,span,a,label,button,input,textarea,select,strong,small) { color:transparent !important; text-shadow:none !important; caret-color:transparent; }
+[data-skeleton-surface] :where(input,textarea)::placeholder { color:transparent !important; }
+[data-skeleton-surface] :where(svg,img) { visibility:hidden; }
+[data-skeleton-surface] :where(button,input,textarea,select,h1,h2,h3,h4,label,strong) {
+  background-color:#e8ebef !important;
+  background-image:linear-gradient(100deg,transparent 15%,rgba(255,255,255,.65) 50%,transparent 85%) !important;
+  background-size:200% 100% !important;
+  animation:ey-skeleton-surface 1.6s ease-in-out infinite;
+  border-color:transparent !important;
+  box-shadow:none !important;
+}
+@keyframes ey-skeleton-surface { from { background-position:200% 0; } to { background-position:-200% 0; } }
+@media(prefers-reduced-motion:reduce) { [data-skeleton-surface] * { animation:none !important; } }

@@ -95,6 +95,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Domain
         public const string ProviderUpdated = "PROVIDER_UPDATED";
         public const string ProviderArchived = "PROVIDER_ARCHIVED";
         public const string ProviderRestored = "PROVIDER_RESTORED";
+        public const string ProviderDeleted = "PROVIDER_DELETED";
         public const string SourceAdded = "SOURCE_ADDED";
         public const string SourceRemoved = "SOURCE_REMOVED";
         public const string SourceCrawlStarted = "SOURCE_CRAWL_STARTED";

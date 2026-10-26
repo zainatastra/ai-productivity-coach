@@ -1,0 +1,22 @@
+/* Shared containment for public pages, embedded views and workspace panels. */
+:where(.prov-root,.pp-root,.pa-root,.wp-root,.wb-root,.adm-root,.pub-root,.aip-root) :where(h1,h2,h3,h4,p,a) {
+  overflow-wrap:anywhere;
+}
+:where(.prov-root,.pp-root,.pa-root,.wp-root,.wb-root,.adm-root,.pub-root,.aip-root) :where(input,textarea,select) {
+  max-width:100%;
+  min-width:0;
+}
+:where(.pp-root,.pa-root,.wp-root,.wb-root,.aip-root) :where(img,video,iframe) { max-width:100%; }
+:where(.pub-company-fields,.pub-foundation-form-grid,.pub-preview-grid,.pub-media-grid,.pub-resource-layout,.pp-about-grid,.adm-review-info-grid,.aip-plan-grid,.aip-doc-grid) > * { min-width:0; }
+.pub-root.pub-root,.pub-sidebar.pub-sidebar,.adm-root.adm-root { height:100dvh; }
+:where(.pub-root,.adm-root,.aip-root) pre { max-width:100%; overflow:auto; }
+.pub-resource-modal.pub-resource-modal,.pub-modal.pub-modal,.adm-review-modal.adm-review-modal { max-height:calc(100dvh - 32px); }
+@media(max-width:600px) {
+  .pub-root .pub-foundation-wrap,.pub-root .pub-company-shell { min-width:0; max-width:100%; }
+  .pub-root .pub-resource-manager-head,.pub-root .pub-topbar,.adm-root .adm-topbar { gap:10px; }
+  .pub-root .pub-modal-actions,.aip-root .aip-pop-head { flex-wrap:wrap; }
+  .pub-root .pub-primary-btn,.pub-root .pub-secondary-btn { max-width:100%; white-space:normal; }
+  .aip-root .aip-engine { align-items:flex-start; max-width:100%; }
+  .aip-root .aip-engine .aip-pill { height:auto; min-height:22px; white-space:normal; overflow-wrap:anywhere; }
+  .aip-root .aip-contact > span { min-width:0; overflow-wrap:anywhere; }
+}

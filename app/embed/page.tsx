@@ -1,5 +1,7 @@
 "use client";
 
+import { FormSkeleton } from "@/components/loading/Skeleton";
+
 import { useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import ProductivitySection from "@/components/ProductivitySection";
@@ -45,10 +47,12 @@ export default function EmbedPage() {
     window.open(MAIN_APP_URL, "_top");
   };
 
+  if (authLoading) return <FormSkeleton />;
+
   return (
     <main className="apc-embed min-h-screen bg-white text-slate-900 md:h-screen md:overflow-hidden">
       <div className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div className="min-w-0 text-sm font-semibold tracking-tight sm:text-base">
             {language === "de"
               ? "Ey Eric! Mach mich produktiv!"

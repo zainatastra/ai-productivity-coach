@@ -1,5 +1,7 @@
 "use client";
 
+import { PageSkeleton } from "@/components/loading/Skeleton";
+
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/services/AuthContext";
@@ -96,7 +98,7 @@ const handleSelectConversation = (conversation: any) => {
   setIsRestored(true);
 };
 
-  if (authLoading || !isHydrated) return null;
+  if (authLoading || !isHydrated) return <PageSkeleton kind="chat" />;
 
   const isLoggedIn = user && !user.isAnonymous;
   const showSidebar = true;
@@ -105,7 +107,7 @@ const handleSelectConversation = (conversation: any) => {
 if (!isHydrated) return null;
 
   return (
-    <div className="h-screen flex bg-gray-100 overflow-hidden">
+    <div className="h-dvh flex bg-gray-100 overflow-hidden">
 
       {/* ================= MOBILE SIDEBAR ================= */}
       <AnimatePresence>
@@ -155,7 +157,7 @@ if (!isHydrated) return null;
 )}
 
       {/* ================= RIGHT SIDE ================= */}
-      <div className="flex-1 flex flex-col">
+      <div className="min-w-0 flex-1 flex flex-col">
 
         {/* HEADER */}
         <div className="border-b border-gray-200">

@@ -1,5 +1,7 @@
 "use client";
 
+import { PageSkeleton, ListSkeleton, FormSkeleton } from "@/components/loading/Skeleton";
+
 import { useEffect, useState } from "react";
 import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
 import { getFirestore, collection, getDocs } from "firebase/firestore";
@@ -18,7 +20,7 @@ import {
   PanelLeftClose, PanelLeftOpen, Menu, Pencil, Globe, Check, X,
   UserPlus, EyeOff, LockKeyhole, UserCog,
   ClipboardCheck, Building2, CircleCheck, RotateCcw, Ban, Trash2,
-  ExternalLink, Clock3, ShieldCheck, ChevronRight,
+  ExternalLink, ShieldCheck, ChevronRight,
   History, Activity, Filter, RefreshCw, CalendarDays,
   MoreVertical, KeyRound, ShieldOff, Sparkles,
 } from "lucide-react";
@@ -277,11 +279,7 @@ export default function AdminDashboard() {
     return () => window.clearTimeout(timeout);
   }, [adminToast]);
 
-  if (loading) return (
-    <div className="flex h-screen items-center justify-center bg-gray-50">
-      <p className="text-gray-400 text-sm">Loading admin dashboard…</p>
-    </div>
-  );
+  if (loading) return <PageSkeleton />;
 
   if (unauthorized) {
     if (typeof window !== "undefined") window.location.href = "/admin/login";
@@ -2243,12 +2241,7 @@ export default function AdminDashboard() {
                     )}
 
                     {providerReviewsLoading ? (
-                      <div className="adm-review-empty">
-                        <div>
-                          <div className="adm-review-empty-icon"><Clock3 size={19} /></div>
-                          <div className="adm-review-empty-title">Loading provider profiles…</div>
-                        </div>
-                      </div>
+                      <ListSkeleton />
                     ) : providerReviews.length === 0 ? (
                       <div className="adm-review-empty">
                         <div>
@@ -2398,12 +2391,7 @@ export default function AdminDashboard() {
                         <div className="adm-review-error">{auditError}</div>
                       </div>
                     ) : auditLoading ? (
-                      <div className="adm-audit-empty">
-                        <div>
-                          <div className="adm-audit-empty-icon"><Clock3 size={18} /></div>
-                          <div className="adm-audit-empty-title">Loading audit history…</div>
-                        </div>
-                      </div>
+                      <ListSkeleton />
                     ) : visibleAuditLogs.length === 0 ? (
                       <div className="adm-audit-empty">
                         <div>
@@ -2642,12 +2630,7 @@ export default function AdminDashboard() {
                 {providerReviewError && <div className="adm-review-error">{providerReviewError}</div>}
 
                 {providerReviewLoading || !selectedProviderReview ? (
-                  <div className="adm-review-empty" style={{ minHeight: 300 }}>
-                    <div>
-                      <div className="adm-review-empty-icon"><Clock3 size={19} /></div>
-                      <div className="adm-review-empty-title">Loading submitted profile…</div>
-                    </div>
-                  </div>
+                  providerReviewError ? null : <FormSkeleton />
                 ) : (
                   <>
                     <div className="adm-review-section">

@@ -1,5 +1,7 @@
 "use client";
 
+import { PageSkeleton, FormSkeleton, ListSkeleton } from "@/components/loading/Skeleton";
+
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -3253,67 +3255,7 @@ export default function PublisherDashboard() {
     setMobileSidebarOpen(false);
   };
 
-  if (loading) {
-    return (
-      <>
-        <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-
-          .pub-shell-loader {
-            min-height:100vh;
-            background:#f6f7f9;
-            font-family:"Plus Jakarta Sans",sans-serif;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-          }
-
-          .pub-loader-card {
-            width:min(420px,calc(100vw - 32px));
-            background:#fff;
-            border:1px solid #eceef1;
-            border-radius:28px;
-            padding:26px;
-            box-shadow:0 24px 70px rgba(15,23,42,.07);
-          }
-
-          .pub-shimmer {
-            position:relative;
-            overflow:hidden;
-            background:#eef1f4;
-            border-radius:999px;
-          }
-
-          .pub-shimmer::after {
-            content:"";
-            position:absolute;
-            inset:0;
-            transform:translateX(-100%);
-            background:linear-gradient(90deg,transparent,rgba(255,255,255,.72),transparent);
-            animation:pubShimmer 1.15s infinite;
-          }
-
-          @keyframes pubShimmer {
-            100% { transform:translateX(100%); }
-          }
-        `}</style>
-
-        <div className="pub-shell-loader">
-          <motion.div
-            className="pub-loader-card"
-            initial={{ opacity: 0, y: 14, scale: .985 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: .35, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <div className="pub-shimmer" style={{ width: 42, height: 42, borderRadius: 14, marginBottom: 18 }} />
-            <div className="pub-shimmer" style={{ width: "56%", height: 18, marginBottom: 11 }} />
-            <div className="pub-shimmer" style={{ width: "82%", height: 10, marginBottom: 7 }} />
-            <div className="pub-shimmer" style={{ width: "68%", height: 10 }} />
-          </motion.div>
-        </div>
-      </>
-    );
-  }
+  if (loading) return <PageSkeleton />;
 
   if (!access) return null;
 
@@ -3333,26 +3275,6 @@ export default function PublisherDashboard() {
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
         *,*::before,*::after{box-sizing:border-box}
-
-        .pub-shimmer {
-          position:relative;
-          overflow:hidden;
-          background:#eef1f4;
-          border-radius:999px;
-        }
-
-        .pub-shimmer::after {
-          content:"";
-          position:absolute;
-          inset:0;
-          transform:translateX(-100%);
-          background:linear-gradient(90deg,transparent,rgba(255,255,255,.72),transparent);
-          animation:pubShimmer 1.15s infinite;
-        }
-
-        @keyframes pubShimmer {
-          100% { transform:translateX(100%); }
-        }
 
         .pub-root {
           height:100vh;
@@ -6547,18 +6469,7 @@ export default function PublisherDashboard() {
                   <div className="pub-company-shell">
                     <AnimatePresence mode="wait">
                       {companiesLoading ? (
-                        <motion.div
-                          key="company-loading"
-                          className="pub-company-loading"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                        >
-                          <div className="pub-shimmer" style={{ width: 46, height: 46, borderRadius: 15, marginBottom: 18 }} />
-                          <div className="pub-shimmer" style={{ width: "44%", height: 21, marginBottom: 11 }} />
-                          <div className="pub-shimmer" style={{ width: "78%", height: 10, marginBottom: 8 }} />
-                          <div className="pub-shimmer" style={{ width: "62%", height: 10 }} />
-                        </motion.div>
+                        <FormSkeleton key="company-loading" />
                       ) : companies.length === 0 ? (
                         <motion.div
                           key="company-create"
@@ -6628,18 +6539,7 @@ export default function PublisherDashboard() {
                           </div>
                         </motion.div>
                       ) : companyDetailsLoading ? (
-                        <motion.div
-                          key="company-details-loading"
-                          className="pub-company-loading"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                        >
-                          <div className="pub-shimmer" style={{ width: "34%", height: 22, marginBottom: 14 }} />
-                          <div className="pub-shimmer" style={{ width: "76%", height: 11, marginBottom: 24 }} />
-                          <div className="pub-shimmer" style={{ width: "100%", height: 46, marginBottom: 14 }} />
-                          <div className="pub-shimmer" style={{ width: "100%", height: 110, borderRadius: 18 }} />
-                        </motion.div>
+                        <FormSkeleton key="company-details-loading" />
                       ) : (
                         <motion.div
                           key="company-editor"
@@ -7162,11 +7062,7 @@ export default function PublisherDashboard() {
                       {sectionSuccess && <div className="pub-foundation-feedback success">{sectionSuccess}</div>}
 
                       {sectionLoading ? (
-                        <div className="pub-company-loading" style={{ width: "100%", boxShadow: "none" }}>
-                          <div className="pub-shimmer" style={{ width: "42%", height: 18, marginBottom: 14 }} />
-                          <div className="pub-shimmer" style={{ width: "100%", height: 44, marginBottom: 12 }} />
-                          <div className="pub-shimmer" style={{ width: "100%", height: 108, borderRadius: 18 }} />
-                        </div>
+                        <FormSkeleton />
                       ) : (
                         <>
                           <div className="pub-foundation-form-grid">
@@ -7301,9 +7197,7 @@ export default function PublisherDashboard() {
 
                       <div className="pub-resource-table-shell">
                         {sectionLoading ? (
-                          <div className="pub-resource-table-empty">
-                            Loading {RESOURCE_CONFIG[activeMenu].title.toLowerCase()}…
-                          </div>
+                          <ListSkeleton />
                         ) : resourceItems[activeMenu].length === 0 ? (
                           <div className="pub-resource-table-empty">
                             <div className="pub-resource-empty-icon">
@@ -8197,7 +8091,7 @@ export default function PublisherDashboard() {
                       {sectionSuccess && <div className="pub-foundation-feedback success">{sectionSuccess}</div>}
 
                       {previewLoading ? (
-                        <div className="pub-resource-empty">Preparing profile summary…</div>
+                        <FormSkeleton />
                       ) : (
                         <>
                           <div className="pub-preview-grid">
@@ -8341,7 +8235,7 @@ export default function PublisherDashboard() {
                     {whitepaperResponsesError}
                   </div>
                 ) : whitepaperResponsesLoading ? (
-                  <div className="pub-responses-empty">Loading responses…</div>
+                  <ListSkeleton />
                 ) : whitepaperResponses.length === 0 ? (
                   <div className="pub-responses-empty">
                     No responses have been submitted for this whitepaper yet.
@@ -8476,7 +8370,7 @@ export default function PublisherDashboard() {
                     {webinarResponsesError}
                   </div>
                 ) : webinarResponsesLoading ? (
-                  <div className="pub-responses-empty">Loading responses…</div>
+                  <ListSkeleton />
                 ) : webinarResponses.length === 0 ? (
                   <div className="pub-responses-empty">
                     No responses have been submitted for this webinar yet.

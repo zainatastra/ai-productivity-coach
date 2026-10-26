@@ -1,5 +1,7 @@
 "use client";
 
+import { FormSkeleton } from "@/components/loading/Skeleton";
+
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle, ArrowLeft, BookOpen, CheckCircle2, ExternalLink, FileText, Loader2, Lock,
@@ -86,7 +88,7 @@ interface Props {
   archived: boolean;
   generationRunning: boolean;
   refreshKey: string;
-  onJobStarted: () => void;
+  onJobStarted: (kind?: "documents" | "image") => void;
 }
 
 const ICONS: Record<string, any> = { article: FileText, whitepaper: BookOpen, webinar: Video, tutorial: Lock };
@@ -114,6 +116,7 @@ const pointsOf = (text: string) =>
 export default function ContentPanels({ lang, providerId, api, archived, generationRunning, refreshKey, onJobStarted }: Props) {
   const t = (key: keyof typeof TEXT) => TEXT[key][lang];
 
+  const [initialLoaded, setInitialLoaded] = useState(false);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [docs, setDocs] = useState<ContentRow[]>([]);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
@@ -161,6 +164,7 @@ export default function ContentPanels({ lang, providerId, api, archived, generat
     }
 
     if (c.ok) setDocs(c.data || []);
+    setInitialLoaded(true);
   }, [api, providerId]);
 
   useEffect(() => {
@@ -231,7 +235,7 @@ export default function ContentPanels({ lang, providerId, api, archived, generat
         body: JSON.stringify({ types, regenerate }),
       }));
 
-    if (ok) onJobStarted();
+    if (ok) onJobStarted("documents");
   };
 
   /* ── documents ── */
@@ -276,7 +280,7 @@ export default function ContentPanels({ lang, providerId, api, archived, generat
   const createImage = async (id: string, instruction: string) => {
     const ok = await run("image", () =>
       api(`/api/ai/content/${id}/media/generate`, { method: "POST", body: JSON.stringify({ instruction }) }));
-    if (ok) onJobStarted();
+    if (ok) onJobStarted("image");
     return ok;
   };
 
@@ -301,6 +305,8 @@ export default function ContentPanels({ lang, providerId, api, archived, generat
   const missing = generatable.filter((i) => !i.contentId);
   const approved = plan?.status === "approved";
   const locked = archived || generationRunning || busy !== "";
+
+  if (!initialLoaded || docLoading) return <FormSkeleton />;
 
   /* ═══════════ document viewer ═══════════ */
   if (openDoc) {
@@ -419,7 +425,7 @@ export default function ContentPanels({ lang, providerId, api, archived, generat
       </div>
 
       {docs.length > 0 && (
-        <div className="aip-card">
+        <div className="aip-card aip-focus-target" id="aip-docs">
           <h3 className="aip-h3"><FileText size={16} /> <span>{t("docsTitle")}</span> <span className="aip-pill gray">{docs.length}</span></h3>
           <p className="aip-help" style={{ marginBottom: 12 }}>{t("privateNote")}</p>
 
@@ -761,7 +767,7 @@ function DocumentViewer(props: {
       </div>
 
 
-      <div className="aip-card">
+      <div className="aip-card aip-focus-target" id="aip-images">
         <div className="aip-card-head">
           <div>
             <h3 className="aip-h3"><ImageIcon size={16} /> <span>{t("imagesTitle")}</span> <span className="aip-pill gray">{images.length}</span></h3>

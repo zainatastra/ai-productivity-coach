@@ -1,5 +1,7 @@
 "use client";
 
+import { ListSkeleton } from "@/components/loading/Skeleton";
+
 import { useEffect, useState, useRef } from "react";
 import { getAuth, signOut } from "firebase/auth";
 import { app } from "@/services/firebase";
@@ -631,16 +633,7 @@ export default function Sidebar({
               }}
             >
               {isLoadingChats ? (
-                <div className="sb-dots">
-                  {[0, 1, 2].map((i) => (
-                    <motion.div
-                      key={i}
-                      style={{ width: 6, height: 6, borderRadius: "50%", background: "#d1d5db" }}
-                      animate={{ opacity: [0.3, 1, 0.3] }}
-                      transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
-                    />
-                  ))}
-                </div>
+<ListSkeleton rows={5} />
               ) : (
                 conversations.map((conv) => (
                   <div

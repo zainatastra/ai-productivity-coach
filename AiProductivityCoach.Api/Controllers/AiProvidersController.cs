@@ -25,13 +25,15 @@ namespace AiProductivityCoach.Api.Controllers
         private readonly AiAuditService _audit;
         private readonly AiJobService _jobs;
         private readonly KnowledgeStore _knowledge;
+        private readonly ProviderPurgeService _purge;
 
-        public AiProvidersController(FirestoreDb firestore, AiAuditService audit, AiJobService jobs, KnowledgeStore knowledge)
+        public AiProvidersController(FirestoreDb firestore, AiAuditService audit, AiJobService jobs, KnowledgeStore knowledge, ProviderPurgeService purge)
         {
             _firestore = firestore;
             _audit = audit;
             _jobs = jobs;
             _knowledge = knowledge;
+            _purge = purge;
         }
 
         public class CreateProviderDto
@@ -227,6 +229,44 @@ namespace AiProductivityCoach.Api.Controllers
         [HttpPost("{providerId}/restore")]
         public Task<IActionResult> Restore(string providerId) =>
             SetStatusAsync(providerId, ProviderStatus.Created, AuditActions.ProviderRestored);
+
+        public class DeleteProviderDto
+        {
+            public string? Name { get; set; }
+        }
+
+        /// <summary>
+        /// Permanently deletes a provider and all of its data. The caller must repeat the exact
+        /// provider name, so a stray request can never delete a profile by accident.
+        /// </summary>
+        [HttpDelete("{providerId}")]
+        public async Task<IActionResult> Delete(string providerId, [FromBody] DeleteProviderDto? request, CancellationToken ct)
+        {
+            var actor = Actor;
+            if (actor == null || !actor.IsAdmin) return Unauthorized();
+
+            var provider = await GetProviderAsync(providerId);
+            if (provider == null) return ProviderNotFound();
+
+            var data = provider.ToDictionary();
+            var name = FirestoreApi.GetString(data, "name");
+
+            if (!string.Equals(request?.Name?.Trim(), name.Trim(), StringComparison.Ordinal))
+                return Error(400, "provider_name_mismatch", "The provider name does not match.");
+
+            // A running job would write into the data while it is being removed.
+            var jobs = await _jobs.ListForProviderAsync(providerId, 100);
+            if (jobs.Any(job => JobStatus.IsActive(job.GetValueOrDefault("status")?.ToString() ?? string.Empty) ||
+                                job.GetValueOrDefault("status")?.ToString() == JobStatus.Queued))
+                return Error(409, "provider_busy", "A job is still running for this provider. Wait for it or cancel it first.");
+
+            await _audit.LogAsync(actor, AuditActions.ProviderDeleted, providerId, null, null,
+                new Dictionary<string, object> { ["name"] = name, ["website"] = FirestoreApi.GetString(data, "website") });
+
+            var summary = await _purge.PurgeAsync(providerId, ct);
+
+            return Ok(new { deleted = true, summary.Documents, summary.Images });
+        }
 
         private async Task<IActionResult> SetStatusAsync(string providerId, string status, string auditAction)
         {
