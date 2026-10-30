@@ -7,6 +7,9 @@ import {
   AlertTriangle, ArrowLeft, BookOpen, CheckCircle2, ExternalLink, FileText, Loader2, Lock,
   RefreshCw, Sparkles, Trash2, Video, XCircle, Eye, Check, RotateCcw, ImageIcon,
 } from "lucide-react";
+import { EditPanel, RevisionPanel, ComparePanel, type DraftDoc } from "./DraftWorkspace";
+import { ReviewTab, STATUS_TONE, statusLabel } from "./ReviewPanels";
+import { rt } from "./reviewText";
 import {
   CONTENT_ERRORS, CONTENT_TYPES, ERRORS, EXTRA_ERRORS, GATE_REASONS, GATE_STATES, Lang,
   QUALITY_CHECKS, QUALITY_STATES, TEXT, tr,
@@ -76,7 +79,7 @@ type ContentDetail = ContentRow & {
   llmProvider?: string;
   sources?: { number: number; url: string; title: string; used: boolean }[];
   quality?: { state: string; checks: { code: string; severity: string; detail: string }[]; metrics?: Record<string, number> };
-  versions?: { id: string; versionNumber: number; createdAt?: string; revisionInstruction?: string; model?: string }[];
+  versions?: { id: string; versionNumber: number; createdAt?: string; revisionInstruction?: string; model?: string; llmProvider?: string; createdByAI?: boolean }[];
 };
 
 type Draft = { title: string; angle: string; audience: string; points: string; instruction: string };
@@ -88,7 +91,7 @@ interface Props {
   archived: boolean;
   generationRunning: boolean;
   refreshKey: string;
-  onJobStarted: (kind?: "documents" | "image") => void;
+  onJobStarted: (kind?: "documents" | "image" | "revision") => void;
 }
 
 const ICONS: Record<string, any> = { article: FileText, whitepaper: BookOpen, webinar: Video, tutorial: Lock };
@@ -284,6 +287,28 @@ export default function ContentPanels({ lang, providerId, api, archived, generat
     return ok;
   };
 
+  const [reviseError, setReviseError] = useState("");
+
+  const reviseDoc = async (id: string, instruction: string) => {
+    setReviseError("");
+    const res = await api(`/api/ai/content/${id}/revise`, { method: "POST", body: JSON.stringify({ instruction }) });
+
+    if (!res.ok) {
+      setReviseError(errorText(res));
+      return false;
+    }
+
+    onJobStarted("revision");
+    return true;
+  };
+
+  const restoreDoc = async (id: string, version: number) => {
+    const ok = await run("restore", () => api(`/api/ai/content/${id}/versions/${version}/restore`, { method: "POST" }),
+      () => setNotice(t("restored")));
+    if (ok) await reloadDoc(id);
+    return ok;
+  };
+
   const makeCover = async (id: string, mediaId: string) => {
     const ok = await run(`cover-${mediaId}`, () => api(`/api/ai/content/${id}/media/${mediaId}/cover`, { method: "PUT" }));
     if (ok) await reloadDoc(id);
@@ -320,6 +345,12 @@ export default function ContentPanels({ lang, providerId, api, archived, generat
         onBack={() => { setOpenDoc(null); setError(""); load(); }}
         onRewrite={() => generate([openDoc.type], true).then(() => setOpenDoc(null))}
         onDelete={() => setConfirm({ kind: "delete", id: openDoc.id })}
+        api={api}
+        revising={generationRunning}
+        reviseError={reviseError}
+        onRevise={(instruction) => reviseDoc(openDoc.id, instruction)}
+        onRestore={(version) => restoreDoc(openDoc.id, version)}
+        onSaved={() => { void reloadDoc(openDoc.id); void load(); }}
         imageBusy={busy}
         onCreateImage={(instruction) => createImage(openDoc.id, instruction)}
         onMakeCover={(mediaId) => makeCover(openDoc.id, mediaId)}
@@ -442,7 +473,7 @@ export default function ContentPanels({ lang, providerId, api, archived, generat
                     </span>
                   </div>
                   <div className="aip-item-side">
-                    <span className="aip-pill gray"><span>{t("draftBadge")}</span></span>
+                    <span className={`aip-pill ${STATUS_TONE[doc.status] || "gray"}`}><span>{statusLabel(doc.status, lang)}</span></span>
                     {doc.quality && (
                       <span className={`aip-pill ${doc.quality.state === "ok" ? "green" : doc.quality.state === "warnings" ? "amber" : "red"}`}>
                         <span>{tr(QUALITY_STATES[doc.quality.state], lang, doc.quality.state)}</span>
@@ -615,6 +646,12 @@ function DocumentViewer(props: {
   onBack: () => void;
   onRewrite: () => void;
   onDelete: () => void;
+  api: Api;
+  revising: boolean;
+  reviseError: string;
+  onRevise: (instruction: string) => Promise<boolean>;
+  onRestore: (version: number) => Promise<boolean>;
+  onSaved: () => void;
   imageBusy: string;
   onCreateImage: (instruction: string) => Promise<boolean>;
   onMakeCover: (mediaId: string) => void;
@@ -629,16 +666,34 @@ function DocumentViewer(props: {
   const [imageWish, setImageWish] = useState("");
   const images = doc.media || [];
 
+  const [tab, setTab] = useState<"read" | "edit" | "ai" | "compare" | "review">("read");
+  const editable = doc.status === "draft" || doc.status === "changes_requested";
+  const [dirty, setDirty] = useState(false);
+
+  // Leaving a tab with typed-in changes asks first, so nothing is lost by accident.
+  const guard = (action: () => void) => {
+    if (dirty && !window.confirm(t("editLeaveConfirm"))) return;
+    if (dirty) setDirty(false);
+    action();
+  };
+
+  const tabs: { id: typeof tab; label: keyof typeof TEXT }[] = [
+    { id: "read", label: "tabRead" }, { id: "edit", label: "tabEdit" }, { id: "ai", label: "tabAi" }, { id: "compare", label: "tabCompare" },
+  ];
+
+  const draft = doc as unknown as DraftDoc;
+  const manual = doc.llmProvider === "manual";
+
   return (
     <>
-      <button className="aip-back" onClick={props.onBack}><ArrowLeft size={14} /> <span>{t("closeDoc")}</span></button>
+      <button className="aip-back" onClick={() => guard(props.onBack)}><ArrowLeft size={14} /> <span>{t("closeDoc")}</span></button>
 
-      <div className="aip-card">
+      <div className="aip-card aip-focus-target" id="aip-doc-head">
         <div className="aip-doc-top">
           <div>
             <div className="aip-row wrap" style={{ margin: "0 0 8px" }}>
               <span className="aip-pill blue"><span>{tr(CONTENT_TYPES[doc.type], lang, doc.type)}</span></span>
-              <span className="aip-pill gray"><span>{t("draftBadge")}</span></span>
+              <span className={`aip-pill ${STATUS_TONE[doc.status] || "gray"}`}><span>{statusLabel(doc.status, lang)}</span></span>
               <span className="aip-pill gray"><span>{t("version")} {doc.currentVersion ?? 1}</span></span>
               <span className="aip-pill gray"><span>{doc.wordCount ?? 0} {t("words")}</span></span>
               {quality && (
@@ -650,16 +705,16 @@ function DocumentViewer(props: {
             <h2 className="aip-doc-title"><span>{doc.title}</span></h2>
             {doc.subtitle && <p className="aip-doc-sub"><span>{doc.subtitle}</span></p>}
             <div className="aip-meta">
-              {t("privateNote")} · {t("writtenBy")} {doc.llmProvider === "anthropic" ? "Claude" : "OpenAI"} {doc.model} · {fmt(doc.updatedAt, lang)}
+              {t("privateNote")} · {manual ? t("editedByAdmin") : `${t("writtenBy")} ${doc.llmProvider === "anthropic" ? "Claude" : "OpenAI"} ${doc.model}`} · {fmt(doc.updatedAt, lang)}
             </div>
           </div>
 
           <div className="aip-row wrap">
-            <button className="aip-btn ghost" onClick={props.onRewrite} disabled={props.locked || !props.approved}
+            <button className="aip-btn ghost" onClick={props.onRewrite} disabled={props.locked || !props.approved || doc.status !== "draft"}
               title={!props.approved ? t("approvePlanFirst") : undefined}>
               <RefreshCw size={13} /> <span>{t("rewriteDoc")}</span>
             </button>
-            <button className="aip-btn ghost danger-text" onClick={props.onDelete} disabled={props.locked}>
+            <button className="aip-btn ghost danger-text" onClick={props.onDelete} disabled={props.locked || doc.status !== "draft"}>
               <Trash2 size={13} /> <span>{t("deleteDoc")}</span>
             </button>
           </div>
@@ -667,6 +722,40 @@ function DocumentViewer(props: {
         {props.error && <div className="aip-error-text">{props.error}</div>}
       </div>
 
+      <div className="aip-tabs" role="tablist">
+        {tabs.map((x) => (
+          <button key={x.id} role="tab" aria-selected={tab === x.id} className={`aip-tab ${tab === x.id ? "on" : ""}`}
+            onClick={() => { if (x.id !== tab) guard(() => setTab(x.id)); }}>
+            <span>{t(x.label)}</span>
+          </button>
+        ))}
+        <button role="tab" aria-selected={tab === "review"} className={`aip-tab ${tab === "review" ? "on" : ""}`}
+          onClick={() => { if (tab !== "review") guard(() => setTab("review")); }}>
+          <span>{rt("tabReview", lang)}</span>
+        </button>
+      </div>
+
+      {tab === "edit" && (
+        <EditPanel lang={lang} doc={draft} api={props.api} locked={props.locked || !editable} onDirty={setDirty}
+          onSaved={() => { setDirty(false); props.onSaved(); }} />
+      )}
+
+      {tab === "ai" && (
+        <RevisionPanel lang={lang} doc={draft} locked={props.locked || !editable} running={props.revising}
+          error={props.reviseError} onRevise={props.onRevise} />
+      )}
+
+      {tab === "compare" && (
+        <ComparePanel lang={lang} doc={draft} api={props.api} locked={props.locked || !editable} onRestore={props.onRestore} />
+      )}
+
+      {tab === "review" && (
+        <ReviewTab lang={lang} contentId={doc.id} status={doc.status} api={props.api} locked={props.locked}
+          onChanged={props.onSaved} />
+      )}
+
+      {(tab === "read" || tab === "ai") && (
+        <>
       <div className="aip-card">
         {doc.excerpt && (
           <div className="aip-doc-section">
@@ -882,6 +971,9 @@ function DocumentViewer(props: {
             ))}
           </div>
         </div>
+      )}
+
+        </>
       )}
 
       {props.confirm?.kind === "delete" && (

@@ -59,6 +59,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Domain
         public const string Research = "research";
         public const string Generate = "content.generate";
         public const string GenerateMedia = "media.generate";
+        public const string Revise = "content.revise";
     }
 
     public static class JobStatus
@@ -115,6 +116,21 @@ namespace AiProductivityCoach.Api.AiPublishing.Domain
         public const string ContentGenerated = "CONTENT_GENERATED";
         public const string ContentGenerationFailed = "CONTENT_GENERATION_FAILED";
         public const string ContentDeleted = "CONTENT_DELETED";
+        public const string ContentEdited = "CONTENT_EDITED";
+        public const string ContentRevisionStarted = "CONTENT_REVISION_STARTED";
+        public const string ContentRevised = "CONTENT_REVISED";
+        public const string ContentRevisionFailed = "CONTENT_REVISION_FAILED";
+        public const string ContentVersionRestored = "CONTENT_VERSION_RESTORED";
+        public const string InvitationCreated = "INVITATION_CREATED";
+        public const string InvitationEmailSent = "INVITATION_EMAIL_SENT";
+        public const string InvitationRevoked = "INVITATION_REVOKED";
+        public const string InvitationAccepted = "INVITATION_ACCEPTED";
+        public const string MemberRemoved = "MEMBER_REMOVED";
+        public const string ContentSentToCompany = "CONTENT_SENT_TO_COMPANY";
+        public const string ContentSubmittedByCompany = "CONTENT_SUBMITTED_BY_COMPANY";
+        public const string ContentDecision = "CONTENT_DECISION";
+        public const string ContentCommented = "CONTENT_COMMENTED";
+        public const string CompanyRevisionRequested = "COMPANY_REVISION_REQUESTED";
         public const string MediaGenerationStarted = "MEDIA_GENERATION_STARTED";
         public const string MediaGenerated = "MEDIA_GENERATED";
         public const string MediaGenerationFailed = "MEDIA_GENERATION_FAILED";
@@ -136,5 +152,9 @@ namespace AiProductivityCoach.Api.AiPublishing.Domain
         public const string Content = "ai_content";
         public const string ContentVersions = "versions";
         public const string ContentMedia = "media";
+        public const string ContentComments = "comments";
+        public const string ContentStatusLog = "status_log";
+        public const string Invitations = "ai_invitations";
+        public const string Members = "ai_provider_members";
     }
 }

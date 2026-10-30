@@ -48,6 +48,10 @@ namespace AiProductivityCoach.Api.AiPublishing.Services
 
             foreach (var draft in drafts.Documents)
             {
+                foreach (var name in new[] { AiCollections.ContentComments, AiCollections.ContentStatusLog })
+                    await foreach (var doc in draft.Reference.Collection(name).ListDocumentsAsync().WithCancellation(ct))
+                        await doc.DeleteAsync(cancellationToken: ct);
+
                 foreach (var image in await _media.ListAsync(draft.Id))
                 {
                     await _storage.DeleteAsync(image.GetValueOrDefault("pathname")?.ToString(), ct);
@@ -58,7 +62,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Services
             }
 
             // 2) jobs, notifications and AI run records of this provider
-            foreach (var collection in new[] { AiCollections.Jobs, AiCollections.Notifications, AiCollections.Runs })
+            foreach (var collection in new[] { AiCollections.Jobs, AiCollections.Notifications, AiCollections.Runs, AiCollections.Invitations, AiCollections.Members })
             {
                 var rows = await _firestore.Collection(collection)
                     .WhereEqualTo("providerId", providerId)

@@ -31,9 +31,11 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
             int maxTokens,
             int sourceCount,
             string? jobId,
-            CancellationToken ct)
+            CancellationToken ct,
+            bool allowExpansion = true,
+            string? operationName = null)
         {
-            var operation = $"generate_{type}";
+            var operation = operationName ?? $"generate_{type}";
             var result = await CallAsync(providerId, jobId, operation, LlmTier.Writing, ContentPrompts.WriterSystem, userPrompt, maxTokens, ct);
 
             var outcome = DocumentParser.Parse(result.Text, type, sourceCount);
@@ -64,7 +66,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
             var minimum = QualityChecker.MinimumWords(type);
             var words = HtmlRenderer.WordCount(HtmlRenderer.PlainText(doc.Blocks));
 
-            if (minimum > 0 && words < minimum * ExpandBelow && result.Text.Length < 60_000)
+            if (allowExpansion && minimum > 0 && words < minimum * ExpandBelow && result.Text.Length < 60_000)
             {
                 var bigger = await TryExpandAsync(providerId, jobId, type, userPrompt, result.Text, words, minimum, maxTokens, sourceCount, ct);
 

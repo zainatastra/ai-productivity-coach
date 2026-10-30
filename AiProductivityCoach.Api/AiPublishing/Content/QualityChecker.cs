@@ -53,7 +53,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
             GeneratedDocument doc,
             IReadOnlyList<string> sourceTexts,
             string language,
-            int providedSourceCount)
+            int providedSourceCount,
+            bool grounded = true)
         {
             var checks = new List<QualityCheck>();
             var plain = HtmlRenderer.PlainText(doc.Blocks);
@@ -128,21 +129,23 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
             if (unsupportedHype.Count > 0 || hype.Count > 2)
                 checks.Add(new("promotional_language", "warning", string.Join(", ", hype.Take(4))));
 
-            // ── grounding ──
-            if (providedSourceCount > 0 && doc.UsedSources.Count == 0)
+            // ── grounding (skipped for text the admin edited by hand: there is no source set to check against) ──
+            if (grounded && providedSourceCount > 0 && doc.UsedSources.Count == 0)
                 checks.Add(new("no_sources_used", "warning", string.Empty));
-            else if (providedSourceCount >= 3 && doc.UsedSources.Count < 2)
+            else if (grounded && providedSourceCount >= 3 && doc.UsedSources.Count < 2)
                 checks.Add(new("low_source_coverage", "warning", $"{doc.UsedSources.Count}/{providedSourceCount}"));
 
-            var unsupportedNumbers = FindUnsupportedNumbers(fullText, allSources);
+            var unsupportedNumbers = grounded ? FindUnsupportedNumbers(fullText, allSources) : new List<string>();
             if (unsupportedNumbers.Count > 0)
                 checks.Add(new("unsupported_number", "warning", string.Join(", ", unsupportedNumbers.Take(5))));
 
-            var unsupportedClaims = Claim.Matches(fullText)
-                .Select(m => m.Value.Trim())
-                .Where(claim => !ClaimSupported(claim, allSources))
-                .Distinct()
-                .ToList();
+            var unsupportedClaims = grounded
+                ? Claim.Matches(fullText)
+                    .Select(m => m.Value.Trim())
+                    .Where(claim => !ClaimSupported(claim, allSources))
+                    .Distinct()
+                    .ToList()
+                : new List<string>();
             if (unsupportedClaims.Count > 0)
                 checks.Add(new("unsupported_claim", "warning", string.Join(" | ", unsupportedClaims.Take(3))));
 
