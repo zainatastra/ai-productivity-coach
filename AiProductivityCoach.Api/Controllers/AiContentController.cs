@@ -6,6 +6,7 @@ using AiProductivityCoach.Api.AiPublishing.Content;
 using AiProductivityCoach.Api.AiPublishing.Domain;
 using AiProductivityCoach.Api.AiPublishing.Jobs;
 using AiProductivityCoach.Api.AiPublishing.Media;
+using AiProductivityCoach.Api.AiPublishing.Review;
 using AiProductivityCoach.Api.AiPublishing.Services;
 
 namespace AiProductivityCoach.Api.Controllers
@@ -25,6 +26,8 @@ namespace AiProductivityCoach.Api.Controllers
         private readonly AiJobService _jobs;
         private readonly AiAuditService _audit;
         private readonly ILlmClient _llm;
+        private readonly ContentRevisionService _revisions;
+        private readonly ReviewStore _reviewStore;
         private readonly MediaStore _media;
         private readonly MediaGenerationService _mediaGeneration;
         private readonly GeneratedMediaStorage _mediaStorage;
@@ -36,6 +39,8 @@ namespace AiProductivityCoach.Api.Controllers
             AiJobService jobs,
             AiAuditService audit,
             ILlmClient llm,
+            ContentRevisionService revisions,
+            ReviewStore reviewStore,
             MediaStore media,
             MediaGenerationService mediaGeneration,
             GeneratedMediaStorage mediaStorage)
@@ -46,6 +51,8 @@ namespace AiProductivityCoach.Api.Controllers
             _jobs = jobs;
             _audit = audit;
             _llm = llm;
+            _revisions = revisions;
+            _reviewStore = reviewStore;
             _media = media;
             _mediaGeneration = mediaGeneration;
             _mediaStorage = mediaStorage;
@@ -233,6 +240,7 @@ namespace AiProductivityCoach.Api.Controllers
                 await _mediaStorage.DeleteAsync(image.GetValueOrDefault("pathname")?.ToString(), HttpContext.RequestAborted);
 
             await _media.DeleteAllAsync(contentId);
+            await _reviewStore.DeleteTrailAsync(contentId);
             await _store.DeleteAsync(contentId);
             await _plans.ClearContentLinkAsync(providerId, contentId);
 
@@ -240,6 +248,122 @@ namespace AiProductivityCoach.Api.Controllers
                 new Dictionary<string, object> { ["type"] = FirestoreApi.GetString(data, "type") });
 
             return NoContent();
+        }
+
+        // ───────────── editing, AI revision, versions ─────────────
+
+        public class ReviseDto
+        {
+            public string? Instruction { get; set; }
+        }
+
+        /// <summary>The draft may only be changed while no job of this provider is running.</summary>
+        private async Task<bool> ProviderBusyAsync(string providerId)
+        {
+            var jobs = await _jobs.ListForProviderAsync(providerId, 100);
+
+            return jobs.Any(job =>
+            {
+                var status = job.GetValueOrDefault("status")?.ToString() ?? string.Empty;
+                return JobStatus.IsActive(status) || status == JobStatus.Queued;
+            });
+        }
+
+        private async Task<(Google.Cloud.Firestore.DocumentSnapshot? Doc, string ProviderId, IActionResult? Error)> LoadEditableAsync(string contentId)
+        {
+            var doc = await _store.GetAsync(contentId);
+            if (doc == null) return (null, string.Empty, Error(404, "content_not_found", "Content not found."));
+
+            var data = doc.ToDictionary();
+            var providerId = FirestoreApi.GetString(data, "providerId");
+
+            var status = FirestoreApi.GetString(data, "status");
+            if (status != ContentStatus.Draft && status != ContentStatus.ChangesRequested)
+                return (null, providerId, Error(409, "content_not_draft", "Only drafts can be changed."));
+
+            if (await ProviderBusyAsync(providerId))
+                return (null, providerId, Error(409, "provider_busy", "A job is still running for this provider."));
+
+            return (doc, providerId, null);
+        }
+
+        [HttpPut("content/{contentId}")]
+        public async Task<IActionResult> EditContent(string contentId, [FromBody] EditDocumentDto? request)
+        {
+            var actor = Actor;
+            if (actor == null || !actor.IsAdmin) return Unauthorized();
+            if (request == null) return Error(400, "invalid_document", "The document is missing.");
+
+            var (doc, providerId, error) = await LoadEditableAsync(contentId);
+            if (error != null) return error;
+
+            return await Run(async () =>
+            {
+                var result = await _revisions.SaveEditAsync(contentId, request, actor.UserId);
+
+                await _audit.LogAsync(actor, AuditActions.ContentEdited, providerId, contentId, null,
+                    new Dictionary<string, object> { ["version"] = result.Version, ["quality"] = result.QualityState });
+
+                return Ok(new { contentId, version = result.Version, quality = result.QualityState, words = result.Words });
+            });
+        }
+
+        [HttpPost("content/{contentId}/revise")]
+        public async Task<IActionResult> ReviseContent(string contentId, [FromBody] ReviseDto? request)
+        {
+            var actor = Actor;
+            if (actor == null || !actor.IsAdmin) return Unauthorized();
+
+            var instruction = request?.Instruction?.Trim() ?? string.Empty;
+            if (instruction.Length < 3) return Error(400, "instruction_required", "Please describe what should change.");
+            if (instruction.Length > ContentPrompts.MaxInstructionLength) instruction = instruction[..ContentPrompts.MaxInstructionLength];
+
+            if (!_llm.IsConfigured) return Error(503, "ai_not_configured", "The AI is not configured.");
+
+            var (doc, providerId, error) = await LoadEditableAsync(contentId);
+            if (error != null) return error;
+
+            var payload = new Dictionary<string, object> { ["contentId"] = contentId, ["instruction"] = instruction };
+
+            var (jobId, alreadyActive) = await _jobs.CreateAsync(
+                JobTypes.Revise, providerId, actor.Platform, actor.UserId, payload, RevisionJobHandler.InitialSteps());
+
+            if (!alreadyActive)
+            {
+                await _audit.LogAsync(actor, AuditActions.JobCreated, providerId, contentId, null,
+                    new Dictionary<string, object> { ["jobId"] = jobId, ["type"] = JobTypes.Revise });
+            }
+
+            return Accepted(new { jobId, alreadyActive });
+        }
+
+        [HttpGet("content/{contentId}/versions/{version:int}")]
+        public async Task<IActionResult> GetVersion(string contentId, int version)
+        {
+            if (await _store.GetAsync(contentId) == null) return Error(404, "content_not_found", "Content not found.");
+
+            var row = await _store.GetVersionAsync(contentId, version);
+            return row == null ? Error(404, "version_not_found", "Version not found.") : Ok(row);
+        }
+
+        [HttpPost("content/{contentId}/versions/{version:int}/restore")]
+        public async Task<IActionResult> RestoreVersion(string contentId, int version)
+        {
+            var actor = Actor;
+            if (actor == null || !actor.IsAdmin) return Unauthorized();
+
+            var (doc, providerId, error) = await LoadEditableAsync(contentId);
+            if (error != null) return error;
+
+            if (await _store.GetVersionAsync(contentId, version) == null)
+                return Error(404, "version_not_found", "Version not found.");
+
+            var next = await _store.RestoreVersionAsync(contentId, version, actor.UserId);
+
+            await _audit.LogAsync(actor, AuditActions.ContentVersionRestored, providerId, contentId, null,
+                new Dictionary<string, object> { ["from"] = version, ["version"] = next });
+
+            return Ok(new { contentId, version = next });
         }
 
         // ───────────── images ─────────────
@@ -390,6 +514,9 @@ namespace AiProductivityCoach.Api.Controllers
                 {
                     "ai_not_configured" => Error(503, ex.Code, "The AI is not configured."),
                     "no_knowledge" => Error(409, ex.Code, "The knowledge base is empty. Run the research first."),
+                    "content_not_found" => Error(404, ex.Code, "Content not found."),
+                    "missing_title" or "empty_body" or "too_many_blocks" or "invalid_block" or "invalid_document"
+                        => Error(400, ex.Code, "The document is not valid."),
                     "plan_not_found" or "item_not_found" => Error(404, ex.Code, "Not found."),
                     "ai_refused" or "ai_truncated" or "ai_invalid_output" or "ai_unavailable" => Error(502, ex.Code, "The AI could not complete the request."),
                     _ => Error(400, ex.Code, "The request is not valid.")

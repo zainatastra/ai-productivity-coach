@@ -25,6 +25,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
             [ContentTypes.Webinar] = (10, 10000, 20_000),
         };
 
+        public static (int Passages, int MaxTokens, int CharLimit) SettingsFor(string type) => Settings[type];
+
         private readonly ILlmClient _llm;
         private readonly KnowledgeSearchService _search;
         private readonly ContentStore _store;

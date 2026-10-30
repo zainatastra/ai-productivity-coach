@@ -65,7 +65,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
             QualityReport quality,
             IReadOnlyList<SourceRef> sources,
             string createdBy,
-            string? instruction)
+            string? instruction,
+            bool byAi = true)
         {
             var docRef = Docs.Document(contentId);
 
@@ -81,7 +82,65 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
 
                 tx.Update(docRef, data);
                 tx.Set(docRef.Collection(AiCollections.ContentVersions).Document(next.ToString()),
-                    VersionFields(data, next, createdBy, instruction));
+                    VersionFields(data, next, createdBy, instruction, byAi));
+
+                return next;
+            });
+        }
+
+        private static readonly string[] VersionedFields =
+        {
+            "language", "title", "subtitle", "excerpt", "seoTitle", "metaDescription", "blocks", "bodyHtml",
+            "data", "notes", "wordCount", "sources", "quality", "model", "llmProvider"
+        };
+
+        /// <summary>One full version (text, SEO, quality), for compare and restore.</summary>
+        public async Task<Dictionary<string, object?>?> GetVersionAsync(string contentId, int version)
+        {
+            var snap = await Docs.Document(contentId).Collection(AiCollections.ContentVersions).Document(version.ToString()).GetSnapshotAsync();
+            return snap.Exists ? FirestoreApi.ToApi(snap) : null;
+        }
+
+        /// <summary>
+        /// Makes an older version the current text again. History is never rewritten: the old text is
+        /// copied into a NEW version, so nothing is lost and the restore itself can be undone.
+        /// </summary>
+        public async Task<int> RestoreVersionAsync(string contentId, int version, string actorUid)
+        {
+            var docRef = Docs.Document(contentId);
+            var versionRef = docRef.Collection(AiCollections.ContentVersions).Document(version.ToString());
+
+            return await _firestore.RunTransactionAsync(async tx =>
+            {
+                var snap = await tx.GetSnapshotAsync(docRef);
+                var old = await tx.GetSnapshotAsync(versionRef);
+
+                if (!snap.Exists || !old.Exists) throw new InvalidOperationException("Version not found.");
+
+                var oldData = old.ToDictionary();
+                var next = (int)FirestoreApi.GetLong(snap.ToDictionary(), "currentVersion", 1) + 1;
+
+                var data = new Dictionary<string, object>();
+                foreach (var key in VersionedFields)
+                {
+                    if (oldData.TryGetValue(key, out var value) && value != null)
+                        data[key] = value;
+                }
+
+                var versionData = new Dictionary<string, object>(data)
+                {
+                    ["versionNumber"] = next,
+                    ["createdBy"] = actorUid,
+                    ["createdByAI"] = false,
+                    ["revisionInstruction"] = $"restored:{version}",
+                    ["createdAt"] = Timestamp.GetCurrentTimestamp()
+                };
+
+                data["currentVersion"] = next;
+                data["updatedAt"] = Timestamp.GetCurrentTimestamp();
+
+                tx.Update(docRef, data);
+                tx.Set(docRef.Collection(AiCollections.ContentVersions).Document(next.ToString()), versionData);
 
                 return next;
             });
@@ -175,7 +234,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
             Dictionary<string, object> data,
             int version,
             string createdBy,
-            string? instruction)
+            string? instruction,
+            bool byAi = true)
         {
             var copy = new Dictionary<string, object>(data);
 
@@ -184,7 +244,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
 
             copy["versionNumber"] = version;
             copy["createdBy"] = createdBy;
-            copy["createdByAI"] = true;
+            copy["createdByAI"] = byAi;
             copy["revisionInstruction"] = instruction ?? string.Empty;
             copy["createdAt"] = Timestamp.GetCurrentTimestamp();
 

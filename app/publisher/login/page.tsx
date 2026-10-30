@@ -15,6 +15,13 @@ import { API_BASE_URL } from "@/services/api";
 
 const PUBLISHER_SESSION_SECONDS = 60 * 60;
 
+// After signing in, only the AI review pages may be the target (never an arbitrary address).
+const nextTarget = () => {
+  if (typeof window === "undefined") return "/publisher";
+  const next = new URLSearchParams(window.location.search).get("next") || "";
+  return next.startsWith("/publisher/ai-review") || next.startsWith("/publisher/invite?token=") ? next : "/publisher";
+};
+
 export default function PublisherLoginPage() {
   const auth = getAuth(publisherApp);
   const router = useRouter();
@@ -90,7 +97,7 @@ export default function PublisherLoginPage() {
         const access = await verifyPublisherAccess(user);
 
         if (access.ok) {
-          router.replace("/publisher");
+          router.replace(nextTarget());
           return;
         }
 
@@ -142,7 +149,7 @@ export default function PublisherLoginPage() {
         return;
       }
 
-      router.replace("/publisher");
+      router.replace(nextTarget());
     } catch (error: unknown) {
       const firebaseCode =
         typeof error === "object" &&

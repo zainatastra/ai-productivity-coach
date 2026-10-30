@@ -14,6 +14,7 @@ import {
 } from "./aiPublishingText";
 import { KnowledgeData, PageRow, PagesCard, ProfileCard, ReadinessCard, SearchCard } from "./KnowledgePanels";
 import ContentPanels from "./ContentPanels";
+import { AccessPanel, ReviewQueue } from "./ReviewPanels";
 
 /* ───────────── types ───────────── */
 
@@ -277,7 +278,7 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
   const jobsRef = useRef<Job[]>([]);
   useEffect(() => { jobsRef.current = jobs; }, [jobs]);
 
-  const pendingFocus = useRef<"documents" | "image" | null>(null);
+  const pendingFocus = useRef<"documents" | "image" | "revision" | null>(null);
 
   const focusSection = useCallback((id: string, tone: "info" | "ok" | "error") => {
     const el = document.getElementById(id);
@@ -314,11 +315,11 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
     if (previous && !current) {
       const finished = jobsRef.current.find((job) => job.id === previous);
 
-      if (finished && (finished.type === "content.generate" || finished.type === "media.generate")) {
+      if (finished && (finished.type === "content.generate" || finished.type === "media.generate" || finished.type === "content.revise")) {
         const failed = finished.status === "failed" || finished.status === "partially_completed";
         const target = failed
           ? `aip-job-${finished.id}`
-          : finished.type === "media.generate" ? "aip-images" : "aip-docs";
+          : finished.type === "media.generate" ? "aip-images" : finished.type === "content.revise" ? "aip-doc-head" : "aip-docs";
 
         setTimeout(() => focusSection(target, failed ? "error" : "ok"), 700);
       }
@@ -822,6 +823,9 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
               <PagesCard lang={lang} pages={pages} />
               {knowledge?.readiness && <SearchCard lang={lang} providerId={provider.id} api={api} />}
 
+              {/* Phase 6: company access */}
+              <AccessPanel lang={lang} providerId={provider.id} api={api} archived={archived} />
+
               {/* Phase 3: content plan, drafts and viewer */}
               {knowledge?.readiness && (
                 <ContentPanels
@@ -829,7 +833,7 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
                   providerId={provider.id}
                   api={api}
                   archived={archived}
-                  generationRunning={!!activeJob && (activeJob.type === "content.generate" || activeJob.type === "media.generate")}
+                  generationRunning={!!activeJob && (activeJob.type === "content.generate" || activeJob.type === "media.generate" || activeJob.type === "content.revise")}
                   refreshKey={`${jobs[0]?.id ?? ""}-${jobs[0]?.status ?? ""}`}
                   onJobStarted={(kind) => { pendingFocus.current = kind ?? null; void loadDetail(provider.id, true); }}
                 />
@@ -870,6 +874,8 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
       ) : (
         /* ═══════════ LIST VIEW ═══════════ */
         <>
+          <ReviewQueue lang={lang} api={api} refreshKey={`${filter}-${providers.length}`} onOpenProvider={(id) => openProvider(id)} />
+
           {/* create form (spec: name + website + Create) */}
           <form className="aip-card" onSubmit={handleCreate}>
             <h3 className="aip-h3"><Plus size={16} /> {t("createTitle")}</h3>
@@ -1075,6 +1081,57 @@ const CSS = `
 .aip-dot { width:8px; height:8px; border-radius:50%; background:#cbd5e1; display:inline-block; margin:0 2px; }
 .aip-link { display:inline-flex; align-items:center; gap:5px; border:none; background:none; font-family:inherit; font-size:12px; font-weight:700; color:#0369a1; cursor:pointer; padding:8px 0 0; }
 .aip-link.danger { color:#dc2626; }
+.aip-tabs { display:flex; gap:6px; flex-wrap:wrap; margin:0 0 14px; padding:5px; background:#f3f4f6; border-radius:999px; width:fit-content; max-width:100%; }
+.aip-tab { border:0; background:transparent; padding:8px 16px; border-radius:999px; font-family:inherit; font-size:13px; font-weight:700; color:#6b7280; cursor:pointer; }
+.aip-tab:hover { color:#111827; }
+.aip-tab.on { background:#fff; color:#111827; box-shadow:0 1px 4px rgba(15,23,42,.12); }
+.aip-gap { margin-top:14px; }
+.aip-hint-inline { text-transform:none; letter-spacing:0; font-weight:500; color:#9ca3af; }
+.aip-blocks { display:flex; flex-direction:column; gap:10px; }
+.aip-block { border:1px solid #e5e7eb; border-radius:14px; padding:10px 12px 12px; background:#fcfcfd; }
+.aip-block-heading { background:#f8fafc; border-left:4px solid #94a3b8; }
+.aip-block-quote { border-left:4px solid #cbd5e1; }
+.aip-block-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+.aip-block-tools { margin-left:auto; display:flex; gap:4px; }
+.aip-select { height:34px; padding:0 10px; border:1.5px solid #e5e7eb; border-radius:10px; font-family:inherit; font-size:12.5px; font-weight:600; background:#fff; color:#111827; }
+.aip-select.wide { width:100%; height:42px; font-size:13px; }
+.aip-checkbox { display:inline-flex; flex-direction:row; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:#374151; cursor:pointer; }
+.aip-checkbox input { width:auto; height:auto; margin:0; }
+.aip-icon-btn { width:30px; height:30px; display:inline-flex; align-items:center; justify-content:center; border:1px solid #e5e7eb; background:#fff; border-radius:9px; color:#4b5563; cursor:pointer; }
+.aip-icon-btn:hover:not(:disabled) { background:#f3f4f6; }
+.aip-icon-btn.danger { color:#dc2626; border-color:#fecaca; }
+.aip-icon-btn:disabled { opacity:.4; cursor:not-allowed; }
+.aip-two { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+@media (max-width: 720px) { .aip-two { grid-template-columns:1fr; } }
+.aip-sticky-actions { position:sticky; bottom:0; margin-top:16px; padding:12px 0 2px; background:linear-gradient(to top,#fff 70%,rgba(255,255,255,0)); align-items:center; }
+.aip-agenda-edit { display:flex; flex-direction:column; gap:8px; align-items:flex-start; }
+.aip-agenda-edit-row { display:grid; grid-template-columns:72px 1fr 1.4fr 30px; gap:8px; width:100%; align-items:center; }
+@media (max-width: 720px) { .aip-agenda-edit-row { grid-template-columns:72px 1fr 30px; } .aip-agenda-edit-row input:nth-child(3) { grid-column:1 / -1; order:5; } }
+.aip-chips { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 12px; }
+.aip-chip { border:1px solid #e5e7eb; background:#fff; border-radius:999px; padding:6px 13px; font-family:inherit; font-size:12.5px; font-weight:700; color:#374151; cursor:pointer; }
+.aip-chip:hover:not(:disabled) { background:#f0f9ff; border-color:#7dd3fc; color:#075985; }
+.aip-chip:disabled { opacity:.45; cursor:not-allowed; }
+.aip-chat { display:flex; flex-direction:column; gap:10px; margin-top:8px; }
+.aip-bubble { max-width:88%; padding:10px 13px; border-radius:16px; font-size:13px; line-height:1.5; color:#111827; }
+.aip-bubble.you { margin-left:auto; background:#111827; color:#fff; border-bottom-right-radius:4px; }
+.aip-bubble.you .aip-bubble-who { color:#cbd5e1; }
+.aip-bubble.ai { background:#f3f4f6; border-bottom-left-radius:4px; margin-top:6px; }
+.aip-bubble-who { display:flex; align-items:center; gap:6px; font-size:11px; font-weight:800; color:#6b7280; margin-bottom:4px; }
+.aip-diff { display:flex; flex-direction:column; gap:8px; margin-top:6px; }
+.aip-diff-row { position:relative; padding:10px 14px; border-radius:12px; font-size:13.5px; line-height:1.65; white-space:pre-wrap; border:1px solid #eef0f3; background:#fff; color:#374151; }
+.aip-diff-row.added { background:#f0fdf4; border-color:#bbf7d0; color:#14532d; }
+.aip-diff-row.removed { background:#fef2f2; border-color:#fecaca; color:#7f1d1d; text-decoration:line-through; text-decoration-color:rgba(220,38,38,.5); }
+.aip-diff-row.changed { background:#fffbeb; border-color:#fde68a; }
+.aip-diff-tag { font-size:10.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; margin-bottom:3px; color:#6b7280; text-decoration:none; display:block; }
+.aip-diff-row.added .aip-diff-tag { color:#15803d; }
+.aip-diff-row.removed .aip-diff-tag { color:#b91c1c; }
+.aip-diff-row.changed .aip-diff-tag { color:#b45309; }
+.aip-ins { background:#bbf7d0; color:#14532d; text-decoration:none; border-radius:4px; padding:0 2px; }
+.aip-stack { display:block; padding:4px 8px; margin:2px 0; border-radius:8px; }
+.aip-del { background:#fecaca; color:#7f1d1d; text-decoration:line-through; border-radius:4px; padding:0 2px; }
+.aip-invite-box { margin-top:14px; padding:14px; border:1px solid #bae6fd; background:#f0f9ff; border-radius:14px; }
+.aip-review-action { padding:14px; border:1px solid #e5e7eb; background:#fafbfc; border-radius:14px; margin-bottom:6px; }
+.aip-queue { border-color:#fde68a; background:#fffdf5; }
 .aip-focus-target { scroll-margin-top: 90px; }
 @keyframes aipGlowInfo { 0% { box-shadow:0 0 0 0 rgba(37,99,235,0); } 15% { box-shadow:0 0 0 4px rgba(37,99,235,.35), 0 0 36px rgba(37,99,235,.45); background-color:#eff6ff; } 70% { box-shadow:0 0 0 4px rgba(37,99,235,.2), 0 0 28px rgba(37,99,235,.28); background-color:#eff6ff; } 100% { box-shadow:0 0 0 0 rgba(37,99,235,0); } }
 @keyframes aipGlowOk { 0% { box-shadow:0 0 0 0 rgba(22,163,74,0); } 15% { box-shadow:0 0 0 4px rgba(22,163,74,.35), 0 0 36px rgba(22,163,74,.45); background-color:#f0fdf4; } 70% { box-shadow:0 0 0 4px rgba(22,163,74,.2), 0 0 28px rgba(22,163,74,.28); background-color:#f0fdf4; } 100% { box-shadow:0 0 0 0 rgba(22,163,74,0); } }
