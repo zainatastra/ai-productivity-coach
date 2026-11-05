@@ -1145,6 +1145,7 @@ const CSS = `
 .aip-length-option.on { border-color:#38bdf8; background:#f0f9ff; box-shadow:0 0 0 3px rgba(56,189,248,.18); }
 .aip-length-option:disabled { opacity:.5; cursor:not-allowed; }
 .aip-plan-doc { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:16px; padding:10px 14px; border:1px solid #eef0f3; border-radius:12px; background:#fff; }
+.aip-refs { margin:0; padding-left:22px; display:flex; flex-direction:column; gap:6px; font-size:13px; }
 .aip-focus-target { scroll-margin-top: 90px; }
 @keyframes aipGlowInfo { 0% { box-shadow:0 0 0 0 rgba(37,99,235,0); } 15% { box-shadow:0 0 0 4px rgba(37,99,235,.35), 0 0 36px rgba(37,99,235,.45); background-color:#eff6ff; } 70% { box-shadow:0 0 0 4px rgba(37,99,235,.2), 0 0 28px rgba(37,99,235,.28); background-color:#eff6ff; } 100% { box-shadow:0 0 0 0 rgba(37,99,235,0); } }
 @keyframes aipGlowOk { 0% { box-shadow:0 0 0 0 rgba(22,163,74,0); } 15% { box-shadow:0 0 0 4px rgba(22,163,74,.35), 0 0 36px rgba(22,163,74,.45); background-color:#f0fdf4; } 70% { box-shadow:0 0 0 4px rgba(22,163,74,.2), 0 0 28px rgba(22,163,74,.28); background-color:#f0fdf4; } 100% { box-shadow:0 0 0 0 rgba(22,163,74,0); } }

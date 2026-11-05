@@ -118,4 +118,38 @@ namespace AiProductivityCoach.Api.Tests
             Assert.Equal(0, QualityChecker.MinimumWords(ContentTypes.Tutorial));
         }
     }
+
+    public class WhitepaperReferenceTests
+    {
+        [Fact]
+        public void The_reference_list_is_numbered_like_the_text_marks()
+        {
+            var html = HtmlRenderer.RenderReferences(new[] { (3, "https://a.de/x", "Seite A"), (1, "https://b.de/y", "Seite B") });
+
+            Assert.StartsWith("<h2>Quellen</h2>", html);
+            Assert.True(html.IndexOf("[S1]") < html.IndexOf("[S3]"));
+            Assert.Contains("href=\"https://b.de/y\"", html);
+        }
+
+        [Fact]
+        public void Titles_and_addresses_are_encoded_and_only_web_addresses_become_links()
+        {
+            var html = HtmlRenderer.RenderReferences(new[]
+            {
+                (1, "javascript:alert(1)", "<img src=x onerror=alert(1)>"),
+                (2, "https://x.de/?a=1&b=\"2\"", "")
+            });
+
+            Assert.DoesNotContain("<img", html);
+            Assert.DoesNotContain("href=\"javascript", html);
+            Assert.Contains("&lt;img", html);
+            Assert.Contains("&amp;b=&quot;2&quot;", html);
+        }
+
+        [Fact]
+        public void No_used_sources_means_no_section()
+        {
+            Assert.Equal(string.Empty, HtmlRenderer.RenderReferences(Array.Empty<(int, string, string)>()));
+        }
+    }
 }

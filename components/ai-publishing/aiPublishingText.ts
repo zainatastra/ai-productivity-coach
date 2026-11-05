@@ -213,6 +213,8 @@ export const TEXT = {
   lengthWords: { de: "{min}–{max} Wörter", en: "{min}–{max} words" },
   planDocInfo: { de: "Dokument", en: "Document" },
   planNoDoc: { de: "Noch kein Dokument – nach der Planfreigabe über „Inhalte erstellen“.", en: "No document yet – use “Write documents” after approving the plan." },
+  docReferences: { de: "Quellenverzeichnis", en: "References" },
+  docReferencesHelp: { de: "Nur Quellen, die in diesem Whitepaper verwendet wurden. Die Nummern entsprechen den Verweisen [S1], [S2] … im Text.", en: "Only sources used in this whitepaper. The numbers match the marks [S1], [S2] … in the text." },
   tabRead: { de: "Lesen", en: "Read" },
   tabEdit: { de: "Bearbeiten", en: "Edit" },
   tabAi: { de: "Mit KI überarbeiten", en: "Revise with AI" },

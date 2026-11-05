@@ -78,6 +78,7 @@ export const RT = {
   c_version: { de: "Version", en: "Version" },
   c_excerpt: { de: "Kurzfassung", en: "Excerpt" },
   c_sources: { de: "Verwendete Quellen", en: "Sources used" },
+  c_references: { de: "Quellenverzeichnis", en: "References" },
   c_seo: { de: "Suchmaschinen-Vorschau", en: "Search preview" },
   c_history: { de: "Verlauf", en: "History" },
   c_versions: { de: "Versionen", en: "Versions" },

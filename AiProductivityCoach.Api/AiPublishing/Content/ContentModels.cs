@@ -88,6 +88,33 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
             return html.ToString();
         }
 
+        /// <summary>
+        /// The reference list of a whitepaper: only the sources it really used, numbered like the
+        /// [S1] marks in the text. Titles and addresses are encoded, and only http(s) addresses become links.
+        /// </summary>
+        public static string RenderReferences(IEnumerable<(int Number, string Url, string Title)> used, string heading = "Quellen")
+        {
+            var list = used.OrderBy(s => s.Number).ToList();
+            if (list.Count == 0) return string.Empty;
+
+            var html = new StringBuilder($"<h2>{Inline(heading)}</h2><ol class=\"sources\">");
+
+            foreach (var (number, url, title) in list)
+            {
+                var label = string.IsNullOrWhiteSpace(title) ? url : title;
+                var isWeb = Uri.TryCreate(url, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp);
+
+                html.Append($"<li value=\"{number}\">[S{number}] ");
+                html.Append(isWeb
+                    ? $"<a href=\"{Inline(url)}\" rel=\"noopener noreferrer\">{Inline(label)}</a>"
+                    : Inline(label));
+                html.Append("</li>");
+            }
+
+            html.Append("</ol>");
+            return html.ToString();
+        }
+
         /// <summary>Encodes text and turns **bold** into &lt;strong&gt;.</summary>
         public static string Inline(string text)
         {

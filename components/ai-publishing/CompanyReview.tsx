@@ -321,8 +321,21 @@ export default function CompanyReview() {
 
           {(detail.sources || []).length > 0 && (
             <>
-              <div className="cr-label">{t("c_sources")}</div>
-              <ul className="cr-sources">{detail.sources.map((s: any) => <li key={s.number}>{(s.title || s.url).toString()}</li>)}</ul>
+              <div className="cr-label">{detail.type === "whitepaper" ? t("c_references") : t("c_sources")}</div>
+              {detail.type === "whitepaper" ? (
+                <ol className="cr-sources">
+                  {[...detail.sources].sort((a: any, b: any) => a.number - b.number).map((s: any) => (
+                    <li key={s.number} value={s.number}>
+                      [S{s.number}]{" "}
+                      {/^https?:\/\//.test(s.url || "")
+                        ? <a href={s.url} target="_blank" rel="noopener noreferrer">{(s.title || s.url).toString()}</a>
+                        : (s.title || s.url).toString()}
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <ul className="cr-sources">{detail.sources.map((s: any) => <li key={s.number}>{(s.title || s.url).toString()}</li>)}</ul>
+              )}
             </>
           )}
         </div>
