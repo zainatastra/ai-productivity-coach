@@ -33,7 +33,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
             string? jobId,
             CancellationToken ct,
             bool allowExpansion = true,
-            string? operationName = null)
+            string? operationName = null,
+            string? lengthPreset = null)
         {
             var operation = operationName ?? $"generate_{type}";
             var result = await CallAsync(providerId, jobId, operation, LlmTier.Writing, ContentPrompts.WriterSystem, userPrompt, maxTokens, ct);
@@ -63,7 +64,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
             var expanded = false;
 
             // A draft far below the target length gets exactly one expansion pass.
-            var minimum = QualityChecker.MinimumWords(type);
+            var minimum = QualityChecker.MinimumWords(type, lengthPreset);
             var words = HtmlRenderer.WordCount(HtmlRenderer.PlainText(doc.Blocks));
 
             if (allowExpansion && minimum > 0 && words < minimum * ExpandBelow && result.Text.Length < 60_000)

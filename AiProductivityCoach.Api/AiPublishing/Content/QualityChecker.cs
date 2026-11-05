@@ -16,14 +16,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
     /// </summary>
     public static class QualityChecker
     {
-        private static readonly Dictionary<string, (int Min, int Max)> WordRange = new()
-        {
-            [ContentTypes.Article] = (450, 1200),
-            [ContentTypes.Whitepaper] = (1100, 3400),
-            [ContentTypes.Webinar] = (250, 1400),
-        };
-
-        public static int MinimumWords(string type) => WordRange.TryGetValue(type, out var range) ? range.Min : 0;
+        /// <summary>The smallest accepted length (without a "too short" warning) for this type and length preset.</summary>
+        public static int MinimumWords(string type, string? lengthPreset = null) => LengthPresets.Accepted(type, lengthPreset).Min;
 
         private static readonly string[] Promotional =
         {
@@ -54,7 +48,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
             IReadOnlyList<string> sourceTexts,
             string language,
             int providedSourceCount,
-            bool grounded = true)
+            bool grounded = true,
+            string? lengthPreset = null)
         {
             var checks = new List<QualityCheck>();
             var plain = HtmlRenderer.PlainText(doc.Blocks);
@@ -70,7 +65,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
             if (doc.Type != ContentTypes.Webinar && (string.IsNullOrWhiteSpace(doc.SeoTitle) || string.IsNullOrWhiteSpace(doc.MetaDescription)))
                 checks.Add(new("missing_seo", "warning", string.Empty));
 
-            if (WordRange.TryGetValue(doc.Type, out var range))
+            var range = LengthPresets.Accepted(doc.Type, lengthPreset);
+            if (range.Max != int.MaxValue)
             {
                 if (words < range.Min) checks.Add(new("too_short", "warning", $"{words}/{range.Min}"));
                 if (words > range.Max) checks.Add(new("too_long", "warning", $"{words}/{range.Max}"));

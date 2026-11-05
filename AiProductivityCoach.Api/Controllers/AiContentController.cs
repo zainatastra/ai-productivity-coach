@@ -66,6 +66,7 @@ namespace AiProductivityCoach.Api.Controllers
             public List<string>? KeyPoints { get; set; }
             public string? Instruction { get; set; }
             public bool? Removed { get; set; }
+            public string? Length { get; set; }
         }
 
         public class RegenerateItemDto
@@ -113,7 +114,7 @@ namespace AiProductivityCoach.Api.Controllers
             var provider = await ContentContext.LoadAsync(_firestore, providerId);
             if (provider == null) return ProviderNotFound();
 
-            var patch = new PlanItemPatch(request.Title, request.Angle, request.Audience, request.KeyPoints, request.Instruction, request.Removed);
+            var patch = new PlanItemPatch(request.Title, request.Angle, request.Audience, request.KeyPoints, request.Instruction, request.Removed, request.Length);
 
             return await Run(async () => Ok(PlanResponse(provider, await _plans.UpdateItemAsync(providerId, type, patch, actor))));
         }
@@ -491,6 +492,14 @@ namespace AiProductivityCoach.Api.Controllers
                         audience = i.Audience,
                         keyPoints = i.KeyPoints,
                         instruction = i.Instruction,
+                        length = i.Length,
+                        lengthOptions = LengthPresets.For(i.Type).Count > 1
+                            ? LengthPresets.For(i.Type).Select(preset =>
+                            {
+                                var (min, max) = LengthPresets.Target(i.Type, preset);
+                                return new { id = preset, minWords = min, maxWords = max };
+                            }).ToList()
+                            : null,
                         status = i.Status,
                         contentId = i.ContentId,
                         gate = provider.Gates.TryGetValue(i.Type, out var gate)

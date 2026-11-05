@@ -52,9 +52,10 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
             var language = FirestoreApi.GetString(data, "language", "de");
 
             // There is no source set for hand-written text, so only structure, language and tone are checked.
-            var quality = QualityChecker.Check(outcome.Document, Array.Empty<string>(), language, 0, grounded: false);
+            var preset = FirestoreApi.GetString(data, "lengthPreset", LengthPresets.Standard);
+            var quality = QualityChecker.Check(outcome.Document, Array.Empty<string>(), language, 0, grounded: false, lengthPreset: preset);
 
-            var meta = new ContentMeta(language, "admin", "manual", null);
+            var meta = new ContentMeta(language, "admin", "manual", null, preset);
             var version = await _store.AddVersionAsync(
                 contentId, outcome.Document, meta, quality, ContentDocumentMapper.SourcesFromStored(data),
                 actorUid, ManualEditInstruction, byAi: false);
@@ -82,7 +83,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
                 ?? throw new ContentGenerationException("provider_not_found");
 
             var current = ContentDocumentMapper.FromStored(data);
-            var (passages, maxTokens, charLimit) = ContentGenerationService.SettingsFor(type);
+            var preset = FirestoreApi.GetString(data, "lengthPreset", LengthPresets.Standard);
+            var (passages, maxTokens, charLimit) = ContentGenerationService.SettingsFor(type, preset);
 
             // 1) Fresh passages of THIS provider for the topic and for what the admin asked.
             var queries = new List<string> { current.Title, instruction };
@@ -109,16 +111,16 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
                 ToJson(current), instruction, type);
 
             var written = await _writer.WriteAsync(providerId, type, user, maxTokens, excerpts.Count, jobId, ct,
-                allowExpansion: false, operationName: $"revise_{type}");
+                allowExpansion: false, operationName: $"revise_{type}", lengthPreset: preset);
 
             // 3) Checks, then store as the next version.
-            var quality = QualityChecker.Check(written.Doc, excerpts.Select(e => e.Text).ToList(), provider.Language, excerpts.Count);
+            var quality = QualityChecker.Check(written.Doc, excerpts.Select(e => e.Text).ToList(), provider.Language, excerpts.Count, lengthPreset: preset);
 
             var sources = excerpts
                 .Select(e => new SourceRef(e.Number, e.Url, e.Title, written.Doc.UsedSources.Contains(e.Number)))
                 .ToList();
 
-            var meta = new ContentMeta(provider.Language, written.Model, written.LlmProvider, jobId);
+            var meta = new ContentMeta(provider.Language, written.Model, written.LlmProvider, jobId, preset);
             var version = await _store.AddVersionAsync(contentId, written.Doc, meta, quality, sources, actorUid, instruction);
 
             return new RevisionResult(contentId, version, quality.State, (int)quality.Metrics["words"]);

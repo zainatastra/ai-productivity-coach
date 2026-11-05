@@ -4,7 +4,7 @@ using AiProductivityCoach.Api.AiPublishing.Services;
 
 namespace AiProductivityCoach.Api.AiPublishing.Content
 {
-    public sealed record ContentMeta(string Language, string Model, string LlmProvider, string? JobId);
+    public sealed record ContentMeta(string Language, string Model, string LlmProvider, string? JobId, string? LengthPreset = null);
 
     public sealed record SourceRef(int Number, string Url, string Title, bool Used);
 
@@ -91,7 +91,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
         private static readonly string[] VersionedFields =
         {
             "language", "title", "subtitle", "excerpt", "seoTitle", "metaDescription", "blocks", "bodyHtml",
-            "data", "notes", "wordCount", "sources", "quality", "model", "llmProvider"
+            "data", "notes", "wordCount", "sources", "quality", "model", "llmProvider", "lengthPreset"
         };
 
         /// <summary>One full version (text, SEO, quality), for compare and restore.</summary>
@@ -226,7 +226,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
                 },
                 ["model"] = meta.Model,
                 ["llmProvider"] = meta.LlmProvider,
-                ["jobId"] = meta.JobId ?? string.Empty
+                ["jobId"] = meta.JobId ?? string.Empty,
+                ["lengthPreset"] = meta.LengthPreset ?? LengthPresets.Standard
             };
         }
 

@@ -39,8 +39,8 @@ GRUNDREGELN (zwingend):
     {""type"": ""quote"", ""text"": ""...""}
   ]";
 
-        public static string ArticleTask() =>
-@"AUFGABE: Schreibe EINEN Fachartikel mit 700 bis 900 Wörtern.
+        public static string ArticleTask(string? length = null) =>
+@"AUFGABE: Schreibe EINEN Fachartikel mit " + WordRange(ContentTypes.Article, length) + @".
 Aufbau: sachlicher Einstieg, 3 bis 5 Abschnitte mit Zwischenüberschriften (Ebene 2), wo sinnvoll eine Aufzählung, am Ende ein Fazit mit nächsten Schritten. Keine Wiederholungen. Der Text enthält weder eine Überschrift der Ebene 1 noch den Titel noch einmal. Zitate nur, wenn sie wörtlich in den Quellen stehen.
 
 JSON-Format:
@@ -55,8 +55,8 @@ JSON-Format:
   ""notes"": """"
 }";
 
-        public static string WhitepaperTask() =>
-@"AUFGABE: Schreibe EIN Whitepaper mit 1.800 bis 2.500 Wörtern.
+        public static string WhitepaperTask(string? length = null) =>
+@"AUFGABE: Schreibe EIN Whitepaper mit " + WordRange(ContentTypes.Whitepaper, length) + @".
 Verwende diese Zwischenüberschriften (Ebene 2) in dieser Reihenfolge:
 1. Zusammenfassung (Executive Summary)
 2. Ausgangslage und Hintergrund
@@ -112,10 +112,17 @@ JSON-Format:
   ""notes"": """"
 }";
 
-        public static string TaskFor(string type) => type switch
+        /// <summary>"700 bis 900 Wörtern" - the target range of the chosen length, in German.</summary>
+        public static string WordRange(string type, string? length)
         {
-            ContentTypes.Article => ArticleTask(),
-            ContentTypes.Whitepaper => WhitepaperTask(),
+            var (min, max) = LengthPresets.Target(type, length);
+            return $"{min:N0} bis {max:N0} Wörtern".Replace(",", ".");
+        }
+
+        public static string TaskFor(string type, string? length = null) => type switch
+        {
+            ContentTypes.Article => ArticleTask(length),
+            ContentTypes.Whitepaper => WhitepaperTask(length),
             ContentTypes.Webinar => WebinarTask(),
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Type cannot be generated.")
         };
@@ -162,7 +169,7 @@ JSON-Format:
             }
 
             text.AppendLine();
-            text.AppendLine(TaskFor(item.Type));
+            text.AppendLine(TaskFor(item.Type, item.Length));
 
             return text.ToString();
         }

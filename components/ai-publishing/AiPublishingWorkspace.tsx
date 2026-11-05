@@ -1139,6 +1139,11 @@ const CSS = `
 .aip-plan-card.wide { padding:22px; }
 .aip-plan-fields { display:grid; grid-template-columns:1fr 1fr; gap:6px 26px; }
 @media (max-width: 860px) { .aip-plan-fields { grid-template-columns:1fr; } }
+.aip-length { display:grid; grid-template-columns:repeat(auto-fit,minmax(112px,1fr)); gap:8px; margin-bottom:6px; }
+.aip-length-option { display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left; padding:9px 12px; border:1.5px solid #e5e7eb; border-radius:12px; background:#fff; cursor:pointer; font-family:inherit; }
+.aip-length-option strong { font-size:13px; color:#111827; } .aip-length-option span { font-size:11.5px; color:#6b7280; }
+.aip-length-option.on { border-color:#38bdf8; background:#f0f9ff; box-shadow:0 0 0 3px rgba(56,189,248,.18); }
+.aip-length-option:disabled { opacity:.5; cursor:not-allowed; }
 .aip-plan-doc { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:16px; padding:10px 14px; border:1px solid #eef0f3; border-radius:12px; background:#fff; }
 .aip-focus-target { scroll-margin-top: 90px; }
 @keyframes aipGlowInfo { 0% { box-shadow:0 0 0 0 rgba(37,99,235,0); } 15% { box-shadow:0 0 0 4px rgba(37,99,235,.35), 0 0 36px rgba(37,99,235,.45); background-color:#eff6ff; } 70% { box-shadow:0 0 0 4px rgba(37,99,235,.2), 0 0 28px rgba(37,99,235,.28); background-color:#eff6ff; } 100% { box-shadow:0 0 0 0 rgba(37,99,235,0); } }

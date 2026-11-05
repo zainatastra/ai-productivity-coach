@@ -30,6 +30,8 @@ type PlanItem = {
   instruction: string;
   status: string;
   contentId: string | null;
+  length?: string;
+  lengthOptions?: { id: string; minWords: number; maxWords: number }[] | null;
   gate?: { state: string; reasons: string[] } | null;
 };
 
@@ -82,7 +84,7 @@ type ContentDetail = ContentRow & {
   versions?: { id: string; versionNumber: number; createdAt?: string; revisionInstruction?: string; model?: string; llmProvider?: string; createdByAI?: boolean }[];
 };
 
-type Draft = { title: string; angle: string; audience: string; points: string; instruction: string };
+type Draft = { title: string; angle: string; audience: string; points: string; instruction: string; length: string };
 
 interface Props {
   lang: Lang;
@@ -111,6 +113,7 @@ const toDraft = (item: PlanItem): Draft => ({
   audience: item.audience,
   points: item.keyPoints.join("\n"),
   instruction: item.instruction,
+  length: item.length || "standard",
 });
 
 const pointsOf = (text: string) =>
@@ -211,7 +214,7 @@ export default function ContentPanels({ lang, providerId, api, archived, generat
     return run(`save-${type}`, () =>
       api(`/api/ai/providers/${providerId}/content-plan/items/${type}`, {
         method: "PATCH",
-        body: JSON.stringify({ title: d.title, angle: d.angle, audience: d.audience, keyPoints: pointsOf(d.points), instruction: d.instruction }),
+        body: JSON.stringify({ title: d.title, angle: d.angle, audience: d.audience, keyPoints: pointsOf(d.points), instruction: d.instruction, length: d.length }),
       }), (data) => { applyPlan(data); setNotice(t("saved")); });
   };
 
@@ -598,6 +601,22 @@ function PlanCard(props: {
                 <input className="aip-input" value={draft.audience} maxLength={200} disabled={locked}
                   onChange={(e) => props.onDraft({ ...draft, audience: e.target.value })} />
 
+                {item.lengthOptions && item.lengthOptions.length > 1 && (
+                  <>
+                    <label className="aip-label">{t("lengthLabel")}</label>
+                    <div className="aip-length" role="radiogroup" aria-label={t("lengthLabel")}>
+                      {item.lengthOptions.map((option) => (
+                        <button key={option.id} type="button" role="radio" aria-checked={draft.length === option.id}
+                          className={`aip-length-option ${draft.length === option.id ? "on" : ""}`} disabled={locked}
+                          onClick={() => props.onDraft({ ...draft, length: option.id })}>
+                          <strong>{t(`length${option.id.charAt(0).toUpperCase()}${option.id.slice(1)}` as keyof typeof TEXT)}</strong>
+                          <span>{t("lengthWords").replace("{min}", option.minWords.toLocaleString(lang === "de" ? "de-DE" : "en-GB")).replace("{max}", option.maxWords.toLocaleString(lang === "de" ? "de-DE" : "en-GB"))}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="aip-meta">{t("lengthHelp")}</div>
+                  </>
+                )}
               </div>
 
               <div>
