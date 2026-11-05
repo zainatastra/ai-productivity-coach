@@ -853,6 +853,21 @@ function DocumentViewer(props: {
           })}
         </div>
 
+        {doc.type === "whitepaper" && (doc.sources || []).some((s) => s.used) && (
+          <div className="aip-doc-section">
+            <div className="aip-label">{t("docReferences")}</div>
+            <p className="aip-help" style={{ marginBottom: 8 }}>{t("docReferencesHelp")}</p>
+            <ol className="aip-refs">
+              {(doc.sources || []).filter((s) => s.used).sort((a, b) => a.number - b.number).map((s) => (
+                <li key={s.number} value={s.number}>
+                  <span className="aip-pill gray"><span>S{s.number}</span></span>{" "}
+                  <a className="aip-url" href={s.url} target="_blank" rel="noreferrer">{s.title || hostOf(s.url)} <ExternalLink size={10} /></a>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+
         {doc.type === "whitepaper" && data.callToAction && (
           <div className="aip-doc-section">
             <div className="aip-label">{t("whitepaperCta")}</div>

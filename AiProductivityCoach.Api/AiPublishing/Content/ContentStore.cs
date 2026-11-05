@@ -207,7 +207,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
                 ["seoTitle"] = doc.SeoTitle,
                 ["metaDescription"] = doc.MetaDescription,
                 ["blocks"] = doc.Blocks.Select(BlockToMap).ToList(),
-                ["bodyHtml"] = HtmlRenderer.Render(doc.Blocks),
+                ["bodyHtml"] = HtmlRenderer.Render(doc.Blocks) + ReferencesFor(doc, sources),
                 ["data"] = doc.Data.ToDictionary(pair => pair.Key, pair => pair.Value),
                 ["notes"] = doc.Notes,
                 ["wordCount"] = HtmlRenderer.WordCount(plain),
@@ -230,6 +230,12 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
                 ["lengthPreset"] = meta.LengthPreset ?? LengthPresets.Standard
             };
         }
+
+        /// <summary>A whitepaper carries its sources inside the document; other types keep them as metadata.</summary>
+        private static string ReferencesFor(GeneratedDocument doc, IReadOnlyList<SourceRef> sources) =>
+            doc.Type == ContentTypes.Whitepaper
+                ? HtmlRenderer.RenderReferences(sources.Where(s => s.Used).Select(s => (s.Number, s.Url, s.Title)))
+                : string.Empty;
 
         private static Dictionary<string, object> VersionFields(
             Dictionary<string, object> data,
