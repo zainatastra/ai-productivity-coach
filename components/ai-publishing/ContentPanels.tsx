@@ -128,6 +128,7 @@ export default function ContentPanels({ lang, providerId, api, archived, generat
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [wishOpen, setWishOpen] = useState<string | null>(null);
+  const [planTab, setPlanTab] = useState<string>("article");
   const [wish, setWish] = useState("");
   const [openDoc, setOpenDoc] = useState<ContentDetail | null>(null);
   const [docLoading, setDocLoading] = useState(false);
@@ -429,28 +430,52 @@ export default function ContentPanels({ lang, providerId, api, archived, generat
               </div>
             </div>
 
-            <div className="aip-plan-grid">
-              {plan.items.map((item) => (
-                <PlanCard
-                  key={item.type}
-                  lang={lang}
-                  item={item}
-                  draft={drafts[item.type]}
-                  dirty={dirty(item.type)}
-                  busy={busy}
-                  locked={locked}
-                  wishOpen={wishOpen === item.type}
-                  wish={wish}
-                  onDraft={(d) => setDrafts((cur) => ({ ...cur, [item.type]: d }))}
-                  onSave={() => saveItem(item.type)}
-                  onToggleRemoved={() => toggleRemoved(item)}
-                  onOpenWish={() => { setWishOpen(wishOpen === item.type ? null : item.type); setWish(""); }}
-                  onWish={setWish}
-                  onSuggest={() => regenerateItem(item.type)}
-                  onOpenDoc={() => item.contentId && open(item.contentId)}
-                />
-              ))}
-            </div>
+            {(() => {
+              const activeItem = plan.items.find((i) => i.type === planTab) ?? plan.items[0];
+
+              return (
+                <>
+                  <div className="aip-tabs aip-plan-tabs" role="tablist">
+                    {plan.items.map((item) => {
+                      const TabIcon = ICONS[item.type] || FileText;
+                      return (
+                        <button key={item.type} role="tab" aria-selected={activeItem?.type === item.type}
+                          className={`aip-tab ${activeItem?.type === item.type ? "on" : ""}`}
+                          onClick={() => setPlanTab(item.type)}>
+                          <TabIcon size={14} />
+                          <span>{tr(CONTENT_TYPES[item.type], lang, item.type)}</span>
+                          {item.type === "tutorial" && <span className="aip-pill blue"><span>{t("comingSoon")}</span></span>}
+                          {item.contentId && <span className="aip-tab-dot green" title={t("hasDocument")} />}
+                          {item.type !== "tutorial" && dirty(item.type) && <span className="aip-tab-dot amber" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {activeItem && (
+                    <PlanCard
+                      key={activeItem.type}
+                      lang={lang}
+                      item={activeItem}
+                      doc={docs.find((d) => d.id === activeItem.contentId)}
+                      draft={drafts[activeItem.type]}
+                      dirty={dirty(activeItem.type)}
+                      busy={busy}
+                      locked={locked}
+                      wishOpen={wishOpen === activeItem.type}
+                      wish={wish}
+                      onDraft={(d) => setDrafts((cur) => ({ ...cur, [activeItem.type]: d }))}
+                      onSave={() => saveItem(activeItem.type)}
+                      onToggleRemoved={() => toggleRemoved(activeItem)}
+                      onOpenWish={() => { setWishOpen(wishOpen === activeItem.type ? null : activeItem.type); setWish(""); }}
+                      onWish={setWish}
+                      onSuggest={() => regenerateItem(activeItem.type)}
+                      onOpenDoc={() => activeItem.contentId && open(activeItem.contentId)}
+                    />
+                  )}
+                </>
+              );
+            })()}
           </>
         )}
       </div>
@@ -508,6 +533,7 @@ export default function ContentPanels({ lang, providerId, api, archived, generat
 function PlanCard(props: {
   lang: Lang;
   item: PlanItem;
+  doc?: ContentRow;
   draft?: Draft;
   dirty: boolean;
   busy: string;
@@ -543,7 +569,7 @@ function PlanCard(props: {
   const gate = item.gate;
 
   return (
-    <div className={`aip-plan-card ${removed ? "removed" : ""}`}>
+    <div className={`aip-plan-card wide ${removed ? "removed" : ""}`}>
       <div className="aip-plan-head">
         <span className="aip-plan-type"><Icon size={15} /> <span>{label}</span></span>
         <span className="aip-row wrap" style={{ margin: 0 }}>
@@ -562,26 +588,37 @@ function PlanCard(props: {
       ) : (
         draft && (
           <>
-            <label className="aip-label">{t("planFieldTitle")}</label>
-            <input className="aip-input" value={draft.title} maxLength={180} disabled={locked}
-              onChange={(e) => props.onDraft({ ...draft, title: e.target.value })} />
+            <div className="aip-plan-fields">
+              <div>
+                <label className="aip-label">{t("planFieldTitle")}</label>
+                <input className="aip-input" value={draft.title} maxLength={180} disabled={locked}
+                  onChange={(e) => props.onDraft({ ...draft, title: e.target.value })} />
 
-            <label className="aip-label">{t("planFieldAngle")}</label>
-            <textarea className="aip-input aip-area" rows={3} value={draft.angle} maxLength={500} disabled={locked}
-              onChange={(e) => props.onDraft({ ...draft, angle: e.target.value })} />
+                <label className="aip-label">{t("planFieldAudience")}</label>
+                <input className="aip-input" value={draft.audience} maxLength={200} disabled={locked}
+                  onChange={(e) => props.onDraft({ ...draft, audience: e.target.value })} />
 
-            <label className="aip-label">{t("planFieldAudience")}</label>
-            <input className="aip-input" value={draft.audience} maxLength={200} disabled={locked}
-              onChange={(e) => props.onDraft({ ...draft, audience: e.target.value })} />
+              </div>
 
-            <label className="aip-label">{t("planFieldPoints")}</label>
-            <textarea className="aip-input aip-area" rows={4} value={draft.points} disabled={locked}
-              onChange={(e) => props.onDraft({ ...draft, points: e.target.value })} />
+              <div>
+                <label className="aip-label">{t("planFieldAngle")}</label>
+                <textarea className="aip-input aip-area" rows={7} value={draft.angle} maxLength={500} disabled={locked}
+                  onChange={(e) => props.onDraft({ ...draft, angle: e.target.value })} />
+              </div>
 
-            <label className="aip-label">{t("planFieldInstruction")}</label>
-            <textarea className="aip-input aip-area" rows={2} value={draft.instruction} maxLength={1000} disabled={locked}
-              placeholder={t("planInstructionPh")}
-              onChange={(e) => props.onDraft({ ...draft, instruction: e.target.value })} />
+              <div>
+                <label className="aip-label">{t("planFieldPoints")}</label>
+                <textarea className="aip-input aip-area" rows={7} value={draft.points} disabled={locked}
+                  onChange={(e) => props.onDraft({ ...draft, points: e.target.value })} />
+              </div>
+
+              <div>
+                <label className="aip-label">{t("planFieldInstruction")}</label>
+                <textarea className="aip-input aip-area" rows={7} value={draft.instruction} maxLength={1000} disabled={locked}
+                  placeholder={t("planInstructionPh")}
+                  onChange={(e) => props.onDraft({ ...draft, instruction: e.target.value })} />
+              </div>
+            </div>
           </>
         )
       )}
@@ -595,6 +632,22 @@ function PlanCard(props: {
             {busy === `regen-${item.type}` ? <Loader2 size={13} className="aip-spin" /> : <Sparkles size={13} />}
             <span>{busy === `regen-${item.type}` ? t("suggesting") : t("suggest")}</span>
           </button>
+        </div>
+      )}
+
+      {!removed && (
+        <div className="aip-plan-doc">
+          {props.doc ? (
+            <>
+              <span className="aip-label" style={{ margin: 0 }}>{t("planDocInfo")}</span>
+              <span className="aip-pill green"><span>{t("hasDocument")}</span></span>
+              <span className="aip-meta">
+                {t("version")} {props.doc.currentVersion ?? 1} · {props.doc.wordCount ?? 0} {t("words")}
+              </span>
+            </>
+          ) : (
+            <span className="aip-meta">{t("planNoDoc")}</span>
+          )}
         </div>
       )}
 
