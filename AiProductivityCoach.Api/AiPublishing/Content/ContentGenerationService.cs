@@ -25,7 +25,19 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
             [ContentTypes.Webinar] = (10, 10000, 20_000),
         };
 
-        public static (int Passages, int MaxTokens, int CharLimit) SettingsFor(string type) => Settings[type];
+        public static (int Passages, int MaxTokens, int CharLimit) SettingsFor(string type, string? lengthPreset = null)
+        {
+            var (passages, maxTokens, charLimit) = Settings[type];
+
+            // Longer documents need more source material to stay grounded instead of padding.
+            return LengthPresets.Normalize(type, lengthPreset) switch
+            {
+                LengthPresets.Long => (passages + 6, maxTokens, (int)(charLimit * 1.25)),
+                LengthPresets.Extra => (passages + 8, maxTokens, (int)(charLimit * 1.5)),
+                LengthPresets.Short => (Math.Max(6, passages - 3), maxTokens, charLimit),
+                _ => (passages, maxTokens, charLimit)
+            };
+        }
 
         private readonly ILlmClient _llm;
         private readonly KnowledgeSearchService _search;
@@ -59,7 +71,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
             if (!_llm.IsConfigured)
                 throw new ContentGenerationException("ai_not_configured");
 
-            var (passages, maxTokens, charLimit) = Settings[item.Type];
+            var (passages, maxTokens, charLimit) = SettingsFor(item.Type, item.Length);
 
             // 1) Retrieve this provider's passages for the topic (tenant-scoped by provider id).
             var queries = new List<string> { item.Title, item.Angle };
@@ -84,16 +96,16 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
             var user = ContentPrompts.BuildWriterUser(
                 provider.Language, provider.Name, provider.Website, item, provider.Profile, excerpts, revisionInstruction);
 
-            var parsed = await _writer.WriteAsync(provider.Id, item.Type, user, maxTokens, excerpts.Count, jobId, ct);
+            var parsed = await _writer.WriteAsync(provider.Id, item.Type, user, maxTokens, excerpts.Count, jobId, ct, lengthPreset: item.Length);
 
             // 3) Automatic quality checks against the passages the writer was given.
-            var quality = QualityChecker.Check(parsed.Doc, excerpts.Select(e => e.Text).ToList(), provider.Language, excerpts.Count);
+            var quality = QualityChecker.Check(parsed.Doc, excerpts.Select(e => e.Text).ToList(), provider.Language, excerpts.Count, lengthPreset: item.Length);
 
             var sources = excerpts
                 .Select(e => new SourceRef(e.Number, e.Url, e.Title, parsed.Doc.UsedSources.Contains(e.Number)))
                 .ToList();
 
-            var meta = new ContentMeta(provider.Language, parsed.Model, parsed.LlmProvider, jobId);
+            var meta = new ContentMeta(provider.Language, parsed.Model, parsed.LlmProvider, jobId, LengthPresets.Normalize(item.Type, item.Length));
 
             // 4) Store as a private draft (new document or next version).
             string contentId;

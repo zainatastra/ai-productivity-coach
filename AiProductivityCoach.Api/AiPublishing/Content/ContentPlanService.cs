@@ -20,7 +20,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
         string? Audience,
         List<string>? KeyPoints,
         string? Instruction,
-        bool? Removed);
+        bool? Removed,
+        string? Length = null);
 
     /// <summary>
     /// The content strategy step before any long text is written (specification section 11):
@@ -126,7 +127,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
                 }
 
                 var proposed = proposals[type];
-                items.Add(proposed with { Instruction = old?.Instruction ?? string.Empty });
+                items.Add(proposed with { Instruction = old?.Instruction ?? string.Empty, Length = old?.Length ?? LengthPresets.Standard });
             }
 
             items.Add(ComingSoonTutorial());
@@ -216,6 +217,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
                 Audience = patch.Audience != null ? DocumentParser.Clean(patch.Audience, 200) : item.Audience,
                 KeyPoints = points,
                 Instruction = patch.Instruction != null ? DocumentParser.Clean(patch.Instruction, 1000) : item.Instruction,
+                Length = patch.Length != null ? LengthPresets.Normalize(type, patch.Length) : item.Length,
                 Status = patch.Removed switch
                 {
                     true => PlanItemStatus.Removed,
@@ -262,7 +264,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
 
             if (proposed == null) throw new ContentGenerationException("ai_invalid_output");
 
-            var updated = proposed with { Instruction = item.Instruction, ContentId = item.ContentId, Status = PlanItemStatus.Proposed };
+            var updated = proposed with { Instruction = item.Instruction, ContentId = item.ContentId, Status = PlanItemStatus.Proposed, Length = item.Length };
             var next = Replace(plan, updated) with { Status = PlanStatus.Draft };
             await SaveAsync(provider.Id, next);
 
@@ -346,6 +348,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
                 ["audience"] = i.Audience,
                 ["keyPoints"] = i.KeyPoints.ToList(),
                 ["instruction"] = i.Instruction,
+                ["length"] = i.Length,
                 ["status"] = i.Status,
                 ["contentId"] = i.ContentId ?? string.Empty
             }).ToList()
@@ -373,7 +376,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
                         points,
                         FirestoreApi.GetString(map, "instruction"),
                         FirestoreApi.GetString(map, "status", PlanItemStatus.Proposed),
-                        contentId.Length > 0 ? contentId : null));
+                        contentId.Length > 0 ? contentId : null,
+                        LengthPresets.Normalize(FirestoreApi.GetString(map, "type"), FirestoreApi.GetString(map, "length"))));
                 }
             }
 

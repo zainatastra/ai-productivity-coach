@@ -24,7 +24,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
         IReadOnlyList<string> KeyPoints,
         string Instruction,
         string Status,
-        string? ContentId);
+        string? ContentId,
+        string Length = LengthPresets.Standard);
 
     public sealed record PlanParseOutcome(Dictionary<string, PlanItem>? Items, string? ErrorCode);
 
