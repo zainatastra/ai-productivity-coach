@@ -34,6 +34,9 @@ export default function PublisherLoginPage() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [error, setError] = useState("");
   const [sessionNotice, setSessionNotice] = useState("");
+  const [mode, setMode] = useState<"login" | "forgot">("login");
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => emailRef.current?.focus(), 90);
@@ -111,6 +114,35 @@ export default function PublisherLoginPage() {
 
     return () => unsubscribe();
   }, [auth, router]);
+
+  // The answer is always the same, so nobody can find out which addresses have an account.
+  const handleForgot = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail || resetBusy) {
+      if (!normalizedEmail) setError("Enter your email address first.");
+      return;
+    }
+
+    setError("");
+    setResetBusy(true);
+
+    try {
+      await fetch(`${API_BASE_URL}/api/auth/publisher/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: normalizedEmail,
+          language: typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("de") ? "de" : "en",
+        }),
+      });
+      setResetDone(true);
+    } catch {
+      setError("Could not reach the server. Please try again.");
+    } finally {
+      setResetBusy(false);
+    }
+  };
 
   const handleLogin = async () => {
     setError("");
@@ -441,6 +473,41 @@ export default function PublisherLoginPage() {
           font-weight:700;
         }
 
+        .pub-link {
+          display: block;
+          margin: 12px auto 0;
+          border: 0;
+          background: transparent;
+          color: #4b5563;
+          font-family: inherit;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+          text-decoration: underline;
+          text-underline-offset: 3px;
+        }
+
+        .pub-link:hover { color: #111827; }
+
+        .pub-forgot-text {
+          margin: 0 0 14px;
+          color: #6b7280;
+          font-size: 12.5px;
+          line-height: 1.55;
+        }
+
+        .pub-reset-ok {
+          margin: 0 0 14px;
+          padding: 10px 12px;
+          border-radius: 12px;
+          border: 1px solid #bbf7d0;
+          background: #f0fdf4;
+          color: #166534;
+          font-size: 12px;
+          font-weight: 600;
+          line-height: 1.5;
+        }
+
         .pub-footnote {
           display: flex;
           align-items: flex-start;
@@ -524,6 +591,42 @@ export default function PublisherLoginPage() {
               )}
             </AnimatePresence>
 
+            {mode === "forgot" ? (
+              <>
+                <p className="pub-forgot-text">
+                  Enter the email address of your access. If it exists, we send you a link to choose a new password.
+                </p>
+
+                <div className="pub-field">
+                  <label className="pub-label">Email Address</label>
+                  <input
+                    className="pub-input"
+                    type="email"
+                    placeholder="publisher@company.com"
+                    value={email}
+                    onChange={(e) => { setEmail(e.target.value); setResetDone(false); }}
+                    onKeyDown={(e) => e.key === "Enter" && handleForgot()}
+                    autoComplete="email"
+                    disabled={resetBusy}
+                  />
+                </div>
+
+                {resetDone && (
+                  <div className="pub-reset-ok">
+                    If an access exists for this address, an email with a link is on its way. The link is valid for a short time.
+                  </div>
+                )}
+
+                <button className="pub-btn" onClick={handleForgot} disabled={resetBusy || !email.trim()}>
+                  {resetBusy ? (<><span className="pub-spinner" />Sending…</>) : "Send reset link"}
+                </button>
+
+                <button type="button" className="pub-link" onClick={() => { setMode("login"); setError(""); setResetDone(false); }}>
+                  Back to sign in
+                </button>
+              </>
+            ) : (
+              <>
             <div className="pub-field">
               <label className="pub-label">Email Address</label>
               <input
@@ -578,6 +681,11 @@ export default function PublisherLoginPage() {
                 </>
               )}
             </button>
+                <button type="button" className="pub-link" onClick={() => { setMode("forgot"); setError(""); }}>
+                  Forgot your password?
+                </button>
+              </>
+            )}
 
             <div className="pub-footnote">
               <ShieldCheck size={13} style={{ flexShrink: 0, marginTop: 1 }} />
