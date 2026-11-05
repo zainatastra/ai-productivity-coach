@@ -1132,6 +1132,14 @@ const CSS = `
 .aip-invite-box { margin-top:14px; padding:14px; border:1px solid #bae6fd; background:#f0f9ff; border-radius:14px; }
 .aip-review-action { padding:14px; border:1px solid #e5e7eb; background:#fafbfc; border-radius:14px; margin-bottom:6px; }
 .aip-queue { border-color:#fde68a; background:#fffdf5; }
+.aip-plan-tabs { margin-bottom:16px; }
+.aip-plan-tabs .aip-tab { display:inline-flex; align-items:center; gap:7px; }
+.aip-tab-dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+.aip-tab-dot.green { background:#22c55e; } .aip-tab-dot.amber { background:#f59e0b; }
+.aip-plan-card.wide { padding:22px; }
+.aip-plan-fields { display:grid; grid-template-columns:1fr 1fr; gap:6px 26px; }
+@media (max-width: 860px) { .aip-plan-fields { grid-template-columns:1fr; } }
+.aip-plan-doc { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:16px; padding:10px 14px; border:1px solid #eef0f3; border-radius:12px; background:#fff; }
 .aip-focus-target { scroll-margin-top: 90px; }
 @keyframes aipGlowInfo { 0% { box-shadow:0 0 0 0 rgba(37,99,235,0); } 15% { box-shadow:0 0 0 4px rgba(37,99,235,.35), 0 0 36px rgba(37,99,235,.45); background-color:#eff6ff; } 70% { box-shadow:0 0 0 4px rgba(37,99,235,.2), 0 0 28px rgba(37,99,235,.28); background-color:#eff6ff; } 100% { box-shadow:0 0 0 0 rgba(37,99,235,0); } }
 @keyframes aipGlowOk { 0% { box-shadow:0 0 0 0 rgba(22,163,74,0); } 15% { box-shadow:0 0 0 4px rgba(22,163,74,.35), 0 0 36px rgba(22,163,74,.45); background-color:#f0fdf4; } 70% { box-shadow:0 0 0 4px rgba(22,163,74,.2), 0 0 28px rgba(22,163,74,.28); background-color:#f0fdf4; } 100% { box-shadow:0 0 0 0 rgba(22,163,74,0); } }

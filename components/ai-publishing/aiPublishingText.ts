@@ -204,6 +204,8 @@ export const TEXT = {
   noDocs: { de: "Noch keine Dokumente erstellt.", en: "No documents written yet." },
   openDoc: { de: "Öffnen", en: "Open" },
   closeDoc: { de: "Zurück zur Übersicht", en: "Back to overview" },
+  planDocInfo: { de: "Dokument", en: "Document" },
+  planNoDoc: { de: "Noch kein Dokument – nach der Planfreigabe über „Inhalte erstellen“.", en: "No document yet – use “Write documents” after approving the plan." },
   tabRead: { de: "Lesen", en: "Read" },
   tabEdit: { de: "Bearbeiten", en: "Edit" },
   tabAi: { de: "Mit KI überarbeiten", en: "Revise with AI" },
