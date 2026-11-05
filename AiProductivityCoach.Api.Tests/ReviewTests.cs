@@ -244,3 +244,20 @@ namespace AiProductivityCoach.Api.Tests
         }
     }
 }
+
+namespace AiProductivityCoach.Api.Tests
+{
+    public class InvitationEmailFontTests
+    {
+        [Fact]
+        public void The_email_document_loads_the_website_font_and_has_fallbacks()
+        {
+            var html = InvitationMailer.Document(InvitationMailer.BuildInvitationHtml("X", "a@b.co", "https://x.de/i?token=1", "de"));
+
+            Assert.StartsWith("<!DOCTYPE html>", html);
+            Assert.Contains("fonts.googleapis.com/css2?family=Plus+Jakarta+Sans", html);
+            Assert.Contains("'Plus Jakarta Sans',Arial,Helvetica,sans-serif", html);
+            Assert.DoesNotContain("font-family:Arial,Helvetica,sans-serif'>", html.Substring(html.IndexOf("<body")).Replace(InvitationMailer.FontStack, ""));
+        }
+    }
+}
