@@ -164,6 +164,8 @@ export const RT = {
   es_unknown: { de: "Unbekannter Platzhalter:", en: "Unknown placeholder:" },
   es_notConfigured: { de: "E-Mail-Versand ist nicht eingerichtet.", en: "Email sending is not configured." },
   es_unsaved: { de: "Ungespeicherte Änderungen", en: "Unsaved changes" },
+  i_signingIn: { de: "Sie werden angemeldet …", en: "Signing you in …" },
+  i_forgot: { de: "Passwort vergessen?", en: "Forgot your password?" },
   i_goLogin: { de: "Zur Anmeldung", en: "Go to sign in" },
   i_existing: { de: "Für diese E-Mail-Adresse gibt es schon einen Zugang. Melden Sie sich an, um die Einladung anzunehmen.", en: "An account already exists for this email address. Sign in to accept the invitation." },
   i_acceptExisting: { de: "Einladung annehmen", en: "Accept invitation" },

@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { getAuth, onAuthStateChanged, type User } from "firebase/auth";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, type User } from "firebase/auth";
 import { Check, Loader2 } from "lucide-react";
 import { publisherApp } from "@/services/firebase";
 import { API_BASE_URL } from "@/services/api";
@@ -28,6 +28,7 @@ function InviteContent() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState<null | "created" | "accepted">(null);
+  const [signingIn, setSigningIn] = useState(false);
 
   useEffect(() => onAuthStateChanged(auth, (u) => setUser(u)), [auth]);
 
@@ -73,6 +74,23 @@ function InviteContent() {
 
       if (!res.ok) { setError(errorText(data?.code)); return; }
       setDone("created");
+
+      // Sign the new person in right away, so there is no separate login step that can go wrong.
+      setSigningIn(true);
+      try {
+        const signedIn = await signInWithEmailAndPassword(auth, preview?.email || data?.email, password);
+        const idToken = await signedIn.user.getIdToken(true);   // fresh token: it carries the new role
+        const access = await fetch(`${API_BASE_URL}/api/auth/access`, { headers: { Authorization: `Bearer ${idToken}` }, cache: "no-store" });
+        const info = access.ok ? await access.json().catch(() => null) : null;
+
+        if (info?.authenticated && info.role === "publisher" && info.status === "active") {
+          window.location.assign("/publisher/ai-review");
+          return;
+        }
+      } catch {
+        // fall through: the person can still sign in by hand
+      }
+      setSigningIn(false);
     } catch {
       setError(t("c_err_network"));
     } finally {
@@ -159,7 +177,10 @@ function InviteContent() {
                     </button>
                   </>
                 ) : (
-                  <a className="iv-btn" href={loginHref}><span>{t("i_goLogin")}</span></a>
+                  <>
+                    <a className="iv-btn" href={loginHref}><span>{t("i_goLogin")}</span></a>
+                    <a className="iv-hint" style={{ display: "block", textAlign: "center", marginTop: 12 }} href={loginHref}>{t("i_forgot")}</a>
+                  </>
                 )}
               </>
             )}
@@ -169,8 +190,14 @@ function InviteContent() {
         {done === "created" && (
           <>
             <p className="iv-ok"><Check size={16} /> <span>{t("i_done")}</span></p>
-            <p className="iv-hint" style={{ fontSize: 13.5 }}>{t("i_doneHelp")}</p>
-            <a className="iv-btn" href="/publisher/login?next=/publisher/ai-review"><span>{t("i_goLogin")}</span></a>
+            {signingIn ? (
+              <div className="iv-row"><Loader2 size={16} className="iv-spin" /> <span>{t("i_signingIn")}</span></div>
+            ) : (
+              <>
+                <p className="iv-hint" style={{ fontSize: 13.5 }}>{t("i_doneHelp")}</p>
+                <a className="iv-btn" href="/publisher/login?next=/publisher/ai-review"><span>{t("i_goLogin")}</span></a>
+              </>
+            )}
           </>
         )}
 
