@@ -15,6 +15,7 @@ import {
 import { KnowledgeData, PageRow, PagesCard, ProfileCard, ReadinessCard, SearchCard } from "./KnowledgePanels";
 import ContentPanels from "./ContentPanels";
 import { AccessPanel, ReviewQueue } from "./ReviewPanels";
+import EmailSettingsPanel from "./EmailSettingsPanel";
 
 /* ───────────── types ───────────── */
 
@@ -942,6 +943,9 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
               </div>
             )}
           </div>
+
+          {/* Phase 1 improvement: editable email texts */}
+          <EmailSettingsPanel lang={lang} api={api} />
         </>
       )}
 
@@ -1146,6 +1150,9 @@ const CSS = `
 .aip-length-option:disabled { opacity:.5; cursor:not-allowed; }
 .aip-plan-doc { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:16px; padding:10px 14px; border:1px solid #eef0f3; border-radius:12px; background:#fff; }
 .aip-refs { margin:0; padding-left:22px; display:flex; flex-direction:column; gap:6px; font-size:13px; }
+.aip-email-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:24px; align-items:start; }
+@media (max-width: 960px) { .aip-email-grid { grid-template-columns:1fr; } }
+.aip-email-frame { width:100%; height:640px; border:1px solid #e5e7eb; border-radius:14px; background:#f3f4f6; }
 .aip-focus-target { scroll-margin-top: 90px; }
 @keyframes aipGlowInfo { 0% { box-shadow:0 0 0 0 rgba(37,99,235,0); } 15% { box-shadow:0 0 0 4px rgba(37,99,235,.35), 0 0 36px rgba(37,99,235,.45); background-color:#eff6ff; } 70% { box-shadow:0 0 0 4px rgba(37,99,235,.2), 0 0 28px rgba(37,99,235,.28); background-color:#eff6ff; } 100% { box-shadow:0 0 0 0 rgba(37,99,235,0); } }
 @keyframes aipGlowOk { 0% { box-shadow:0 0 0 0 rgba(22,163,74,0); } 15% { box-shadow:0 0 0 4px rgba(22,163,74,.35), 0 0 36px rgba(22,163,74,.45); background-color:#f0fdf4; } 70% { box-shadow:0 0 0 4px rgba(22,163,74,.2), 0 0 28px rgba(22,163,74,.28); background-color:#f0fdf4; } 100% { box-shadow:0 0 0 0 rgba(22,163,74,0); } }

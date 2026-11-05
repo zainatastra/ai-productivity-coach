@@ -218,6 +218,7 @@ builder.Services.AddSingleton<ProviderPurgeService>();
 builder.Services.AddSingleton<InvitationService>();
 builder.Services.AddSingleton<MembershipService>();
 builder.Services.AddSingleton<ReviewStore>();
+builder.Services.AddSingleton<EmailTemplateStore>();
 builder.Services.AddSingleton<InvitationMailer>();
 builder.Services.AddSingleton<IAiJobHandler, MediaJobHandler>();
 builder.Services.AddSingleton<IAiJobHandler, GenerationJobHandler>();
