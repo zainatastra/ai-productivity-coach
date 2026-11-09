@@ -15,6 +15,7 @@ import {
 import { KnowledgeData, PageRow, PagesCard, ProfileCard, ReadinessCard, SearchCard } from "./KnowledgePanels";
 import ContentPanels from "./ContentPanels";
 import { AccessPanel, ReviewQueue } from "./ReviewPanels";
+import ProfileBuilderPanel from "./ProfileBuilderPanel";
 import EmailSettingsPanel from "./EmailSettingsPanel";
 
 /* ───────────── types ───────────── */
@@ -824,6 +825,9 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
               <PagesCard lang={lang} pages={pages} />
               {knowledge?.readiness && <SearchCard lang={lang} providerId={provider.id} api={api} />}
 
+              {/* Phase 2: profile builder (About fields, logo, AI header, preview link) */}
+              <ProfileBuilderPanel lang={lang} providerId={provider.id} api={api} archived={archived} />
+
               {/* Phase 6: company access */}
               <AccessPanel lang={lang} providerId={provider.id} api={api} archived={archived} />
 
@@ -1153,6 +1157,13 @@ const CSS = `
 .aip-email-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:24px; align-items:start; }
 @media (max-width: 960px) { .aip-email-grid { grid-template-columns:1fr; } }
 .aip-email-frame { width:100%; height:640px; border:1px solid #e5e7eb; border-radius:14px; background:#f3f4f6; }
+.aip-subsection { margin-top:22px; padding-top:18px; border-top:1px solid #eef0f3; }
+.aip-h4 { display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:800; color:#111827; margin:0 0 4px; }
+.aip-logo-preview { width:96px; height:96px; object-fit:contain; border-radius:12px; border:1px solid #e5e7eb; background:#fff; padding:8px; }
+.aip-header-preview { width:100%; max-width:640px; aspect-ratio:3/2; object-fit:cover; border-radius:14px; border:1px solid #e5e7eb; background:#f3f4f6; display:block; }
+.aip-logo-candidates { display:flex; flex-wrap:wrap; gap:12px; }
+.aip-logo-candidate { display:flex; flex-direction:column; align-items:center; gap:6px; padding:10px; border:1.5px solid #e5e7eb; border-radius:12px; background:#fff; }
+.aip-logo-candidate img { width:64px; height:64px; object-fit:contain; }
 .aip-focus-target { scroll-margin-top: 90px; }
 @keyframes aipGlowInfo { 0% { box-shadow:0 0 0 0 rgba(37,99,235,0); } 15% { box-shadow:0 0 0 4px rgba(37,99,235,.35), 0 0 36px rgba(37,99,235,.45); background-color:#eff6ff; } 70% { box-shadow:0 0 0 4px rgba(37,99,235,.2), 0 0 28px rgba(37,99,235,.28); background-color:#eff6ff; } 100% { box-shadow:0 0 0 0 rgba(37,99,235,0); } }
 @keyframes aipGlowOk { 0% { box-shadow:0 0 0 0 rgba(22,163,74,0); } 15% { box-shadow:0 0 0 4px rgba(22,163,74,.35), 0 0 36px rgba(22,163,74,.45); background-color:#f0fdf4; } 70% { box-shadow:0 0 0 4px rgba(22,163,74,.2), 0 0 28px rgba(22,163,74,.28); background-color:#f0fdf4; } 100% { box-shadow:0 0 0 0 rgba(22,163,74,0); } }

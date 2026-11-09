@@ -566,6 +566,13 @@ export const QUALITY_CHECKS: Record<string, Pair> = {
 };
 
 export const CONTENT_ERRORS: Record<string, Pair> = {
+  no_website: { de: "Für diesen Anbieter ist keine Website hinterlegt.", en: "This provider has no website set." },
+  logo_url_required: { de: "Bitte eine Bild-Adresse angeben.", en: "Please provide an image address." },
+  invalid_logo_url: { de: "Die Bild-Adresse ist nicht gültig.", en: "The image address is not valid." },
+  invalid_logo_format: { de: "Die Datei ist kein unterstütztes Bildformat (PNG, JPEG, WebP oder ICO).", en: "The file is not a supported image format (PNG, JPEG, WebP or ICO)." },
+  logo_fetch_failed: { de: "Das Bild konnte nicht heruntergeladen werden.", en: "The image could not be downloaded." },
+  candidate_not_found: { de: "Dieser Vorschlag wurde nicht gefunden.", en: "This suggestion was not found." },
+  invalid_profile: { de: "Das Profil fehlt oder ist ungültig.", en: "The profile is missing or invalid." },
   no_company_access: { de: "Laden Sie zuerst eine Kontaktperson des Unternehmens ein.", en: "Invite a company contact first." },
   invalid_transition: { de: "Dieser Schritt ist im aktuellen Status nicht möglich.", en: "This step is not possible in the current status." },
   invalid_decision: { de: "Unbekannte Entscheidung.", en: "Unknown decision." },

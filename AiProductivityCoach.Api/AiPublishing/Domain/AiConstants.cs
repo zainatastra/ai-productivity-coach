@@ -97,6 +97,14 @@ namespace AiProductivityCoach.Api.AiPublishing.Domain
         public const string ProviderArchived = "PROVIDER_ARCHIVED";
         public const string ProviderRestored = "PROVIDER_RESTORED";
         public const string ProviderDeleted = "PROVIDER_DELETED";
+        public const string ProviderProfileEdited = "PROVIDER_PROFILE_EDITED";
+        public const string ProviderLogoCandidatesRefreshed = "PROVIDER_LOGO_CANDIDATES_REFRESHED";
+        public const string ProviderLogoSelected = "PROVIDER_LOGO_SELECTED";
+        public const string ProviderLogoRemoved = "PROVIDER_LOGO_REMOVED";
+        public const string ProviderHeaderGenerated = "PROVIDER_HEADER_GENERATED";
+        public const string ProviderHeaderRemoved = "PROVIDER_HEADER_REMOVED";
+        public const string ProviderPreviewLinkCreated = "PROVIDER_PREVIEW_LINK_CREATED";
+        public const string ProviderPreviewLinkRevoked = "PROVIDER_PREVIEW_LINK_REVOKED";
         public const string SourceAdded = "SOURCE_ADDED";
         public const string SourceRemoved = "SOURCE_REMOVED";
         public const string SourceCrawlStarted = "SOURCE_CRAWL_STARTED";

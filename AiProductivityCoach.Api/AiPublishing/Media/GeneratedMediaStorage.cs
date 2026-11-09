@@ -28,7 +28,14 @@ namespace AiProductivityCoach.Api.AiPublishing.Media
         public static string PathFor(string providerId, string contentId, string mediaId, string extension) =>
             $"providers/{providerId}/ai-content/{contentId}/{mediaId}.{extension.TrimStart('.').ToLowerInvariant()}";
 
-        public async Task<StoredImage> SaveAsync(string pathname, GeneratedImage image, CancellationToken cancellationToken)
+        /// <summary>Path for the provider profile's own media (logo, AI header) - distinct from per-content images.</summary>
+        public static string ProfilePathFor(string providerId, string slot, string extension) =>
+            $"providers/{providerId}/profile/{slot}-{Guid.NewGuid():N}.{extension.TrimStart('.').ToLowerInvariant()}";
+
+        public Task<StoredImage> SaveAsync(string pathname, GeneratedImage image, CancellationToken cancellationToken) =>
+            SaveAsync(pathname, image.Bytes, image.ContentType, cancellationToken);
+
+        public async Task<StoredImage> SaveAsync(string pathname, byte[] bytes, string contentType, CancellationToken cancellationToken)
         {
             if (!IsConfigured)
                 throw new ImageGenerationException("storage_not_configured", "The media storage is not configured.");
@@ -39,8 +46,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Media
             request.Content = JsonContent.Create(new
             {
                 pathname,
-                contentType = image.ContentType,
-                dataBase64 = Convert.ToBase64String(image.Bytes)
+                contentType,
+                dataBase64 = Convert.ToBase64String(bytes)
             });
 
             try

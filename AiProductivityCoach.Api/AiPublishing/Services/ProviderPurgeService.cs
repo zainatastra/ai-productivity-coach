@@ -41,6 +41,23 @@ namespace AiProductivityCoach.Api.AiPublishing.Services
             var documents = 0;
             var images = 0;
 
+            // 0) the provider's own profile media (logo, AI header) - not a draft's media
+            var providerDoc = await _firestore.Collection(AiCollections.Providers).Document(providerId).GetSnapshotAsync(ct);
+
+            if (providerDoc.Exists)
+            {
+                var providerData = providerDoc.ToDictionary();
+
+                foreach (var key in new[] { "logoPathname", "headerPathname" })
+                {
+                    if (FirestoreApi.GetString(providerData, key) is { Length: > 0 } path)
+                    {
+                        await _storage.DeleteAsync(path, ct);
+                        images++;
+                    }
+                }
+            }
+
             // 1) drafts, including versions and the stored image files
             var drafts = await _firestore.Collection(AiCollections.Content)
                 .WhereEqualTo("providerId", providerId)

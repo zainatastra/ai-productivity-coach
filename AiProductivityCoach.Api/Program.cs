@@ -214,6 +214,8 @@ builder.Services.AddSingleton<MediaStore>();
 builder.Services.AddSingleton<IImageClient, OpenAiImageClient>();
 builder.Services.AddHttpClient<GeneratedMediaStorage>();
 builder.Services.AddSingleton<MediaGenerationService>();
+builder.Services.AddSingleton<ProfileMediaService>();
+builder.Services.AddSingleton<AiProductivityCoach.Api.AiPublishing.Profile.ProfilePreviewService>();
 builder.Services.AddSingleton<ProviderPurgeService>();
 builder.Services.AddSingleton<InvitationService>();
 builder.Services.AddSingleton<MembershipService>();

@@ -19,6 +19,11 @@ namespace AiProductivityCoach.Api.AiPublishing.Security
 
     public sealed record FetchedDocument(FetchResult Meta, string? Body);
 
+    public sealed record BinaryFetchResult(bool Ok, byte[]? Bytes, string? ContentType, string? ErrorCode)
+    {
+        public static BinaryFetchResult Fail(string code) => new(false, null, null, code);
+    }
+
     /// <summary>
     /// HTTP fetcher for admin-supplied source URLs.
     /// - Every connection is checked against the public-address rule at connect time
@@ -296,6 +301,85 @@ namespace AiProductivityCoach.Api.AiPublishing.Security
             text = Regex.Replace(text, @"\s+", " ").Trim();
 
             return text.Length;
+        }
+
+        /// <summary>Fetches a binary resource (an image) through the same SSRF-protected client, up to a byte cap.</summary>
+        public async Task<BinaryFetchResult> FetchBinaryAsync(
+            string url, long maxBytes, CancellationToken cancellationToken)
+        {
+            var check = UrlSafety.Normalize(url);
+            if (!check.Ok) return BinaryFetchResult.Fail("unsafe_url");
+
+            try
+            {
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeout.CancelAfter(RequestTimeout);
+
+                var current = check.Normalized!;
+
+                for (var hop = 0; hop <= MaxRedirects; hop++)
+                {
+                    var hopCheck = UrlSafety.Normalize(current);
+                    if (!hopCheck.Ok) return BinaryFetchResult.Fail("unsafe_url");
+
+                    using var request = new HttpRequestMessage(HttpMethod.Get, current);
+                    using var response = await _client.SendAsync(
+                        request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+
+                    var status = (int)response.StatusCode;
+
+                    if (status is 301 or 302 or 303 or 307 or 308)
+                    {
+                        var location = response.Headers.Location;
+                        if (location == null) return BinaryFetchResult.Fail("http_error");
+
+                        current = location.IsAbsoluteUri
+                            ? location.AbsoluteUri
+                            : new Uri(new Uri(current), location).AbsoluteUri;
+                        continue;
+                    }
+
+                    if (status < 200 || status >= 300)
+                        return BinaryFetchResult.Fail("http_error");
+
+                    if (response.Content.Headers.ContentLength is { } declared && declared > maxBytes)
+                        return BinaryFetchResult.Fail("too_large");
+
+                    var contentType = response.Content.Headers.ContentType?.MediaType?.ToLowerInvariant();
+
+                    await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token);
+                    using var buffer = new MemoryStream();
+                    var chunk = new byte[16 * 1024];
+                    int read;
+
+                    while ((read = await stream.ReadAsync(chunk, timeout.Token)) > 0)
+                    {
+                        if (buffer.Length + read > maxBytes) return BinaryFetchResult.Fail("too_large");
+                        buffer.Write(chunk, 0, read);
+                    }
+
+                    if (buffer.Length == 0) return BinaryFetchResult.Fail("empty_content");
+
+                    return new BinaryFetchResult(true, buffer.ToArray(), contentType, null);
+                }
+
+                return BinaryFetchResult.Fail("too_many_redirects");
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                return BinaryFetchResult.Fail("timeout");
+            }
+            catch (HttpRequestException ex)
+            {
+                var code = IsBlockedAddress(ex) ? "unsafe_url"
+                    : ex.InnerException is SocketException { SocketErrorCode: SocketError.HostNotFound } ? "dns_error"
+                    : "connection_failed";
+                return BinaryFetchResult.Fail(code);
+            }
+            catch (SocketException)
+            {
+                return BinaryFetchResult.Fail("dns_error");
+            }
         }
 
         public void Dispose() => _client.Dispose();

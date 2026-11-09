@@ -127,5 +127,31 @@ namespace AiProductivityCoach.Api.AiPublishing.Media
     public static class ImageSignature
     {
         public static bool IsJpeg(byte[] bytes) => bytes.Length > 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF;
+
+        public static bool IsPng(byte[] bytes) =>
+            bytes.Length > 8 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47;
+
+        public static bool IsWebp(byte[] bytes) =>
+            bytes.Length >= 12 && bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46 &&
+            bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50;
+
+        public static bool IsIco(byte[] bytes) =>
+            bytes.Length > 4 && bytes[0] == 0x00 && bytes[1] == 0x00 && bytes[2] == 0x01 && bytes[3] == 0x00;
+
+        /// <summary>The real format by file signature, independent of what the server claimed - never trust a content-type header alone.</summary>
+        public static string? Detect(byte[] bytes) =>
+            IsPng(bytes) ? "image/png" :
+            IsJpeg(bytes) ? "image/jpeg" :
+            IsWebp(bytes) ? "image/webp" :
+            IsIco(bytes) ? "image/x-icon" :
+            null;
+
+        public static string ExtensionFor(string contentType) => contentType switch
+        {
+            "image/png" => "png",
+            "image/webp" => "webp",
+            "image/x-icon" => "ico",
+            _ => "jpg"
+        };
     }
 }

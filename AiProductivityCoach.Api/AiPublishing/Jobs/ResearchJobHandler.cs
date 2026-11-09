@@ -6,6 +6,7 @@ using Google.Cloud.Firestore;
 using AiProductivityCoach.Api.AiPublishing.Ai;
 using AiProductivityCoach.Api.AiPublishing.Domain;
 using AiProductivityCoach.Api.AiPublishing.Knowledge;
+using AiProductivityCoach.Api.AiPublishing.Media;
 using AiProductivityCoach.Api.AiPublishing.Security;
 using AiProductivityCoach.Api.AiPublishing.Services;
 
@@ -29,6 +30,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Jobs
         private readonly KnowledgeStore _store;
         private readonly AiRunService _runs;
         private readonly AiAuditService _audit;
+        private readonly ProfileMediaService _profileMedia;
         private readonly ILogger<ResearchJobHandler> _logger;
 
         public ResearchJobHandler(
@@ -38,6 +40,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Jobs
             KnowledgeStore store,
             AiRunService runs,
             AiAuditService audit,
+            ProfileMediaService profileMedia,
             ILogger<ResearchJobHandler> logger)
         {
             _firestore = firestore;
@@ -46,6 +49,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Jobs
             _store = store;
             _runs = runs;
             _audit = audit;
+            _profileMedia = profileMedia;
             _logger = logger;
         }
 
@@ -57,6 +61,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Jobs
             Step("crawl", "Quellen lesen", "Reading sources"),
             Step("index", "Wissensbasis aufbauen", "Building knowledge base"),
             Step("profile", "Anbieterprofil analysieren", "Analysing provider profile"),
+            Step("media", "Logo & Titelbild", "Logo & header image"),
             Step("readiness", "Wissensbereitschaft berechnen", "Calculating knowledge readiness"),
         };
 
@@ -91,6 +96,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Jobs
 
             var providerName = provider.GetValue<string>("name");
             var language = FirestoreApi.GetString(provider.ToDictionary(), "defaultLanguage", "de");
+            var website = FirestoreApi.GetString(provider.ToDictionary(), "website");
 
             var sourceDocs = (await providerRef.Collection(AiCollections.Sources).GetSnapshotAsync(cancellationToken))
                 .Documents
@@ -158,6 +164,14 @@ namespace AiProductivityCoach.Api.AiPublishing.Jobs
                 ct.ThrowIfCancellationRequested();
 
                 await context.ReportAsync(88, "profile", profile != null ? "done" : "failed");
+
+                // ═════════ 3b. PROFILE MEDIA (logo from the website, AI header) ═════════
+                // Spec section 6: "the logo is supposed to be caught from the website".
+                // Spec section 7: "the header is supposed to be created by the AI according to the info it fetched".
+                // Both are a bonus on top of the research job: a failure here never fails the run.
+                await context.ReportAsync(89, "media", "running");
+                await RunProfileMediaAsync(context, website, ct);
+                await context.ReportAsync(90, "media", "done");
 
                 // ═════════ 4. READINESS ═════════
                 await context.ReportAsync(90, "readiness", "running");
@@ -701,7 +715,14 @@ namespace AiProductivityCoach.Api.AiPublishing.Jobs
             string Phone,
             string Address,
             bool HasSoftwareProduct,
-            string Model);
+            string Model,
+            string ShortDescription,
+            string Headline,
+            string Headquarters,
+            string FoundedYear,
+            string EmployeeRange,
+            List<string> Specialties,
+            List<string> Categories);
 
         private static readonly string[] ProfileQueries =
         {
@@ -754,9 +775,16 @@ namespace AiProductivityCoach.Api.AiPublishing.Jobs
                     "Erstelle dieses JSON:\n" +
                     "{\n" +
                     "  \"companyDescription\": \"2-3 sachliche Sätze, nur aus den Auszügen\",\n" +
+                    "  \"shortDescription\": \"1 prägnanter Satz, max. 160 Zeichen, nur aus den Auszügen\",\n" +
+                    "  \"headline\": \"kurzer Claim/Slogan laut Text, sonst leer\",\n" +
                     "  \"products\": [{\"name\": \"Produktname laut Text\", \"summary\": \"1 Satz laut Text\"}],\n" +
                     "  \"topics\": [\"Themenschwerpunkte\"],\n" +
                     "  \"industries\": [\"Zielbranchen, falls genannt\"],\n" +
+                    "  \"specialties\": [\"konkrete Kompetenzen/Schwerpunkte laut Text\"],\n" +
+                    "  \"categories\": [\"kurze Branchen-/Kategorie-Schlagworte, max. 3-5 Wörter je Eintrag\"],\n" +
+                    "  \"headquarters\": \"Hauptsitz/Standort laut Text, sonst leer\",\n" +
+                    "  \"foundedYear\": \"Gründungsjahr laut Text als 4-stellige Zahl, sonst leer\",\n" +
+                    "  \"employeeRange\": \"Mitarbeiterzahl/-spanne laut Text, sonst leer\",\n" +
                     "  \"contact\": {\"email\": \"\", \"phone\": \"\", \"address\": \"\"},\n" +
                     "  \"hasSoftwareProduct\": false\n" +
                     "}";
@@ -789,6 +817,38 @@ namespace AiProductivityCoach.Api.AiPublishing.Jobs
                 // The profile is a bonus: the knowledge base is still valid without it.
                 _logger.LogWarning(ex, "[Research] Profile step failed for {ProviderId}.", context.ProviderId);
                 return null;
+            }
+        }
+
+        /// <summary>
+        /// Logo discovery always runs (cheap, no AI cost); the AI header is generated only once,
+        /// the first time a provider has none yet, so re-running research never re-spends on it.
+        /// Both are a bonus step: any failure is logged and swallowed, never fails the research job.
+        /// </summary>
+        private async Task RunProfileMediaAsync(JobContext context, string website, CancellationToken ct)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(website))
+                    await _profileMedia.DiscoverAsync(context.ProviderId, website, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "[Research] Logo discovery failed for {ProviderId}.", context.ProviderId);
+            }
+
+            try
+            {
+                var providerRef = _firestore.Collection(AiCollections.Providers).Document(context.ProviderId);
+                var current = await providerRef.GetSnapshotAsync(ct);
+                var hasHeader = current.Exists && FirestoreApi.GetString(current.ToDictionary(), "headerImageUrl").Length > 0;
+
+                if (!hasHeader && _profileMedia.HeaderGenerationConfigured)
+                    await _profileMedia.GenerateHeaderAsync(context.ProviderId, context.JobId, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "[Research] Header generation failed for {ProviderId}.", context.ProviderId);
             }
         }
 
@@ -933,10 +993,37 @@ namespace AiProductivityCoach.Api.AiPublishing.Jobs
                 var description = Str(root, "companyDescription", 600);
                 var hasSoftware = root.TryGetProperty("hasSoftwareProduct", out var sw) && sw.ValueKind == JsonValueKind.True;
 
+                // shortDescription/headline are a paraphrased summary, trusted the same way
+                // companyDescription already is. Headquarters/founded year/employee range are
+                // discrete factual values, so - like the address above - they are kept only
+                // when the stated value genuinely appears in the source excerpts.
+                var shortDescription = Str(root, "shortDescription", 200);
+                var headline = Str(root, "headline", 180);
+
+                var headquarters = Str(root, "headquarters", 200);
+                if (headquarters.Length > 0 && !lowerExcerpts.Contains(headquarters.ToLowerInvariant()))
+                    headquarters = string.Empty;
+
+                var foundedYear = Str(root, "foundedYear", 20);
+                var yearDigits = new string(foundedYear.Where(char.IsDigit).ToArray());
+                foundedYear = yearDigits.Length == 4 &&
+                              int.TryParse(yearDigits, out var yearValue) &&
+                              yearValue is >= 1600 and <= 2100 &&
+                              excerptDigits.Contains(yearDigits)
+                    ? yearDigits
+                    : string.Empty;
+
+                var employeeRange = Str(root, "employeeRange", 80);
+                var employeeDigits = new string(employeeRange.Where(char.IsDigit).ToArray());
+                if (employeeDigits.Length == 0 || !excerptDigits.Contains(employeeDigits))
+                    employeeRange = string.Empty;
+
                 return new ProviderProfile(
                     description, products,
                     StrList(root, "topics", 12, 80), StrList(root, "industries", 12, 80),
-                    email, phone, address, hasSoftware, model);
+                    email, phone, address, hasSoftware, model,
+                    shortDescription, headline, headquarters, foundedYear, employeeRange,
+                    StrList(root, "specialties", 20, 80), StrList(root, "categories", 10, 80));
             }
             catch (JsonException)
             {
@@ -949,12 +1036,19 @@ namespace AiProductivityCoach.Api.AiPublishing.Jobs
         private static Dictionary<string, object> ProfileToMap(ProviderProfile profile) => new()
         {
             ["description"] = profile.Description,
+            ["shortDescription"] = profile.ShortDescription,
+            ["headline"] = profile.Headline,
             ["products"] = profile.Products.Select(p => new Dictionary<string, object>
             {
                 ["name"] = p.Name, ["summary"] = p.Summary
             }).ToList(),
             ["topics"] = profile.Topics,
             ["industries"] = profile.Industries,
+            ["specialties"] = profile.Specialties,
+            ["categories"] = profile.Categories,
+            ["headquarters"] = profile.Headquarters,
+            ["foundedYear"] = profile.FoundedYear,
+            ["employeeRange"] = profile.EmployeeRange,
             ["contact"] = new Dictionary<string, object>
             {
                 ["email"] = profile.Email, ["phone"] = profile.Phone, ["address"] = profile.Address

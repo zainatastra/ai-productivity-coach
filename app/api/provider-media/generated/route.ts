@@ -7,7 +7,7 @@ type GeneratedBody = {
   dataBase64?: string;
 };
 
-const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/x-icon"];
 const MAX_BYTES = 3_500_000;
 
 // Server-to-server only: the .NET backend stores AI-generated images here.
@@ -33,7 +33,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (
     !pathname ||
     !pathname.startsWith("providers/") ||
-    !pathname.includes("/ai-content/") ||
+    !(pathname.includes("/ai-content/") || pathname.includes("/profile/")) ||
     pathname.includes("..")
   ) {
     return NextResponse.json({ message: "Invalid Blob pathname." }, { status: 400 });

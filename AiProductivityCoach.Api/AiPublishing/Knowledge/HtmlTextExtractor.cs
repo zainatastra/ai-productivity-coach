@@ -48,7 +48,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Knowledge
             var doc = new HtmlDocument { OptionMaxNestedChildNodes = 300 };
             doc.LoadHtml(html ?? string.Empty);
 
-            var title = Clean(doc.DocumentNode.SelectSingleNode("//title")?.InnerText);
+            var titleNode = doc.DocumentNode.SelectSingleNode("//title");
+            var title = titleNode != null ? CleanSpaced(titleNode) : string.Empty;
             var description = Clean(
                 doc.DocumentNode.SelectSingleNode("//meta[@name='description']")?.GetAttributeValue("content", null) ??
                 doc.DocumentNode.SelectSingleNode("//meta[@property='og:description']")?.GetAttributeValue("content", null));
@@ -61,7 +62,10 @@ namespace AiProductivityCoach.Api.AiPublishing.Knowledge
             RemoveBoilerplate(doc);
 
             if (string.IsNullOrWhiteSpace(title))
-                title = Clean(doc.DocumentNode.SelectSingleNode("//h1")?.InnerText);
+            {
+                var h1Node = doc.DocumentNode.SelectSingleNode("//h1");
+                if (h1Node != null) title = CleanSpaced(h1Node);
+            }
 
             var root = PickContentRoot(doc);
             var blocks = new List<string>();
@@ -249,7 +253,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Knowledge
 
                 if (name.Length == 2 && name[0] == 'h' && char.IsDigit(name[1]))
                 {
-                    var heading = Clean(child.InnerText);
+                    var heading = CleanSpaced(child);
                     if (heading.Length >= 2)
                     {
                         var level = Math.Min(3, name[1] - '0');
@@ -264,7 +268,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Knowledge
                     {
                         var cells = row.ChildNodes
                             .Where(c => c.Name is "td" or "th")
-                            .Select(c => Clean(c.InnerText))
+                            .Select(CleanSpaced)
                             .Where(c => c.Length > 0);
 
                         var line = string.Join(" | ", cells);
@@ -275,7 +279,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Knowledge
 
                 if (BlockTags.Contains(name))
                 {
-                    var text = Clean(child.InnerText);
+                    var text = CleanSpaced(child);
 
                     if (name == "li") text = "- " + text;
 
@@ -298,7 +302,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Knowledge
             var anchors = block.Descendants("a").ToList();
             if (anchors.Count == 0) return false;
 
-            var linkText = Clean(string.Join(" ", anchors.Select(a => a.InnerText)));
+            var linkText = Clean(string.Join(" ", anchors.Select(CleanSpaced)));
             return linkText.Length >= text.TrimStart('-', ' ').Length - 2;
         }
 
@@ -324,6 +328,29 @@ namespace AiProductivityCoach.Api.AiPublishing.Knowledge
             if (string.IsNullOrWhiteSpace(value)) return string.Empty;
             var decoded = WebUtility.HtmlDecode(value).Replace(' ', ' ');
             return Regex.Replace(decoded, @"\s+", " ").Trim();
+        }
+
+        /// <summary>
+        /// Like node.InnerText, but inserts a space at every tag boundary first. Plain InnerText
+        /// concatenates text nodes with no separator at all, so markup such as
+        /// "&lt;span&gt;Engineering&lt;/span&gt;&lt;span&gt;Digital Advantage&lt;/span&gt;" (or a bare
+        /// &lt;br&gt; splitting one heading across lines) collapses into a run-on word
+        /// ("EngineeringDigital Advantage"); the whitespace-collapsing Clean(string) above only
+        /// fixes doubled spaces, it cannot restore one that was never there.
+        /// </summary>
+        private static string CleanSpaced(HtmlNode node)
+        {
+            var sb = new StringBuilder();
+
+            void Collect(HtmlNode n)
+            {
+                if (n.NodeType == HtmlNodeType.Text) { sb.Append(' ').Append(n.InnerText); return; }
+                if (n.NodeType != HtmlNodeType.Element) return;
+                foreach (var child in n.ChildNodes) Collect(child);
+            }
+
+            Collect(node);
+            return Clean(sb.ToString());
         }
     }
 }

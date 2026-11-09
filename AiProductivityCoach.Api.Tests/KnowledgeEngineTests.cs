@@ -90,6 +90,29 @@ namespace AiProductivityCoach.Api.Tests
             var none = HtmlTextExtractor.Extract("", new Uri("https://x.de/"));
             Assert.Equal(string.Empty, none.Text);
         }
+
+        [Fact]
+        public void Heading_split_across_inline_tags_keeps_a_space_between_words()
+        {
+            // A hero heading styled as two <span> runs with no literal whitespace between the
+            // closing and opening tags in the markup - plain InnerText would concatenate this
+            // into "EngineeringDigital Advantage".
+            var html = "<html><body><main><h1><span>Engineering</span><span>Digital Advantage</span></h1>" +
+                        "<p>" + new string('a', 300) + "</p></main></body></html>";
+            var result = HtmlTextExtractor.Extract(html, new Uri("https://x.de/"));
+
+            Assert.Contains("# Engineering Digital Advantage", result.Text);
+        }
+
+        [Fact]
+        public void Heading_split_by_br_keeps_a_space_between_words()
+        {
+            var html = "<html><body><main><h1>Engineering<br>Digital Advantage</h1>" +
+                        "<p>" + new string('a', 300) + "</p></main></body></html>";
+            var result = HtmlTextExtractor.Extract(html, new Uri("https://x.de/"));
+
+            Assert.Contains("# Engineering Digital Advantage", result.Text);
+        }
     }
 
     public class TextChunkerTests
