@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Copy, Image as ImageIcon, Link2, Loader2, RefreshCw, Save, Sparkles, Trash2, UserCircle2 } from "lucide-react";
+import { Check, Copy, ExternalLink, Image as ImageIcon, Link2, Loader2, RefreshCw, Save, Send, Sparkles, Trash2, UserCircle2 } from "lucide-react";
 import { CONTENT_ERRORS, ERRORS, EXTRA_ERRORS, Lang, tr } from "./aiPublishingText";
 import { rt, type RKey } from "./reviewText";
 import type { Api } from "./DraftWorkspace";
@@ -67,11 +67,17 @@ export default function ProfileBuilderPanel({ lang, providerId, api, archived }:
   const [copied, setCopied] = useState(false);
   const [confirmRevoke, setConfirmRevoke] = useState(false);
   const [confirmLogoRemove, setConfirmLogoRemove] = useState(false);
+  const [sendStatus, setSendStatus] = useState<{ sent: boolean; companyId: string; slug: string; sentAt: string | null } | null>(null);
+  const [confirmSend, setConfirmSend] = useState(false);
+  const [midrangeSendStatus, setMidrangeSendStatus] = useState<{ sent: boolean; companyId: string; slug: string; sentAt: string | null } | null>(null);
+  const [confirmMidrangeSend, setConfirmMidrangeSend] = useState(false);
 
   const load = useCallback(async () => {
-    const [profileRes, linkRes] = await Promise.all([
+    const [profileRes, linkRes, sendRes, midrangeSendRes] = await Promise.all([
       api(`/api/ai/providers/${providerId}/profile`),
       api(`/api/ai/providers/${providerId}/profile/preview-link`),
+      api(`/api/ai/providers/${providerId}/profile/send-status/eyeric`),
+      api(`/api/ai/providers/${providerId}/profile/send-status/midrange`),
     ]);
 
     if (profileRes.ok) {
@@ -84,6 +90,8 @@ export default function ProfileBuilderPanel({ lang, providerId, api, archived }:
     }
 
     if (linkRes.ok) setPreviewLink({ active: linkRes.data.active, createdAt: linkRes.data.createdAt });
+    if (sendRes.ok) setSendStatus(sendRes.data);
+    if (midrangeSendRes.ok) setMidrangeSendStatus(midrangeSendRes.data);
   }, [api, providerId, lang]);
 
   useEffect(() => {
@@ -132,6 +140,27 @@ export default function ProfileBuilderPanel({ lang, providerId, api, archived }:
   const copyLink = async () => {
     if (!newPreviewUrl) return;
     try { await navigator.clipboard.writeText(newPreviewUrl); setCopied(true); } catch { /* link stays visible to copy by hand */ }
+  };
+
+  const sendAndPreview = () => {
+    setConfirmSend(false);
+    void run("send", () => api(`/api/ai/providers/${providerId}/profile/send/eyeric`, { method: "POST" }), async () => {
+      await load();
+      const linkRes = await api(`/api/ai/providers/${providerId}/profile/preview-link`, { method: "POST" });
+      if (linkRes.ok) {
+        setNewPreviewUrl(linkRes.data.url);
+        setCopied(false);
+        await load();
+        window.open(linkRes.data.url, "_blank", "noopener,noreferrer");
+      }
+    });
+  };
+
+  const sendToMidrange = () => {
+    setConfirmMidrangeSend(false);
+    void run("send-midrange", () => api(`/api/ai/providers/${providerId}/profile/send/midrange`, { method: "POST" }), async () => {
+      await load();
+    });
   };
 
   const field = (key: keyof Form, label: RKey, rows = 0, max = 300) => {
@@ -336,6 +365,68 @@ export default function ProfileBuilderPanel({ lang, providerId, api, archived }:
                     <span>{t("pb_previewRevoke")}</span>
                   </button>
                 )
+              )}
+            </div>
+          </div>
+
+          {/* ───── send to EY ERIC ───── */}
+          <div className="aip-subsection">
+            <h4 className="aip-h4"><Send size={14} /> <span>{t("pb_send")}</span></h4>
+            <p className="aip-help">{t("pb_sendHelp")}</p>
+
+            {sendStatus?.sent ? (
+              <div className="aip-meta">
+                {t("pb_sendSentAt")} {sendStatus.sentAt ? new Date(sendStatus.sentAt).toLocaleString(lang === "de" ? "de-DE" : "en-GB") : ""}
+              </div>
+            ) : (
+              <div className="aip-meta">{t("pb_sendNone")}</div>
+            )}
+
+            <div className="aip-row wrap" style={{ marginTop: 12 }}>
+              {confirmSend ? (
+                <span className="aip-row" style={{ margin: 0 }}>
+                  <button className="aip-btn" onClick={sendAndPreview}>
+                    {busy === "send" ? <Loader2 size={13} className="aip-spin" /> : null}
+                    <span>{t("pb_sendConfirm")}</span>
+                  </button>
+                  <button className="aip-btn ghost" onClick={() => setConfirmSend(false)}><span>×</span></button>
+                </span>
+              ) : (
+                <button className="aip-btn ghost" onClick={() => setConfirmSend(true)} disabled={!!busy || archived}>
+                  <ExternalLink size={13} />
+                  <span>{sendStatus?.sent ? t("pb_sendAgain") : t("pb_sendCreate")}</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* ───── send to MIDRANGE ───── */}
+          <div className="aip-subsection">
+            <h4 className="aip-h4"><Send size={14} /> <span>{t("pb_sendMidrange")}</span></h4>
+            <p className="aip-help">{t("pb_sendMidrangeHelp")}</p>
+
+            {midrangeSendStatus?.sent ? (
+              <div className="aip-meta">
+                {t("pb_sendSentAt")} {midrangeSendStatus.sentAt ? new Date(midrangeSendStatus.sentAt).toLocaleString(lang === "de" ? "de-DE" : "en-GB") : ""}
+              </div>
+            ) : (
+              <div className="aip-meta">{t("pb_sendNone")}</div>
+            )}
+
+            <div className="aip-row wrap" style={{ marginTop: 12 }}>
+              {confirmMidrangeSend ? (
+                <span className="aip-row" style={{ margin: 0 }}>
+                  <button className="aip-btn" onClick={sendToMidrange}>
+                    {busy === "send-midrange" ? <Loader2 size={13} className="aip-spin" /> : null}
+                    <span>{t("pb_sendConfirm")}</span>
+                  </button>
+                  <button className="aip-btn ghost" onClick={() => setConfirmMidrangeSend(false)}><span>×</span></button>
+                </span>
+              ) : (
+                <button className="aip-btn ghost" onClick={() => setConfirmMidrangeSend(true)} disabled={!!busy || archived}>
+                  <ExternalLink size={13} />
+                  <span>{midrangeSendStatus?.sent ? t("pb_sendMidrangeAgain") : t("pb_sendMidrangeCreate")}</span>
+                </button>
               )}
             </div>
           </div>

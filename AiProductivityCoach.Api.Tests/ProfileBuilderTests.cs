@@ -1,3 +1,4 @@
+using AiProductivityCoach.Api.AiPublishing.Acquisition;
 using AiProductivityCoach.Api.AiPublishing.Content;
 using AiProductivityCoach.Api.AiPublishing.Jobs;
 using AiProductivityCoach.Api.AiPublishing.Media;
@@ -298,6 +299,73 @@ namespace AiProductivityCoach.Api.Tests
             var prompt = ProfileHeaderPlanner.Build("Very Unique Company Name Ltd", new[] { "Software" }, Array.Empty<string>());
 
             Assert.DoesNotContain("Very Unique Company Name Ltd", prompt);
+        }
+    }
+
+    public class EyEricCompanyAdapterTests
+    {
+        [Theory]
+        [InlineData("Astra Soft Digital", "astra-soft-digital")]
+        [InlineData("Müller & Co. GmbH", "muller-co-gmbh")]
+        [InlineData("  Leading   Spaces  ", "leading-spaces")]
+        [InlineData("!!!", "company-")] // falls back to a generated id when nothing slug-able remains
+        public void Slugify_matches_the_real_company_system_style(string input, string expectedPrefix)
+        {
+            var slug = EyEricCompanyAdapter.Slugify(input);
+
+            Assert.StartsWith(expectedPrefix, slug);
+            Assert.DoesNotContain(" ", slug);
+            Assert.DoesNotContain("--", slug);
+        }
+
+        [Theory]
+        [InlineData(ContentTypes.Article, "posts")]
+        [InlineData(ContentTypes.Whitepaper, "whitepapers")]
+        [InlineData(ContentTypes.Webinar, "webinars")]
+        public void CollectionFor_maps_every_generatable_type(string type, string expectedCollection)
+        {
+            Assert.Equal(expectedCollection, EyEricCompanyAdapter.CollectionFor(type));
+        }
+
+        [Fact]
+        public void CollectionFor_rejects_a_type_the_real_company_system_has_no_place_for()
+        {
+            Assert.Null(EyEricCompanyAdapter.CollectionFor(ContentTypes.Tutorial));
+            Assert.Null(EyEricCompanyAdapter.CollectionFor("unknown"));
+        }
+    }
+
+    public class MidrangeCompanyAdapterTests
+    {
+        [Theory]
+        [InlineData(ContentTypes.Article, "posts", "post")]
+        [InlineData(ContentTypes.Whitepaper, "aipc-whitepapers", "aipc_whitepaper")]
+        [InlineData(ContentTypes.Webinar, "aipc-webinars", "aipc_webinar")]
+        public void Maps_every_generatable_type_to_its_wordpress_post_type(string type, string expectedRestBase, string expectedPostType)
+        {
+            Assert.Equal(expectedRestBase, MidrangeCompanyAdapter.RestBaseFor(type));
+            Assert.Equal(expectedPostType, MidrangeCompanyAdapter.PostTypeFor(type));
+        }
+
+        [Fact]
+        public void RestBaseFor_rejects_a_type_wordpress_has_no_place_for()
+        {
+            Assert.Null(MidrangeCompanyAdapter.RestBaseFor(ContentTypes.Tutorial));
+            Assert.Null(MidrangeCompanyAdapter.RestBaseFor("unknown"));
+        }
+
+        [Fact]
+        public void Options_are_not_configured_until_every_required_value_is_present()
+        {
+            Assert.False(new MidrangeOptions().IsConfigured);
+            Assert.False(new MidrangeOptions { SiteUrl = "https://example.com" }.IsConfigured);
+
+            Assert.True(new MidrangeOptions
+            {
+                SiteUrl = "https://example.com",
+                BasicAuthUsername = "user",
+                ApiKey = "key"
+            }.IsConfigured);
         }
     }
 }

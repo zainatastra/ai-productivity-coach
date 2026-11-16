@@ -216,6 +216,21 @@ builder.Services.AddHttpClient<GeneratedMediaStorage>();
 builder.Services.AddSingleton<MediaGenerationService>();
 builder.Services.AddSingleton<ProfileMediaService>();
 builder.Services.AddSingleton<AiProductivityCoach.Api.AiPublishing.Profile.ProfilePreviewService>();
+builder.Services.AddSingleton<AiProductivityCoach.Api.AiPublishing.Acquisition.ICompanyPublishAdapter, AiProductivityCoach.Api.AiPublishing.Acquisition.EyEricCompanyAdapter>();
+
+var midrangeOptions = builder.Configuration.GetSection("Midrange").Get<AiProductivityCoach.Api.AiPublishing.Acquisition.MidrangeOptions>()
+    ?? new AiProductivityCoach.Api.AiPublishing.Acquisition.MidrangeOptions();
+builder.Services.AddSingleton(midrangeOptions);
+builder.Services.AddHttpClient(AiProductivityCoach.Api.AiPublishing.Acquisition.MidrangeOptions.HttpClientName, client =>
+{
+    if (!midrangeOptions.IsConfigured) return;
+
+    client.BaseAddress = new Uri(midrangeOptions.SiteUrl);
+    var basicAuth = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{midrangeOptions.BasicAuthUsername}:{midrangeOptions.BasicAuthPassword}"));
+    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", basicAuth);
+    client.DefaultRequestHeaders.Add("X-API-Key", midrangeOptions.ApiKey);
+});
+builder.Services.AddSingleton<AiProductivityCoach.Api.AiPublishing.Acquisition.ICompanyPublishAdapter, AiProductivityCoach.Api.AiPublishing.Acquisition.MidrangeCompanyAdapter>();
 builder.Services.AddSingleton<ProviderPurgeService>();
 builder.Services.AddSingleton<InvitationService>();
 builder.Services.AddSingleton<MembershipService>();

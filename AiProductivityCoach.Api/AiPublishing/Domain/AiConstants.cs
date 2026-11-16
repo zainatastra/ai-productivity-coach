@@ -105,6 +105,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Domain
         public const string ProviderHeaderRemoved = "PROVIDER_HEADER_REMOVED";
         public const string ProviderPreviewLinkCreated = "PROVIDER_PREVIEW_LINK_CREATED";
         public const string ProviderPreviewLinkRevoked = "PROVIDER_PREVIEW_LINK_REVOKED";
+        public const string ProviderSentToPlatform = "PROVIDER_SENT_TO_PLATFORM";
         public const string SourceAdded = "SOURCE_ADDED";
         public const string SourceRemoved = "SOURCE_REMOVED";
         public const string SourceCrawlStarted = "SOURCE_CRAWL_STARTED";

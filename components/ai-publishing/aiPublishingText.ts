@@ -566,6 +566,8 @@ export const QUALITY_CHECKS: Record<string, Pair> = {
 };
 
 export const CONTENT_ERRORS: Record<string, Pair> = {
+  platform_not_supported: { de: "Das Senden an diese Plattform ist noch nicht verfügbar.", en: "Sending to this platform is not available yet." },
+  provider_not_found: { de: "Anbieter nicht gefunden.", en: "Provider not found." },
   no_website: { de: "Für diesen Anbieter ist keine Website hinterlegt.", en: "This provider has no website set." },
   logo_url_required: { de: "Bitte eine Bild-Adresse angeben.", en: "Please provide an image address." },
   invalid_logo_url: { de: "Die Bild-Adresse ist nicht gültig.", en: "The image address is not valid." },

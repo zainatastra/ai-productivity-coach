@@ -1,6 +1,7 @@
 using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using AiProductivityCoach.Api.AiPublishing.Acquisition;
 using AiProductivityCoach.Api.AiPublishing.Content;
 using AiProductivityCoach.Api.AiPublishing.Domain;
 using AiProductivityCoach.Api.AiPublishing.Media;
@@ -26,19 +27,30 @@ namespace AiProductivityCoach.Api.Controllers
         private readonly ProfilePreviewService _preview;
         private readonly InvitationMailer _mailer;
         private readonly AiAuditService _audit;
+        private readonly IReadOnlyDictionary<string, ICompanyPublishAdapter> _publishAdapters;
 
         public AiProfileController(
             FirestoreDb firestore,
             ProfileMediaService media,
             ProfilePreviewService preview,
             InvitationMailer mailer,
-            AiAuditService audit)
+            AiAuditService audit,
+            IEnumerable<ICompanyPublishAdapter> publishAdapters)
         {
             _firestore = firestore;
             _media = media;
             _preview = preview;
             _mailer = mailer;
             _audit = audit;
+            _publishAdapters = publishAdapters.ToDictionary(a => a.Platform, StringComparer.OrdinalIgnoreCase);
+        }
+
+        private IActionResult? ResolveAdapter(string platform, out ICompanyPublishAdapter adapter)
+        {
+            if (_publishAdapters.TryGetValue(platform, out adapter!)) return null;
+
+            adapter = null!;
+            return Error(400, "platform_not_supported", $"Sending to \"{platform}\" is not available yet.");
         }
 
         public class ProfileFieldsDto
@@ -291,6 +303,58 @@ namespace AiProductivityCoach.Api.Controllers
             return NoContent();
         }
 
+        // ───────────── send to platform (spec section 9: "EY ERIC send and preview") ─────────────
+
+        [HttpGet("send-status/{platform}")]
+        public async Task<IActionResult> SendStatus(string providerId, string platform, CancellationToken ct)
+        {
+            var error = ResolveAdapter(platform, out var adapter);
+            if (error != null) return error;
+
+            var doc = await GetProviderAsync(providerId);
+            if (doc == null) return NotFoundResult();
+
+            return await Guard(async () =>
+            {
+                var status = await adapter.GetStatusAsync(providerId, ct);
+
+                return Ok(new
+                {
+                    sent = status.Sent,
+                    companyId = status.CompanyId,
+                    slug = status.Slug,
+                    sentAt = status.SentAt?.ToString("O")
+                });
+            });
+        }
+
+        [HttpPost("send/{platform}")]
+        public async Task<IActionResult> Send(string providerId, string platform, CancellationToken ct)
+        {
+            var actor = Actor;
+            if (actor == null || !actor.IsAdmin) return Unauthorized();
+
+            var error = ResolveAdapter(platform, out var adapter);
+            if (error != null) return error;
+
+            var doc = await GetProviderAsync(providerId);
+            if (doc == null) return NotFoundResult();
+
+            return await Guard(async () =>
+            {
+                var result = await adapter.SendAsync(providerId, ct);
+
+                await _audit.LogAsync(actor, AuditActions.ProviderSentToPlatform, providerId, null, null,
+                    new Dictionary<string, object>
+                    {
+                        ["platform"] = platform, ["companyId"] = result.CompanyId,
+                        ["created"] = result.Created, ["contentSynced"] = result.ContentSynced
+                    });
+
+                return Ok(new { companyId = result.CompanyId, slug = result.Slug, created = result.Created, contentSynced = result.ContentSynced });
+            });
+        }
+
         // ───────────── helpers ─────────────
 
         private static List<LogoCandidate> Candidates(IDictionary<string, object> data) =>
@@ -332,6 +396,10 @@ namespace AiProductivityCoach.Api.Controllers
                 };
 
                 return Error(status, ex.Code, ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Error(404, "provider_not_found", ex.Message);
             }
         }
     }
