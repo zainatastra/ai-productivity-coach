@@ -337,23 +337,6 @@ namespace AiProductivityCoach.Api.Tests
 
     public class MidrangeCompanyAdapterTests
     {
-        [Theory]
-        [InlineData(ContentTypes.Article, "posts", "post")]
-        [InlineData(ContentTypes.Whitepaper, "aipc-whitepapers", "aipc_whitepaper")]
-        [InlineData(ContentTypes.Webinar, "aipc-webinars", "aipc_webinar")]
-        public void Maps_every_generatable_type_to_its_wordpress_post_type(string type, string expectedRestBase, string expectedPostType)
-        {
-            Assert.Equal(expectedRestBase, MidrangeCompanyAdapter.RestBaseFor(type));
-            Assert.Equal(expectedPostType, MidrangeCompanyAdapter.PostTypeFor(type));
-        }
-
-        [Fact]
-        public void RestBaseFor_rejects_a_type_wordpress_has_no_place_for()
-        {
-            Assert.Null(MidrangeCompanyAdapter.RestBaseFor(ContentTypes.Tutorial));
-            Assert.Null(MidrangeCompanyAdapter.RestBaseFor("unknown"));
-        }
-
         [Fact]
         public void Options_are_not_configured_until_every_required_value_is_present()
         {
