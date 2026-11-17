@@ -99,6 +99,37 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
             return await SendAsync(to, subject, html);
         }
 
+        /// <summary>
+        /// Sends the "set your password" link for a newly created MIDRANGE WordPress account.
+        /// MIDRANGE's own mailer (Microsoft 365) is unreliable, so the WordPress plugin only
+        /// generates the reset link; we deliver it ourselves through Resend. Not an admin-editable
+        /// template - this is a one-off system notification tied to account creation, not reuse.
+        /// </summary>
+        public async Task<MailResult> SendMidrangeAccountSetupAsync(string to, string link, string language)
+        {
+            var en = IsEnglish(language);
+            var subject = en ? "Set up your MIDRANGE account" : "Richten Sie Ihr MIDRANGE-Konto ein";
+
+            var html = Document(Frame(
+                subject,
+                en ? "Hello," : "Guten Tag,",
+                en
+                    ? "an account was created for you on MIDRANGE so you can manage your company profile there. Click the button to set your password."
+                    : "für Sie wurde ein Konto bei MIDRANGE angelegt, damit Sie dort Ihr Unternehmensprofil verwalten können. Klicken Sie auf den Button, um Ihr Passwort festzulegen.",
+                WebUtility.HtmlEncode(to),
+                en ? "Set your password to get started" : "Legen Sie Ihr Passwort fest, um zu starten",
+                string.Empty,
+                Array.Empty<string>(),
+                link,
+                en ? "Set your password" : "Passwort festlegen",
+                en ? "The button does not work? Copy this link into your browser:" : "Der Button funktioniert nicht? Kopieren Sie diesen Link in Ihren Browser:",
+                new[] { en
+                    ? "For your security the link is only valid for a short time and can be used once."
+                    : "Aus Sicherheitsgründen ist der Link nur kurze Zeit gültig und einmal verwendbar." }));
+
+            return await SendAsync(to, subject, html);
+        }
+
         /// <summary>Sends the stored template with sample data to one address (the admin's own).</summary>
         public async Task<MailResult> SendTestAsync(string to, string kind, string language)
         {

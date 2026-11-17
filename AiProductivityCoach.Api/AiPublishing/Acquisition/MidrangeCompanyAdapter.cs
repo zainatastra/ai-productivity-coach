@@ -77,6 +77,39 @@ namespace AiProductivityCoach.Api.AiPublishing.Acquisition
             return new CompanySendResult(result.Id.ToString(), string.Empty, result.Created, synced);
         }
 
+        public sealed record LinkUserResult(int UserId, bool Created, string Email, string? ResetUrl);
+
+        /// <summary>
+        /// Links this provider to a real WordPress user by email, so that person can log in
+        /// (midrange.de/login-2/) and manage their own profile - the same mechanism every
+        /// pre-existing real provider already uses. Admin-triggered only, from a company contact
+        /// already accepted through the AI Publishing engine's own invitation flow; never automatic.
+        /// </summary>
+        public async Task<LinkUserResult> LinkUserAsync(string providerId, string email, CancellationToken ct)
+        {
+            var providerRef = _firestore.Collection(AiCollections.Providers).Document(providerId);
+            var providerDoc = await providerRef.GetSnapshotAsync(ct);
+            if (!providerDoc.Exists) throw new InvalidOperationException("Provider not found.");
+
+            var data = providerDoc.ToDictionary();
+            var companyId = FirestoreApi.GetString(data, "midrangeCompanyId");
+            if (companyId.Length == 0)
+                throw new InvalidOperationException("Send this provider to MIDRANGE before granting access.");
+
+            var result = await PostAsync<LinkUserResponse>(
+                $"/wp-json/aipc/v1/anbieter/{companyId}/link-user",
+                new Dictionary<string, object?> { ["email"] = email },
+                ct);
+
+            await providerRef.UpdateAsync(new Dictionary<string, object>
+            {
+                ["midrangeUserLinkedEmail"] = email,
+                ["midrangeUserLinkedAt"] = Timestamp.GetCurrentTimestamp()
+            }, cancellationToken: ct);
+
+            return new LinkUserResult(result.UserId, result.Created, result.Email, result.ResetUrl);
+        }
+
         public async Task<CompanySendStatus> GetStatusAsync(string providerId, CancellationToken ct)
         {
             var providerDoc = await _firestore.Collection(AiCollections.Providers).Document(providerId).GetSnapshotAsync(ct);
@@ -129,13 +162,17 @@ namespace AiProductivityCoach.Api.AiPublishing.Acquisition
         }
 
         private sealed record WriteResponse(int Id, bool Created);
+        private sealed record LinkUserResponse(int UserId, bool Created, string Email, string? ResetUrl);
 
-        private async Task<WriteResponse> PostAsync(string path, object payload, CancellationToken ct)
+        private Task<WriteResponse> PostAsync(string path, object payload, CancellationToken ct) =>
+            PostAsync<WriteResponse>(path, payload, ct);
+
+        private async Task<T> PostAsync<T>(string path, object payload, CancellationToken ct)
         {
             using var response = await _http.PostAsJsonAsync(path, payload, ct);
             response.EnsureSuccessStatusCode();
 
-            return await response.Content.ReadFromJsonAsync<WriteResponse>(cancellationToken: ct)
+            return await response.Content.ReadFromJsonAsync<T>(cancellationToken: ct)
                 ?? throw new InvalidOperationException("WordPress did not return the expected response.");
         }
     }

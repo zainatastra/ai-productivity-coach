@@ -27,6 +27,7 @@ namespace AiProductivityCoach.Api.Controllers
         private readonly ProfilePreviewService _preview;
         private readonly InvitationMailer _mailer;
         private readonly AiAuditService _audit;
+        private readonly MembershipService _members;
         private readonly IReadOnlyDictionary<string, ICompanyPublishAdapter> _publishAdapters;
 
         public AiProfileController(
@@ -35,6 +36,7 @@ namespace AiProductivityCoach.Api.Controllers
             ProfilePreviewService preview,
             InvitationMailer mailer,
             AiAuditService audit,
+            MembershipService members,
             IEnumerable<ICompanyPublishAdapter> publishAdapters)
         {
             _firestore = firestore;
@@ -42,6 +44,7 @@ namespace AiProductivityCoach.Api.Controllers
             _preview = preview;
             _mailer = mailer;
             _audit = audit;
+            _members = members;
             _publishAdapters = publishAdapters.ToDictionary(a => a.Platform, StringComparer.OrdinalIgnoreCase);
         }
 
@@ -352,6 +355,61 @@ namespace AiProductivityCoach.Api.Controllers
                     });
 
                 return Ok(new { companyId = result.CompanyId, slug = result.Slug, created = result.Created, contentSynced = result.ContentSynced });
+            });
+        }
+
+        public class LinkMidrangeUserDto
+        {
+            public string? Email { get; set; }
+        }
+
+        /// <summary>
+        /// Grants a company contact access to manage their own MIDRANGE profile, by linking a real
+        /// WordPress user to it. Admin-triggered only, and only for an email that has actually
+        /// accepted this provider's own invitation (the AI Publishing engine's existing company-access
+        /// flow) - never an arbitrary address.
+        /// </summary>
+        [HttpPost("midrange/link-user")]
+        public async Task<IActionResult> LinkMidrangeUser(string providerId, [FromBody] LinkMidrangeUserDto? request, CancellationToken ct)
+        {
+            var actor = Actor;
+            if (actor == null || !actor.IsAdmin) return Unauthorized();
+
+            var error = ResolveAdapter(Platforms.Midrange, out var adapter);
+            if (error != null) return error;
+            if (adapter is not MidrangeCompanyAdapter midrange)
+                return Error(500, "adapter_mismatch", "The MIDRANGE adapter is not configured correctly.");
+
+            var doc = await GetProviderAsync(providerId);
+            if (doc == null) return NotFoundResult();
+
+            var email = request?.Email?.Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(email)) return Error(400, "invalid_email", "Please choose a company contact.");
+
+            var members = await _members.ListAsync(providerId);
+            var isAcceptedMember = members.Any(m => string.Equals(m.GetValueOrDefault("email")?.ToString(), email, StringComparison.OrdinalIgnoreCase));
+            if (!isAcceptedMember)
+                return Error(400, "not_a_member", "That email has not accepted this provider's company access invitation yet.");
+
+            return await Guard(async () =>
+            {
+                var result = await midrange.LinkUserAsync(providerId, email, ct);
+
+                var emailSent = (bool?)null;
+                if (result.Created && !string.IsNullOrWhiteSpace(result.ResetUrl))
+                {
+                    var mailResult = await _mailer.SendMidrangeAccountSetupAsync(result.Email, result.ResetUrl, "de");
+                    emailSent = mailResult.Sent;
+                }
+
+                await _audit.LogAsync(actor, AuditActions.ProviderSentToPlatform, providerId, null, null,
+                    new Dictionary<string, object>
+                    {
+                        ["platform"] = Platforms.Midrange, ["action"] = "link_user",
+                        ["email"] = email, ["userCreated"] = result.Created, ["emailSent"] = emailSent ?? false
+                    });
+
+                return Ok(new { userId = result.UserId, created = result.Created, email = result.Email, emailSent });
             });
         }
 

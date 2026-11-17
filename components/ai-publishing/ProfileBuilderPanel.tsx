@@ -71,13 +71,18 @@ export default function ProfileBuilderPanel({ lang, providerId, api, archived }:
   const [confirmSend, setConfirmSend] = useState(false);
   const [midrangeSendStatus, setMidrangeSendStatus] = useState<{ sent: boolean; companyId: string; slug: string; sentAt: string | null } | null>(null);
   const [confirmMidrangeSend, setConfirmMidrangeSend] = useState(false);
+  const [acceptedMembers, setAcceptedMembers] = useState<{ email: string }[]>([]);
+  const [midrangeLinkEmail, setMidrangeLinkEmail] = useState("");
+  const [confirmMidrangeLink, setConfirmMidrangeLink] = useState(false);
+  const [midrangeLinked, setMidrangeLinked] = useState<{ email: string; linkedAt: string } | null>(null);
 
   const load = useCallback(async () => {
-    const [profileRes, linkRes, sendRes, midrangeSendRes] = await Promise.all([
+    const [profileRes, linkRes, sendRes, midrangeSendRes, accessRes] = await Promise.all([
       api(`/api/ai/providers/${providerId}/profile`),
       api(`/api/ai/providers/${providerId}/profile/preview-link`),
       api(`/api/ai/providers/${providerId}/profile/send-status/eyeric`),
       api(`/api/ai/providers/${providerId}/profile/send-status/midrange`),
+      api(`/api/ai/providers/${providerId}/access`),
     ]);
 
     if (profileRes.ok) {
@@ -92,6 +97,7 @@ export default function ProfileBuilderPanel({ lang, providerId, api, archived }:
     if (linkRes.ok) setPreviewLink({ active: linkRes.data.active, createdAt: linkRes.data.createdAt });
     if (sendRes.ok) setSendStatus(sendRes.data);
     if (midrangeSendRes.ok) setMidrangeSendStatus(midrangeSendRes.data);
+    if (accessRes.ok) setAcceptedMembers(accessRes.data.members || []);
   }, [api, providerId, lang]);
 
   useEffect(() => {
@@ -161,6 +167,17 @@ export default function ProfileBuilderPanel({ lang, providerId, api, archived }:
     void run("send-midrange", () => api(`/api/ai/providers/${providerId}/profile/send/midrange`, { method: "POST" }), async () => {
       await load();
     });
+  };
+
+  const linkMidrangeUser = () => {
+    setConfirmMidrangeLink(false);
+    void run(
+      "link-midrange-user",
+      () => api(`/api/ai/providers/${providerId}/profile/midrange/link-user`, { method: "POST", body: JSON.stringify({ email: midrangeLinkEmail }) }),
+      async (result) => {
+        setMidrangeLinked({ email: result.email, linkedAt: new Date().toISOString() });
+      }
+    );
   };
 
   const field = (key: keyof Form, label: RKey, rows = 0, max = 300) => {
@@ -430,6 +447,54 @@ export default function ProfileBuilderPanel({ lang, providerId, api, archived }:
               )}
             </div>
           </div>
+
+          {/* ───── grant MIDRANGE account access ───── */}
+          {midrangeSendStatus?.sent && (
+            <div className="aip-subsection">
+              <h4 className="aip-h4"><UserCircle2 size={14} /> <span>{t("pb_midrangeAccess")}</span></h4>
+              <p className="aip-help">{t("pb_midrangeAccessHelp")}</p>
+
+              {midrangeLinked ? (
+                <div className="aip-meta">{t("pb_midrangeAccessGranted")} {midrangeLinked.email}</div>
+              ) : (
+                <div className="aip-meta">{t("pb_midrangeAccessNone")}</div>
+              )}
+
+              {acceptedMembers.length === 0 ? (
+                <p className="aip-help" style={{ marginTop: 8 }}>{t("pb_midrangeAccessNoMembers")}</p>
+              ) : (
+                <div className="aip-row wrap" style={{ marginTop: 12 }}>
+                  {confirmMidrangeLink ? (
+                    <span className="aip-row" style={{ margin: 0 }}>
+                      <button className="aip-btn" onClick={linkMidrangeUser} disabled={!midrangeLinkEmail}>
+                        {busy === "link-midrange-user" ? <Loader2 size={13} className="aip-spin" /> : null}
+                        <span>{t("pb_sendConfirm")}</span>
+                      </button>
+                      <button className="aip-btn ghost" onClick={() => setConfirmMidrangeLink(false)}><span>×</span></button>
+                    </span>
+                  ) : (
+                    <>
+                      <select
+                        className="aip-input"
+                        style={{ maxWidth: 260 }}
+                        value={midrangeLinkEmail}
+                        onChange={(e) => setMidrangeLinkEmail(e.target.value)}
+                      >
+                        <option value="">{t("pb_midrangeAccessPick")}</option>
+                        {acceptedMembers.map((m) => (
+                          <option key={m.email} value={m.email}>{m.email}</option>
+                        ))}
+                      </select>
+                      <button className="aip-btn ghost" onClick={() => setConfirmMidrangeLink(true)} disabled={!!busy || archived || !midrangeLinkEmail}>
+                        <UserCircle2 size={13} />
+                        <span>{t("pb_midrangeAccessGrant")}</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>
