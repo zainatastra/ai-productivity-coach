@@ -67,6 +67,71 @@ namespace AiProductivityCoach.Api.Tests
         }
 
         [Fact]
+        public void Generate_WithAccentColor_StillProducesAValidPdf()
+        {
+            var request = new WhitepaperPdfRequest(
+                CompanyName: "Astra Soft Digital",
+                WhitepaperTitle: "Test Whitepaper",
+                BodyHtml: SampleHtml,
+                LogoBytes: null,
+                WatermarkText: null,
+                Restricted: false,
+                AccentColor: "#A020F0");
+
+            var bytes = WhitepaperPdfService.Generate(request);
+
+            Assert.True(bytes.Length > 500);
+            Assert.Equal("%PDF", System.Text.Encoding.ASCII.GetString(bytes, 0, 4));
+        }
+
+        [Fact]
+        public void Generate_WithInvalidAccentColor_FallsBackWithoutThrowing()
+        {
+            var request = new WhitepaperPdfRequest(
+                CompanyName: "Astra Soft Digital",
+                WhitepaperTitle: "Test Whitepaper",
+                BodyHtml: SampleHtml,
+                LogoBytes: null,
+                WatermarkText: null,
+                Restricted: false,
+                AccentColor: "not-a-color");
+
+            var bytes = WhitepaperPdfService.Generate(request);
+
+            Assert.True(bytes.Length > 500);
+        }
+
+        [Fact]
+        public void BrandColorExtractor_NullBytes_ReturnsFallback()
+        {
+            var color = BrandColorExtractor.ExtractAccentColor(null);
+            Assert.Matches("^#[0-9A-Fa-f]{6}$", color);
+        }
+
+        [Fact]
+        public void BrandColorExtractor_GarbageBytes_ReturnsFallbackWithoutThrowing()
+        {
+            var color = BrandColorExtractor.ExtractAccentColor(new byte[] { 1, 2, 3, 4, 5 });
+            Assert.Matches("^#[0-9A-Fa-f]{6}$", color);
+        }
+
+        [Fact]
+        public void BrandColorExtractor_SolidRedPng_ExtractsRed()
+        {
+            // A small solid-red 4x4 PNG - the extractor should pick a color close to pure red.
+            var redPng = Convert.FromBase64String(
+                "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEElEQVR4nGP4z8AARwzEcQCukw/x0F8jngAAAABJRU5ErkJggg==");
+
+            var color = BrandColorExtractor.ExtractAccentColor(redPng);
+
+            Assert.Matches("^#[0-9A-Fa-f]{6}$", color);
+            var r = Convert.ToInt32(color.Substring(1, 2), 16);
+            var g = Convert.ToInt32(color.Substring(3, 2), 16);
+            var b = Convert.ToInt32(color.Substring(5, 2), 16);
+            Assert.True(r > g && r > b, $"Expected a red-dominant color, got {color}");
+        }
+
+        [Fact]
         public void Generate_Restricted_StillProducesAValidPdf()
         {
             var request = new WhitepaperPdfRequest(

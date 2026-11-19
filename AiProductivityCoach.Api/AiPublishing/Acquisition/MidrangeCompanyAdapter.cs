@@ -189,7 +189,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Acquisition
                             LogoBytes: logoBytes,
                             WatermarkText: null,
                             DiagramImages: diagrams,
-                            Restricted: true), _logger);
+                            Restricted: true,
+                            AccentColor: BrandColorExtractor.ExtractAccentColor(logoBytes)), _logger);
 
                         payload["pdfBase64"] = Convert.ToBase64String(pdfBytes);
                         payload["pdfFileName"] = $"{SlugifyFileName(title)}.pdf";
@@ -216,7 +217,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Acquisition
             try
             {
                 using var client = _httpClientFactory.CreateClient();
-                client.Timeout = TimeSpan.FromSeconds(10);
+                client.Timeout = TimeSpan.FromSeconds(25);
                 return await client.GetByteArrayAsync(logoUrl, ct);
             }
             catch (Exception ex)

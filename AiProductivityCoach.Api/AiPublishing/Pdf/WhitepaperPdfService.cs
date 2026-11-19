@@ -14,7 +14,13 @@ namespace AiProductivityCoach.Api.AiPublishing.Pdf
         byte[]? LogoBytes,
         string? WatermarkText,
         bool Restricted,
-        IReadOnlyList<byte[]>? DiagramImages = null);
+        IReadOnlyList<byte[]>? DiagramImages = null,
+        /// <summary>
+        /// Hex color (e.g. "#1F2937") used for headings and the header rule, so the document
+        /// carries this provider's own branding. Pass <see cref="BrandColorExtractor.ExtractAccentColor"/>
+        /// on the same logo bytes, or omit to use the service's own neutral default.
+        /// </summary>
+        string? AccentColor = null);
 
     /// <summary>
     /// Renders a whitepaper's already-generated HTML (from <see cref="AiPublishing.Content.HtmlRenderer"/>,
@@ -48,9 +54,48 @@ namespace AiProductivityCoach.Api.AiPublishing.Pdf
             var blocks = ParseBlocks(request.BodyHtml);
             var diagramPositions = PlanDiagramPositions(blocks, request.DiagramImages?.Count ?? 0);
             var diagramQueue = new Queue<byte[]>(request.DiagramImages ?? Array.Empty<byte[]>());
+            string accent = IsValidHexColor(request.AccentColor) ? request.AccentColor! : Colors.Blue.Medium;
 
             var bytes = QuestPDF.Fluent.Document.Create(container =>
             {
+                // Cover page - its own design (colored band, large title), no running header/footer.
+                container.Page(cover =>
+                {
+                    cover.Size(PageSizes.A4);
+                    cover.Margin(0);
+
+                    cover.Content().Column(column =>
+                    {
+                        column.Item().Height(220).Background(accent).Padding(36).Column(band =>
+                        {
+                            if (request.LogoBytes is { Length: > 0 })
+                                band.Item().Height(40).AlignLeft().Image(request.LogoBytes).FitHeight();
+
+                            band.Item().PaddingTop(request.LogoBytes is { Length: > 0 } ? 16 : 0)
+                                .Text(request.CompanyName).FontSize(13).FontColor(Colors.White).Bold();
+                        });
+
+                        column.Item().PaddingHorizontal(40).PaddingTop(60).Column(body =>
+                        {
+                            body.Item().Text("WHITEPAPER").FontSize(11).Bold().FontColor(accent)
+                                .LetterSpacing(0.15f);
+                            body.Item().PaddingTop(10)
+                                .Text(request.WhitepaperTitle).FontSize(27).Bold().FontColor(Colors.Black).LineHeight(1.25f);
+                            body.Item().PaddingTop(22).Width(70).LineHorizontal(2.5f).LineColor(accent);
+                        });
+                    });
+
+                    if (!string.IsNullOrWhiteSpace(request.WatermarkText))
+                    {
+                        cover.Background().AlignCenter().AlignMiddle().Rotate(-40)
+                            .Text(request.WatermarkText).FontSize(22).FontColor(Colors.Grey.Lighten3).Bold();
+                    }
+
+                    cover.Footer().Padding(24).AlignCenter()
+                        .Text($"{request.CompanyName} · {DateTime.UtcNow:MMMM yyyy}").FontSize(9).FontColor(Colors.Grey.Darken1);
+                });
+
+                // Body - flows across as many pages as the content needs, with a running header/footer.
                 container.Page(page =>
                 {
                     page.Size(PageSizes.A4);
@@ -68,34 +113,41 @@ namespace AiProductivityCoach.Api.AiPublishing.Pdf
                         column.Item().Row(row =>
                         {
                             if (request.LogoBytes is { Length: > 0 })
-                                row.ConstantItem(90).Height(32).Image(request.LogoBytes).FitArea();
+                                row.ConstantItem(90).Height(28).Image(request.LogoBytes).FitArea();
 
                             row.RelativeItem().AlignRight().AlignMiddle()
-                                .Text(request.CompanyName).FontSize(9).FontColor(Colors.Grey.Darken1);
+                                .Text(request.WhitepaperTitle).FontSize(8.5f).FontColor(Colors.Grey.Darken1);
                         });
-                        column.Item().PaddingTop(10).LineHorizontal(0.75f).LineColor(Colors.Grey.Lighten2);
+                        column.Item().PaddingTop(8).LineHorizontal(1.5f).LineColor(accent);
                     });
 
-                    page.Content().PaddingTop(16).Column(column =>
+                    page.Content().PaddingTop(18).Column(column =>
                     {
-                        column.Spacing(6);
-                        column.Item().Text(request.WhitepaperTitle).FontSize(20).Bold().FontColor(Colors.Black);
-                        column.Item().PaddingBottom(10);
+                        column.Spacing(7);
 
                         for (var i = 0; i < blocks.Count; i++)
                         {
-                            RenderBlock(column, blocks[i]);
+                            RenderBlock(column, blocks[i], accent);
 
                             if (diagramPositions.Contains(i) && diagramQueue.Count > 0)
-                                column.Item().PaddingVertical(4).MaxHeight(220).Image(diagramQueue.Dequeue()).FitArea();
+                            {
+                                column.Item().PaddingVertical(6).MaxHeight(220)
+                                    .Border(0.75f).BorderColor(Colors.Grey.Lighten2)
+                                    .Image(diagramQueue.Dequeue()).FitArea();
+                            }
                         }
                     });
 
-                    page.Footer().AlignCenter().Text(x =>
+                    page.Footer().Row(row =>
                     {
-                        x.CurrentPageNumber();
-                        x.Span(" / ");
-                        x.TotalPages();
+                        row.RelativeItem().Text(request.CompanyName).FontSize(8).FontColor(Colors.Grey.Medium);
+                        row.RelativeItem().AlignRight().Text(x =>
+                        {
+                            x.DefaultTextStyle(s => s.FontSize(8).FontColor(Colors.Grey.Medium));
+                            x.CurrentPageNumber();
+                            x.Span(" / ");
+                            x.TotalPages();
+                        });
                     });
                 });
             }).GeneratePdf();
@@ -140,14 +192,15 @@ namespace AiProductivityCoach.Api.AiPublishing.Pdf
             return positions;
         }
 
-        private static void RenderBlock(ColumnDescriptor column, Block block)
+        private static void RenderBlock(ColumnDescriptor column, Block block, string accent)
         {
             switch (block.Tag)
             {
                 case "h2":
-                    column.Item().PaddingTop(8).Text(x =>
+                    column.Item().PaddingTop(14).Width(28).LineHorizontal(2.5f).LineColor(accent);
+                    column.Item().PaddingTop(4).Text(x =>
                     {
-                        x.DefaultTextStyle(s => s.FontSize(15).Bold());
+                        x.DefaultTextStyle(s => s.FontSize(15).Bold().FontColor(Colors.Black));
                         RenderInline(x, block.Html);
                     });
                     break;
@@ -218,5 +271,10 @@ namespace AiProductivityCoach.Api.AiPublishing.Pdf
 
         private static string Decode(string value) =>
             System.Net.WebUtility.HtmlDecode(value ?? string.Empty);
+
+        private static readonly Regex HexColorPattern = new(@"^#[0-9A-Fa-f]{6}$", RegexOptions.Compiled);
+
+        private static bool IsValidHexColor(string? value) =>
+            !string.IsNullOrWhiteSpace(value) && HexColorPattern.IsMatch(value);
     }
 }

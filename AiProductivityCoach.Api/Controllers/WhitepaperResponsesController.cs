@@ -392,7 +392,7 @@ namespace AiProductivityCoach.Api.Controllers
                 try
                 {
                     var client = _http.CreateClient();
-                    client.Timeout = TimeSpan.FromSeconds(10);
+                    client.Timeout = TimeSpan.FromSeconds(25);
                     logoBytes = await client.GetByteArrayAsync(logoUrl, cancellationToken);
                 }
                 catch (Exception ex)
@@ -410,7 +410,8 @@ namespace AiProductivityCoach.Api.Controllers
                 LogoBytes: logoBytes,
                 WatermarkText: $"{recipientEmail} • {submittedAtUtc:yyyy-MM-dd HH:mm} UTC",
                 DiagramImages: diagrams,
-                Restricted: true);
+                Restricted: true,
+                AccentColor: BrandColorExtractor.ExtractAccentColor(logoBytes));
 
             return WhitepaperPdfService.Generate(request, _logger);
         }

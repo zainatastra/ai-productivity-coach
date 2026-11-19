@@ -42,7 +42,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Media
                 }
 
                 var client = _httpClientFactory.CreateClient();
-                client.Timeout = TimeSpan.FromSeconds(10);
+                client.Timeout = TimeSpan.FromSeconds(25);
 
                 foreach (var item in existing.Take(MaxDiagramsPerPdf))
                 {

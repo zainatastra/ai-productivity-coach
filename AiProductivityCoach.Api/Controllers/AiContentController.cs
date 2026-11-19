@@ -6,6 +6,7 @@ using AiProductivityCoach.Api.AiPublishing.Content;
 using AiProductivityCoach.Api.AiPublishing.Domain;
 using AiProductivityCoach.Api.AiPublishing.Jobs;
 using AiProductivityCoach.Api.AiPublishing.Media;
+using AiProductivityCoach.Api.AiPublishing.Pdf;
 using AiProductivityCoach.Api.AiPublishing.Review;
 using AiProductivityCoach.Api.AiPublishing.Services;
 
@@ -31,6 +32,9 @@ namespace AiProductivityCoach.Api.Controllers
         private readonly MediaStore _media;
         private readonly MediaGenerationService _mediaGeneration;
         private readonly GeneratedMediaStorage _mediaStorage;
+        private readonly WhitepaperDiagramService _whitepaperDiagrams;
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly ILogger<AiContentController> _logger;
 
         public AiContentController(
             FirestoreDb firestore,
@@ -43,7 +47,10 @@ namespace AiProductivityCoach.Api.Controllers
             ReviewStore reviewStore,
             MediaStore media,
             MediaGenerationService mediaGeneration,
-            GeneratedMediaStorage mediaStorage)
+            GeneratedMediaStorage mediaStorage,
+            WhitepaperDiagramService whitepaperDiagrams,
+            IHttpClientFactory httpClientFactory,
+            ILogger<AiContentController> logger)
         {
             _firestore = firestore;
             _plans = plans;
@@ -56,6 +63,9 @@ namespace AiProductivityCoach.Api.Controllers
             _media = media;
             _mediaGeneration = mediaGeneration;
             _mediaStorage = mediaStorage;
+            _whitepaperDiagrams = whitepaperDiagrams;
+            _httpClientFactory = httpClientFactory;
+            _logger = logger;
         }
 
         public class UpdatePlanItemDto
@@ -418,6 +428,62 @@ namespace AiProductivityCoach.Api.Controllers
         {
             if (await _store.GetAsync(contentId) == null) return Error(404, "content_not_found", "Content not found.");
             return Ok(await _media.ListAsync(contentId));
+        }
+
+        /// <summary>
+        /// Lets an admin generate/preview a whitepaper's PDF directly from the draft, without going
+        /// through the public gated-download form - that form is for real leads, this is for the
+        /// admin to check the document itself. Carries an "admin preview" watermark (not a specific
+        /// recipient's) and the same copy-restriction as any other copy, since a preview can still
+        /// be forwarded.
+        /// </summary>
+        [HttpGet("content/{contentId}/whitepaper-pdf")]
+        public async Task<IActionResult> GetWhitepaperPdf(string contentId)
+        {
+            var doc = await _store.GetAsync(contentId);
+            if (doc == null) return Error(404, "content_not_found", "Content not found.");
+
+            var data = doc.ToDictionary();
+            if (FirestoreApi.GetString(data, "type") != ContentTypes.Whitepaper)
+                return Error(400, "not_a_whitepaper", "Only whitepapers can be downloaded as a PDF.");
+
+            var providerId = FirestoreApi.GetString(data, "providerId");
+            var providerDoc = await _firestore.Collection(AiCollections.Providers).Document(providerId).GetSnapshotAsync();
+            var providerData = providerDoc.Exists ? providerDoc.ToDictionary() : new Dictionary<string, object>();
+
+            var logoUrl = FirestoreApi.GetString(providerData, "logoUrl");
+            byte[]? logoBytes = null;
+
+            if (!string.IsNullOrWhiteSpace(logoUrl))
+            {
+                try
+                {
+                    var client = _httpClientFactory.CreateClient();
+                    client.Timeout = TimeSpan.FromSeconds(25);
+                    logoBytes = await client.GetByteArrayAsync(logoUrl);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[WhitepaperPdf] Could not fetch the provider logo for {ProviderId}.", providerId);
+                }
+            }
+
+            var diagrams = await _whitepaperDiagrams.GetOrGenerateAsync(contentId, HttpContext.RequestAborted);
+
+            var pdfRequest = new WhitepaperPdfRequest(
+                CompanyName: FirestoreApi.GetString(providerData, "name"),
+                WhitepaperTitle: FirestoreApi.GetString(data, "title"),
+                BodyHtml: FirestoreApi.GetString(data, "bodyHtml"),
+                LogoBytes: logoBytes,
+                WatermarkText: "ADMIN PREVIEW • NOT FOR DISTRIBUTION",
+                DiagramImages: diagrams,
+                Restricted: true,
+                AccentColor: BrandColorExtractor.ExtractAccentColor(logoBytes));
+
+            var pdfBytes = WhitepaperPdfService.Generate(pdfRequest, _logger);
+            var fileName = $"{FirestoreApi.GetString(data, "title")}.pdf".Replace(' ', '-');
+
+            return File(pdfBytes, "application/pdf", fileName);
         }
 
         [HttpPut("content/{contentId}/media/{mediaId}/cover")]

@@ -837,6 +837,7 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
                   lang={lang}
                   providerId={provider.id}
                   api={api}
+                  getToken={getToken}
                   archived={archived}
                   generationRunning={!!activeJob && (activeJob.type === "content.generate" || activeJob.type === "media.generate" || activeJob.type === "content.revise")}
                   refreshKey={`${jobs[0]?.id ?? ""}-${jobs[0]?.status ?? ""}`}

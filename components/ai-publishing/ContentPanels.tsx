@@ -1,10 +1,11 @@
 "use client";
 
 import { FormSkeleton } from "@/components/loading/Skeleton";
+import { API_BASE_URL } from "@/services/api";
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle, ArrowLeft, BookOpen, CheckCircle2, ExternalLink, FileText, Loader2, Lock,
+  AlertTriangle, ArrowLeft, BookOpen, CheckCircle2, Download, ExternalLink, FileText, Loader2, Lock,
   RefreshCw, Sparkles, Trash2, Video, XCircle, Eye, Check, RotateCcw, ImageIcon,
 } from "lucide-react";
 import { EditPanel, RevisionPanel, ComparePanel, type DraftDoc } from "./DraftWorkspace";
@@ -90,6 +91,7 @@ interface Props {
   lang: Lang;
   providerId: string;
   api: Api;
+  getToken: () => Promise<string | null>;
   archived: boolean;
   generationRunning: boolean;
   refreshKey: string;
@@ -119,7 +121,7 @@ const toDraft = (item: PlanItem): Draft => ({
 const pointsOf = (text: string) =>
   text.split("\n").map((p) => p.trim()).filter((p) => p.length > 0);
 
-export default function ContentPanels({ lang, providerId, api, archived, generationRunning, refreshKey, onJobStarted }: Props) {
+export default function ContentPanels({ lang, providerId, api, getToken, archived, generationRunning, refreshKey, onJobStarted }: Props) {
   const t = (key: keyof typeof TEXT) => TEXT[key][lang];
 
   const [initialLoaded, setInitialLoaded] = useState(false);
@@ -259,6 +261,37 @@ export default function ContentPanels({ lang, providerId, api, archived, generat
     }
 
     setOpenDoc(res.data);
+  };
+
+  const downloadWhitepaperPdf = async (id: string, type: string, title: string) => {
+    setBusy(`pdf-${type}`);
+    setError("");
+
+    try {
+      const token = await getToken();
+      if (!token) { setError(t("denied")); return; }
+
+      const res = await fetch(`${API_BASE_URL}/api/ai/content/${id}/whitepaper-pdf`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        setError(t("downloadPdfFailed"));
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${(title || "whitepaper").replace(/\s+/g, "-")}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError(t("downloadPdfFailed"));
+    } finally {
+      setBusy("");
+    }
   };
 
   const remove = async (id: string) => {
@@ -474,6 +507,11 @@ export default function ContentPanels({ lang, providerId, api, archived, generat
                       onWish={setWish}
                       onSuggest={() => regenerateItem(activeItem.type)}
                       onOpenDoc={() => activeItem.contentId && open(activeItem.contentId)}
+                      onDownloadPdf={
+                        activeItem.type === "whitepaper" && activeItem.contentId
+                          ? () => downloadWhitepaperPdf(activeItem.contentId!, activeItem.type, activeItem.title)
+                          : undefined
+                      }
                     />
                   )}
                 </>
@@ -550,6 +588,7 @@ function PlanCard(props: {
   onWish: (v: string) => void;
   onSuggest: () => void;
   onOpenDoc: () => void;
+  onDownloadPdf?: () => void;
 }) {
   const { lang, item, draft, dirty, busy, locked } = props;
   const t = (key: keyof typeof TEXT) => TEXT[key][lang];
@@ -689,6 +728,12 @@ function PlanCard(props: {
         {item.contentId && (
           <button className="aip-btn ghost" onClick={props.onOpenDoc}>
             <Eye size={13} /> <span>{t("openDoc")}</span>
+          </button>
+        )}
+        {props.onDownloadPdf && (
+          <button className="aip-btn ghost" onClick={props.onDownloadPdf} disabled={busy === `pdf-${item.type}`}>
+            {busy === `pdf-${item.type}` ? <Loader2 size={13} className="aip-spin" /> : <Download size={13} />}
+            <span>{busy === `pdf-${item.type}` ? t("downloadingPdf") : t("downloadPdf")}</span>
           </button>
         )}
       </div>
