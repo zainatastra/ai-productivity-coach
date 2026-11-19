@@ -771,7 +771,17 @@ namespace AiProductivityCoach.Api.Controllers
 
             if (action == "approve")
             {
-                if (!string.Equals(moderationState, "pending_review", StringComparison.OrdinalIgnoreCase))
+                // An admin-created "from scratch" profile has no publisher account to submit it for
+                // review (ownerUid is deliberately left empty by EyEricCompanyAdapter.SendAsync, an
+                // "unclaimed, admin-created" marker, not a bug) - the admin may publish it directly,
+                // by the standing decision that this never needs a company account first. A profile
+                // with a real ownerUid still always needs that publisher's own pending_review
+                // submission first - an admin can never skip a real publisher's own review step.
+                var ownerUid = GetString(companyData, "ownerUid");
+                var isUnclaimedAdminProfile = string.IsNullOrWhiteSpace(ownerUid);
+                var isPendingReview = string.Equals(moderationState, "pending_review", StringComparison.OrdinalIgnoreCase);
+
+                if (!isPendingReview && !isUnclaimedAdminProfile)
                 {
                     return Conflict(new
                     {

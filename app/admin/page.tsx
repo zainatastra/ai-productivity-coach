@@ -2775,6 +2775,19 @@ export default function AdminDashboard() {
                       </>
                     )}
 
+                    {selectedProviderReview.company.moderationState === "draft" &&
+                      !selectedProviderReview.publisher?.uid && (
+                        <button
+                          className="adm-moderation-btn approve"
+                          onClick={() => requestProviderConfirmation("approve")}
+                          disabled={providerDecisionLoading}
+                          title="This profile has no publisher account - admin-created profiles can be published directly."
+                        >
+                          <CircleCheck size={12} />
+                          Approve & Publish
+                        </button>
+                      )}
+
                     {selectedProviderReview.company.status === "published" && (
                       <button
                         className="adm-moderation-btn unpublish"
