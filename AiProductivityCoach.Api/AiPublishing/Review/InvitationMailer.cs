@@ -130,6 +130,38 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
             return await SendAsync(to, subject, html);
         }
 
+        /// <summary>
+        /// Delivers a gated whitepaper download both ways at once: the watermarked PDF attached
+        /// directly, and a button that re-downloads the same file later. Not an admin-editable
+        /// template - the PDF attachment is the point of this email, not its wording.
+        /// </summary>
+        public async Task<MailResult> SendWhitepaperPdfAsync(
+            string to, string companyName, string whitepaperTitle, string downloadUrl, string language,
+            byte[] pdfBytes, string fileName)
+        {
+            var en = IsEnglish(language);
+            var subject = en ? $"Your whitepaper: {whitepaperTitle}" : $"Ihr Whitepaper: {whitepaperTitle}";
+
+            var html = Document(Frame(
+                en ? "Your whitepaper is ready" : "Ihr Whitepaper ist bereit",
+                en ? "Hello," : "Guten Tag,",
+                en
+                    ? "thank you for your interest. The PDF is attached to this email, and the button below opens the same download again at any time."
+                    : "vielen Dank für Ihr Interesse. Die PDF-Datei ist dieser E-Mail beigefügt, und über den Button unten können Sie sie jederzeit erneut herunterladen.",
+                WebUtility.HtmlEncode(whitepaperTitle),
+                WebUtility.HtmlEncode(companyName),
+                string.Empty,
+                Array.Empty<string>(),
+                downloadUrl,
+                en ? "Download PDF" : "PDF herunterladen",
+                en ? "The button does not work? Copy this link into your browser:" : "Der Button funktioniert nicht? Kopieren Sie diesen Link in Ihren Browser:",
+                new[] { en
+                    ? "This copy is personalized to you and carries a visible usage restriction; please do not redistribute it."
+                    : "Dieses Exemplar ist für Sie personalisiert und trägt eine sichtbare Nutzungsbeschränkung; bitte geben Sie es nicht weiter." }));
+
+            return await SendAsync(to, subject, html, new[] { new MailAttachment(fileName, pdfBytes) });
+        }
+
         /// <summary>Sends the stored template with sample data to one address (the admin's own).</summary>
         public async Task<MailResult> SendTestAsync(string to, string kind, string language)
         {
@@ -271,7 +303,13 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
 </div>";
         }
 
-        private async Task<MailResult> SendAsync(string to, string subject, string html)
+        /// <summary>One file attached to an outgoing email, base64-encoded as Resend's API expects.</summary>
+        public sealed record MailAttachment(string FileName, byte[] Content);
+
+        private Task<MailResult> SendAsync(string to, string subject, string html) =>
+            SendAsync(to, subject, html, Array.Empty<MailAttachment>());
+
+        private async Task<MailResult> SendAsync(string to, string subject, string html, IReadOnlyList<MailAttachment> attachments)
         {
             var apiKey = _configuration["Resend:ApiKey"];
             if (string.IsNullOrWhiteSpace(apiKey))
@@ -282,11 +320,25 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
                 var senderName = await _templates.SenderNameAsync();
 
                 var client = _http.CreateClient();
-                client.Timeout = TimeSpan.FromSeconds(20);
+                client.Timeout = TimeSpan.FromSeconds(30);
                 client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
 
-                var response = await client.PostAsJsonAsync("https://api.resend.com/emails",
-                    new { from = $"{senderName} <{FromAddress}>", to = new[] { to }, subject, html });
+                var payload = attachments.Count == 0
+                    ? (object)new { from = $"{senderName} <{FromAddress}>", to = new[] { to }, subject, html }
+                    : new
+                    {
+                        from = $"{senderName} <{FromAddress}>",
+                        to = new[] { to },
+                        subject,
+                        html,
+                        attachments = attachments.Select(a => new
+                        {
+                            filename = a.FileName,
+                            content = Convert.ToBase64String(a.Content)
+                        })
+                    };
+
+                var response = await client.PostAsJsonAsync("https://api.resend.com/emails", payload);
 
                 if (response.IsSuccessStatusCode) return new MailResult(true, null);
 

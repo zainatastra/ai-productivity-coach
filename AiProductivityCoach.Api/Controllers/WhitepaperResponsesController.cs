@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using Google.Cloud.Firestore;
 using System.Net.Mail;
 using System.Security.Claims;
+using AiProductivityCoach.Api.AiPublishing.Pdf;
+using AiProductivityCoach.Api.AiPublishing.Review;
 
 namespace AiProductivityCoach.Api.Controllers
 {
@@ -10,11 +12,43 @@ namespace AiProductivityCoach.Api.Controllers
     [Route("api/providers/{slug}/whitepapers/{whitepaperId}/responses")]
     public class WhitepaperResponsesController : ControllerBase
     {
-        private readonly FirestoreDb _firestore;
+        // The Render backend's own public address - the PDF download link has to point back at
+        // this API, never at the Vercel frontend (which has no route for it).
+        private const string DefaultApiBaseUrl = "https://ai-productivity-coach-mlnn.onrender.com";
 
-        public WhitepaperResponsesController(FirestoreDb firestore)
+        private readonly FirestoreDb _firestore;
+        private readonly IHttpClientFactory _http;
+        private readonly InvitationMailer _mailer;
+        private readonly IConfiguration _configuration;
+        private readonly ILogger<WhitepaperResponsesController> _logger;
+
+        public WhitepaperResponsesController(
+            FirestoreDb firestore,
+            IHttpClientFactory http,
+            InvitationMailer mailer,
+            IConfiguration configuration,
+            ILogger<WhitepaperResponsesController> logger)
         {
             _firestore = firestore;
+            _http = http;
+            _mailer = mailer;
+            _configuration = configuration;
+            _logger = logger;
+        }
+
+        private string ApiBaseUrl
+        {
+            get
+            {
+                foreach (var candidate in new[] { Environment.GetEnvironmentVariable("API_BASE_URL"), _configuration["Api:PublicUrl"] })
+                {
+                    var value = candidate?.Trim().TrimEnd('/');
+                    if (!string.IsNullOrEmpty(value) && Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
+                        return value;
+                }
+
+                return DefaultApiBaseUrl;
+            }
         }
 
         public class SubmitWhitepaperResponseDto
@@ -195,57 +229,12 @@ namespace AiProductivityCoach.Api.Controllers
             if (!request.ConsentAccepted)
                 return BadRequest(new { message = "Consent is required before submitting the form." });
 
-            var companies = await _firestore
-                .Collection("companies")
-                .WhereEqualTo("status", "published")
-                .GetSnapshotAsync(cancellationToken);
+            var lookup = await FindApprovedWhitepaperAsync(normalizedSlug, requestedWhitepaperId, cancellationToken);
+            if (lookup.SlugMatchedButWhitepaperMissing)
+                return NotFound(new { message = "Whitepaper not found." });
 
-            DocumentSnapshot? companyDoc = null;
-            Dictionary<string, object>? approvedSnapshot = null;
-            Dictionary<string, object>? approvedWhitepaper = null;
-
-            foreach (var candidate in companies.Documents)
-            {
-                var companyData = candidate.ToDictionary();
-
-                if (GetLong(companyData, "approvedVersion") <= 0 ||
-                    !companyData.TryGetValue("approvedSnapshot", out var rawApproved) ||
-                    rawApproved is not Dictionary<string, object> approved)
-                {
-                    continue;
-                }
-
-                if (!approved.TryGetValue("company", out var rawCompany) ||
-                    rawCompany is not Dictionary<string, object> approvedCompany)
-                {
-                    continue;
-                }
-
-                if (!string.Equals(
-                        GetString(approvedCompany, "slug"),
-                        normalizedSlug,
-                        StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                var whitepapers = GetListOfMaps(approved, "whitepapers");
-                var whitepaper = whitepapers.FirstOrDefault(item =>
-                    string.Equals(
-                        GetString(item, "id"),
-                        requestedWhitepaperId,
-                        StringComparison.Ordinal));
-
-                if (whitepaper == null)
-                    return NotFound(new { message = "Whitepaper not found." });
-
-                companyDoc = candidate;
-                approvedSnapshot = approved;
-                approvedWhitepaper = whitepaper;
-                break;
-            }
-
-            if (companyDoc == null || approvedSnapshot == null || approvedWhitepaper == null)
+            var (companyDoc, approvedCompany, approvedWhitepaper) = (lookup.CompanyDoc, lookup.Company, lookup.Whitepaper);
+            if (companyDoc == null || approvedCompany == null || approvedWhitepaper == null)
                 return NotFound(new { message = "Provider profile not found." });
 
             var responseRef = companyDoc.Reference
@@ -275,12 +264,157 @@ namespace AiProductivityCoach.Api.Controllers
                 cancellationToken: cancellationToken
             );
 
+            var downloadUrl = $"{ApiBaseUrl}/api/providers/{normalizedSlug}/whitepapers/{requestedWhitepaperId}/responses/{responseRef.Id}/download";
+            var emailSent = false;
+
+            try
+            {
+                var pdfBytes = await BuildPdfAsync(approvedCompany, approvedWhitepaper, email, now.ToDateTime(), cancellationToken);
+                var fileName = $"{SlugifyFileName(GetString(approvedWhitepaper, "title"))}.pdf";
+                var mailResult = await _mailer.SendWhitepaperPdfAsync(
+                    email, GetString(approvedCompany, "name"), GetString(approvedWhitepaper, "title"), downloadUrl, "en", pdfBytes, fileName);
+                emailSent = mailResult.Sent;
+            }
+            catch (Exception ex)
+            {
+                // The lead's submission is already saved and the download link still works on its
+                // own (it regenerates the PDF itself) - a PDF/email failure here must never turn a
+                // successful submission into an error response for the visitor.
+                _logger.LogWarning(ex, "[WhitepaperDownload] Could not build/send the PDF for {ResponseId}.", responseRef.Id);
+            }
+
             return StatusCode(StatusCodes.Status201Created, new
             {
                 success = true,
                 responseId = responseRef.Id,
+                downloadUrl,
+                emailSent,
                 message = "Thank you. Your response has been submitted."
             });
+        }
+
+        /// <summary>
+        /// Re-downloads the same whitepaper for a lead who already submitted the gated form -
+        /// regenerated fresh each time (never stored) so it always carries that lead's own
+        /// watermark and always reflects the provider's current content.
+        /// </summary>
+        [HttpGet("{responseId}/download")]
+        [AllowAnonymous]
+        public async Task<IActionResult> Download(
+            string slug, string whitepaperId, string responseId, CancellationToken cancellationToken)
+        {
+            var normalizedSlug = Clean(slug).ToLowerInvariant();
+            var requestedWhitepaperId = Clean(whitepaperId);
+
+            var lookup = await FindApprovedWhitepaperAsync(normalizedSlug, requestedWhitepaperId, cancellationToken);
+            var (companyDoc, approvedCompany, approvedWhitepaper) = (lookup.CompanyDoc, lookup.Company, lookup.Whitepaper);
+            if (companyDoc == null || approvedCompany == null || approvedWhitepaper == null)
+                return NotFound(new { message = "Whitepaper not found." });
+
+            var responseDoc = await companyDoc.Reference
+                .Collection("whitepapers").Document(requestedWhitepaperId)
+                .Collection("responses").Document(Clean(responseId))
+                .GetSnapshotAsync(cancellationToken);
+
+            if (!responseDoc.Exists)
+                return NotFound(new { message = "This download link is no longer valid." });
+
+            var responseData = responseDoc.ToDictionary();
+            var email = GetString(responseData, "email");
+            var submittedAt = responseData.TryGetValue("submittedAt", out var raw) && raw is Timestamp ts
+                ? ts.ToDateTime()
+                : DateTime.UtcNow;
+
+            var pdfBytes = await BuildPdfAsync(approvedCompany, approvedWhitepaper, email, submittedAt, cancellationToken);
+            var fileName = $"{SlugifyFileName(GetString(approvedWhitepaper, "title"))}.pdf";
+
+            return File(pdfBytes, "application/pdf", fileName);
+        }
+
+        private sealed record WhitepaperLookupResult(
+            DocumentSnapshot? CompanyDoc,
+            Dictionary<string, object>? Company,
+            Dictionary<string, object>? Whitepaper,
+            bool SlugMatchedButWhitepaperMissing);
+
+        private async Task<WhitepaperLookupResult> FindApprovedWhitepaperAsync(
+            string normalizedSlug, string requestedWhitepaperId, CancellationToken cancellationToken)
+        {
+            var companies = await _firestore
+                .Collection("companies")
+                .WhereEqualTo("status", "published")
+                .GetSnapshotAsync(cancellationToken);
+
+            foreach (var candidate in companies.Documents)
+            {
+                var companyData = candidate.ToDictionary();
+
+                if (GetLong(companyData, "approvedVersion") <= 0 ||
+                    !companyData.TryGetValue("approvedSnapshot", out var rawApproved) ||
+                    rawApproved is not Dictionary<string, object> approved)
+                {
+                    continue;
+                }
+
+                if (!approved.TryGetValue("company", out var rawCompany) ||
+                    rawCompany is not Dictionary<string, object> approvedCompany)
+                {
+                    continue;
+                }
+
+                if (!string.Equals(GetString(approvedCompany, "slug"), normalizedSlug, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var whitepapers = GetListOfMaps(approved, "whitepapers");
+                var whitepaper = whitepapers.FirstOrDefault(item =>
+                    string.Equals(GetString(item, "id"), requestedWhitepaperId, StringComparison.Ordinal));
+
+                return whitepaper == null
+                    ? new WhitepaperLookupResult(null, null, null, SlugMatchedButWhitepaperMissing: true)
+                    : new WhitepaperLookupResult(candidate, approvedCompany, whitepaper, SlugMatchedButWhitepaperMissing: false);
+            }
+
+            return new WhitepaperLookupResult(null, null, null, SlugMatchedButWhitepaperMissing: false);
+        }
+
+        private async Task<byte[]> BuildPdfAsync(
+            Dictionary<string, object> approvedCompany, Dictionary<string, object> approvedWhitepaper,
+            string recipientEmail, DateTime submittedAtUtc, CancellationToken cancellationToken)
+        {
+            var logoUrl = GetString(approvedCompany, "logoUrl");
+            byte[]? logoBytes = null;
+
+            if (!string.IsNullOrWhiteSpace(logoUrl))
+            {
+                try
+                {
+                    var client = _http.CreateClient();
+                    client.Timeout = TimeSpan.FromSeconds(10);
+                    logoBytes = await client.GetByteArrayAsync(logoUrl, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[WhitepaperDownload] Could not fetch the provider logo for the PDF header.");
+                }
+            }
+
+            var request = new WhitepaperPdfRequest(
+                CompanyName: GetString(approvedCompany, "name"),
+                WhitepaperTitle: GetString(approvedWhitepaper, "title"),
+                BodyHtml: GetString(approvedWhitepaper, "content"),
+                LogoBytes: logoBytes,
+                WatermarkText: $"{recipientEmail} • {submittedAtUtc:yyyy-MM-dd HH:mm} UTC",
+                Restricted: true);
+
+            return WhitepaperPdfService.Generate(request, _logger);
+        }
+
+        private static string SlugifyFileName(string title)
+        {
+            var slug = new string((title ?? string.Empty).Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray());
+            while (slug.Contains("--")) slug = slug.Replace("--", "-");
+            slug = slug.Trim('-');
+            return string.IsNullOrEmpty(slug) ? "whitepaper" : slug;
         }
 
         private static string Clean(string? value) =>
