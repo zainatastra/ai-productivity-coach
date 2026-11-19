@@ -19,6 +19,7 @@ namespace AiProductivityCoach.Api.Controllers
         private readonly FirestoreDb _firestore;
         private readonly IHttpClientFactory _http;
         private readonly InvitationMailer _mailer;
+        private readonly AiPublishing.Media.WhitepaperDiagramService _diagrams;
         private readonly IConfiguration _configuration;
         private readonly ILogger<WhitepaperResponsesController> _logger;
 
@@ -26,12 +27,14 @@ namespace AiProductivityCoach.Api.Controllers
             FirestoreDb firestore,
             IHttpClientFactory http,
             InvitationMailer mailer,
+            AiPublishing.Media.WhitepaperDiagramService diagrams,
             IConfiguration configuration,
             ILogger<WhitepaperResponsesController> logger)
         {
             _firestore = firestore;
             _http = http;
             _mailer = mailer;
+            _diagrams = diagrams;
             _configuration = configuration;
             _logger = logger;
         }
@@ -398,12 +401,15 @@ namespace AiProductivityCoach.Api.Controllers
                 }
             }
 
+            var diagrams = await _diagrams.GetOrGenerateAsync(GetString(approvedWhitepaper, "sourceContentId"), cancellationToken);
+
             var request = new WhitepaperPdfRequest(
                 CompanyName: GetString(approvedCompany, "name"),
                 WhitepaperTitle: GetString(approvedWhitepaper, "title"),
                 BodyHtml: GetString(approvedWhitepaper, "content"),
                 LogoBytes: logoBytes,
                 WatermarkText: $"{recipientEmail} • {submittedAtUtc:yyyy-MM-dd HH:mm} UTC",
+                DiagramImages: diagrams,
                 Restricted: true);
 
             return WhitepaperPdfService.Generate(request, _logger);

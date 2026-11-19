@@ -13,7 +13,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Pdf
         string BodyHtml,
         byte[]? LogoBytes,
         string? WatermarkText,
-        bool Restricted);
+        bool Restricted,
+        IReadOnlyList<byte[]>? DiagramImages = null);
 
     /// <summary>
     /// Renders a whitepaper's already-generated HTML (from <see cref="AiPublishing.Content.HtmlRenderer"/>,
@@ -45,6 +46,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Pdf
         public static byte[] Generate(WhitepaperPdfRequest request, ILogger? logger = null)
         {
             var blocks = ParseBlocks(request.BodyHtml);
+            var diagramPositions = PlanDiagramPositions(blocks, request.DiagramImages?.Count ?? 0);
+            var diagramQueue = new Queue<byte[]>(request.DiagramImages ?? Array.Empty<byte[]>());
 
             var bytes = QuestPDF.Fluent.Document.Create(container =>
             {
@@ -79,8 +82,13 @@ namespace AiProductivityCoach.Api.AiPublishing.Pdf
                         column.Item().Text(request.WhitepaperTitle).FontSize(20).Bold().FontColor(Colors.Black);
                         column.Item().PaddingBottom(10);
 
-                        foreach (var block in blocks)
-                            RenderBlock(column, block);
+                        for (var i = 0; i < blocks.Count; i++)
+                        {
+                            RenderBlock(column, blocks[i]);
+
+                            if (diagramPositions.Contains(i) && diagramQueue.Count > 0)
+                                column.Item().PaddingVertical(4).MaxHeight(220).Image(diagramQueue.Dequeue()).FitArea();
+                        }
                     });
 
                     page.Footer().AlignCenter().Text(x =>
@@ -101,6 +109,36 @@ namespace AiProductivityCoach.Api.AiPublishing.Pdf
             BlockPattern.Matches(html ?? string.Empty)
                 .Select(m => new Block(m.Groups[1].Value, m.Groups[2].Value))
                 .ToList();
+
+        /// <summary>
+        /// Spreads the available diagrams evenly across the whitepaper's section headings, each
+        /// placed right under the heading it illustrates - never under the final heading, which is
+        /// always the sources/citations section (<see cref="AiPublishing.Content.HtmlRenderer.RenderReferences"/>),
+        /// not a place for an illustration.
+        /// </summary>
+        private static HashSet<int> PlanDiagramPositions(List<Block> blocks, int diagramCount)
+        {
+            var positions = new HashSet<int>();
+            if (diagramCount == 0) return positions;
+
+            var headingIndices = blocks
+                .Select((b, i) => (b, i))
+                .Where(t => t.b.Tag == "h2")
+                .Select(t => t.i)
+                .ToList();
+
+            if (headingIndices.Count > 1) headingIndices.RemoveAt(headingIndices.Count - 1);
+            if (headingIndices.Count == 0) return positions;
+
+            for (var d = 0; d < Math.Min(diagramCount, headingIndices.Count); d++)
+            {
+                var slot = (int)((d + 1) * (double)headingIndices.Count / (diagramCount + 1));
+                slot = Math.Clamp(slot, 0, headingIndices.Count - 1);
+                positions.Add(headingIndices[slot]);
+            }
+
+            return positions;
+        }
 
         private static void RenderBlock(ColumnDescriptor column, Block block)
         {

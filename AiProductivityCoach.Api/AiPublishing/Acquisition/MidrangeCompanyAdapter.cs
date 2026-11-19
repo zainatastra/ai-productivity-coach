@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using Google.Cloud.Firestore;
 using AiProductivityCoach.Api.AiPublishing.Content;
 using AiProductivityCoach.Api.AiPublishing.Domain;
+using AiProductivityCoach.Api.AiPublishing.Pdf;
 using AiProductivityCoach.Api.AiPublishing.Profile;
 using AiProductivityCoach.Api.AiPublishing.Services;
 
@@ -29,11 +30,18 @@ namespace AiProductivityCoach.Api.AiPublishing.Acquisition
 
         private readonly FirestoreDb _firestore;
         private readonly HttpClient _http;
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly Media.WhitepaperDiagramService _diagrams;
+        private readonly ILogger<MidrangeCompanyAdapter> _logger;
 
-        public MidrangeCompanyAdapter(FirestoreDb firestore, IHttpClientFactory httpClientFactory)
+        public MidrangeCompanyAdapter(
+            FirestoreDb firestore, IHttpClientFactory httpClientFactory, Media.WhitepaperDiagramService diagrams, ILogger<MidrangeCompanyAdapter> logger)
         {
             _firestore = firestore;
             _http = httpClientFactory.CreateClient(MidrangeOptions.HttpClientName);
+            _httpClientFactory = httpClientFactory;
+            _diagrams = diagrams;
+            _logger = logger;
         }
 
         public string Platform => Platforms.Midrange;
@@ -64,7 +72,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Acquisition
             };
 
             var result = await PostAsync("/wp-json/aipc/v1/anbieter", payload, ct);
-            var synced = await SyncContentAsync(providerId, result.Id, ct);
+            var synced = await SyncContentAsync(providerId, result.Id, name, FirestoreApi.GetString(data, "logoUrl"), ct);
             var now = Timestamp.GetCurrentTimestamp();
 
             await providerRef.UpdateAsync(new Dictionary<string, object>
@@ -126,13 +134,15 @@ namespace AiProductivityCoach.Api.AiPublishing.Acquisition
         }
 
         /// <summary>Mirrors every admin-approved/published piece into the matching real post type, linked to its provider.</summary>
-        private async Task<int> SyncContentAsync(string providerId, int anbieterId, CancellationToken ct)
+        private async Task<int> SyncContentAsync(string providerId, int anbieterId, string companyName, string? logoUrl, CancellationToken ct)
         {
             var pieces = await _firestore.Collection(AiCollections.Content)
                 .WhereEqualTo("providerId", providerId)
                 .GetSnapshotAsync(ct);
 
             var synced = 0;
+            byte[]? logoBytes = null;
+            var logoFetchAttempted = false;
 
             foreach (var piece in pieces.Documents)
             {
@@ -143,22 +153,85 @@ namespace AiProductivityCoach.Api.AiPublishing.Acquisition
                 var contentType = FirestoreApi.GetString(data, "type");
                 if (!ContentTypes.IsGeneratable(contentType)) continue;
 
+                var title = FirestoreApi.GetString(data, "title");
+                var bodyHtml = FirestoreApi.GetString(data, "bodyHtml");
+
                 var payload = new Dictionary<string, object?>
                 {
                     ["type"] = contentType,
                     ["sourceContentId"] = piece.Id,
                     ["sourceProviderId"] = providerId,
                     ["anbieterId"] = anbieterId,
-                    ["title"] = FirestoreApi.GetString(data, "title"),
+                    ["title"] = title,
                     ["excerpt"] = FirestoreApi.GetString(data, "excerpt"),
-                    ["bodyHtml"] = FirestoreApi.GetString(data, "bodyHtml")
+                    ["bodyHtml"] = bodyHtml
                 };
+
+                if (contentType == ContentTypes.Whitepaper)
+                {
+                    if (!logoFetchAttempted)
+                    {
+                        logoFetchAttempted = true;
+                        logoBytes = await TryFetchLogoAsync(logoUrl, ct);
+                    }
+
+                    try
+                    {
+                        var diagrams = await _diagrams.GetOrGenerateAsync(piece.Id, ct);
+
+                        // The real document MIDRANGE expects for whitepaper_pdf, not a personalized
+                        // per-lead copy (no recipient to watermark for yet) - generic copy-restriction
+                        // only, same as any other master file on their site.
+                        var pdfBytes = WhitepaperPdfService.Generate(new WhitepaperPdfRequest(
+                            CompanyName: companyName,
+                            WhitepaperTitle: title,
+                            BodyHtml: bodyHtml,
+                            LogoBytes: logoBytes,
+                            WatermarkText: null,
+                            DiagramImages: diagrams,
+                            Restricted: true), _logger);
+
+                        payload["pdfBase64"] = Convert.ToBase64String(pdfBytes);
+                        payload["pdfFileName"] = $"{SlugifyFileName(title)}.pdf";
+                    }
+                    catch (Exception ex)
+                    {
+                        // The text content sync must still go through even if the PDF render fails -
+                        // the client can always fill whitepaper_pdf manually, same as before this phase.
+                        _logger.LogWarning(ex, "[Midrange] Could not render the whitepaper PDF for {ContentId}; syncing text only.", piece.Id);
+                    }
+                }
 
                 await PostAsync("/wp-json/aipc/v1/content", payload, ct);
                 synced++;
             }
 
             return synced;
+        }
+
+        private async Task<byte[]?> TryFetchLogoAsync(string? logoUrl, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(logoUrl)) return null;
+
+            try
+            {
+                using var client = _httpClientFactory.CreateClient();
+                client.Timeout = TimeSpan.FromSeconds(10);
+                return await client.GetByteArrayAsync(logoUrl, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[Midrange] Could not fetch the provider logo for the whitepaper PDF header.");
+                return null;
+            }
+        }
+
+        private static string SlugifyFileName(string title)
+        {
+            var slug = new string((title ?? string.Empty).Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray());
+            while (slug.Contains("--")) slug = slug.Replace("--", "-");
+            slug = slug.Trim('-');
+            return string.IsNullOrEmpty(slug) ? "whitepaper" : slug;
         }
 
         private sealed record WriteResponse(int Id, bool Created);

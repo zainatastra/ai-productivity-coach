@@ -214,6 +214,7 @@ builder.Services.AddSingleton<MediaStore>();
 builder.Services.AddSingleton<IImageClient, OpenAiImageClient>();
 builder.Services.AddHttpClient<GeneratedMediaStorage>();
 builder.Services.AddSingleton<MediaGenerationService>();
+builder.Services.AddSingleton<AiProductivityCoach.Api.AiPublishing.Media.WhitepaperDiagramService>();
 builder.Services.AddSingleton<ProfileMediaService>();
 builder.Services.AddSingleton<AiProductivityCoach.Api.AiPublishing.Profile.ProfilePreviewService>();
 builder.Services.AddSingleton<AiProductivityCoach.Api.AiPublishing.Acquisition.ICompanyPublishAdapter, AiProductivityCoach.Api.AiPublishing.Acquisition.EyEricCompanyAdapter>();

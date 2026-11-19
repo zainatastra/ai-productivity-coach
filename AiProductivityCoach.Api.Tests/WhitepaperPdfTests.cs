@@ -46,6 +46,27 @@ namespace AiProductivityCoach.Api.Tests
         }
 
         [Fact]
+        public void Generate_WithDiagrams_EmbedsThemAndStillProducesAValidPdf()
+        {
+            var onePixelPng = Convert.FromBase64String(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==");
+
+            var request = new WhitepaperPdfRequest(
+                CompanyName: "Astra Soft Digital",
+                WhitepaperTitle: "Test Whitepaper",
+                BodyHtml: SampleHtml,
+                LogoBytes: null,
+                WatermarkText: null,
+                Restricted: false,
+                DiagramImages: new[] { onePixelPng, onePixelPng });
+
+            var bytes = WhitepaperPdfService.Generate(request);
+
+            Assert.True(bytes.Length > 500);
+            Assert.Equal("%PDF", System.Text.Encoding.ASCII.GetString(bytes, 0, 4));
+        }
+
+        [Fact]
         public void Generate_Restricted_StillProducesAValidPdf()
         {
             var request = new WhitepaperPdfRequest(
