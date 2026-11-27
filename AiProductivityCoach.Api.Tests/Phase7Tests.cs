@@ -171,4 +171,49 @@ namespace AiProductivityCoach.Api.Tests
         public void ADraftIsNeverOutOfDate() =>
             Assert.False(VersionApproval.IsOutOfDate(Piece("draft", 2), "midrange"));
     }
+
+    public class ContentMarkerTests
+    {
+        private static Dictionary<string, object> Piece(string status, long current = 1, long? approved = null)
+        {
+            var data = new Dictionary<string, object> { ["status"] = status, ["currentVersion"] = current };
+            if (approved != null) data["approvedVersion"] = approved.Value;
+            return data;
+        }
+
+        [Theory]
+        [InlineData("draft")]
+        [InlineData("company_review")]
+        [InlineData("pending_admin_review")]
+        [InlineData("changes_requested")]
+        [InlineData("rejected")]
+        public void NeverApprovedPieces_AreUnapproved(string status) =>
+            Assert.Equal(ContentMarkers.Unapproved, ContentMarkers.Of(Piece(status)));
+
+        [Theory]
+        [InlineData("approved")]
+        [InlineData("published")]
+        public void LivePieceWithoutNewerEdits_NeedsNoMarker(string status) =>
+            Assert.Equal(ContentMarkers.Live, ContentMarkers.Of(Piece(status, 2, 2)));
+
+        [Fact]
+        public void LivePieceWithNewerEdit_IsFlaggedAsPendingChanges() =>
+            Assert.Equal(ContentMarkers.PendingChanges, ContentMarkers.Of(Piece("published", 3, 2)));
+
+        [Theory]
+        [InlineData("unpublished")]
+        [InlineData("archived")]
+        public void UnpublishedOrArchived_IsInactive(string status) =>
+            Assert.Equal(ContentMarkers.Inactive, ContentMarkers.Of(Piece(status)));
+
+        [Fact]
+        public void OnlyUnapprovedAndPendingChanges_CountAsPreview()
+        {
+            Assert.True(ContentMarkers.IsPreview(ContentMarkers.Unapproved));
+            Assert.True(ContentMarkers.IsPreview(ContentMarkers.PendingChanges));
+            Assert.False(ContentMarkers.IsPreview(ContentMarkers.Live));
+            Assert.False(ContentMarkers.IsPreview(ContentMarkers.Inactive));
+            Assert.False(ContentMarkers.IsPreview(null));
+        }
+    }
 }

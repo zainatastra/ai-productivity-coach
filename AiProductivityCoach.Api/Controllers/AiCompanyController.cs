@@ -147,6 +147,7 @@ namespace AiProductivityCoach.Api.Controllers
                         ["status"] = status, ["wordCount"] = row.GetValueOrDefault("wordCount"),
                         ["currentVersion"] = row.GetValueOrDefault("currentVersion"), ["updatedAt"] = row.GetValueOrDefault("updatedAt"),
                         ["coverUrl"] = row.GetValueOrDefault("coverUrl"), ["providerName"] = providerName,
+                        ["marker"] = row.GetValueOrDefault("marker"),
                         ["hasPendingChanges"] = VersionApproval.HasPendingChanges(ToData(row)),
                         ["approvalState"] = VersionApproval.State(ToData(row))
                     };

@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { EditPanel, RevisionPanel, ComparePanel, type DraftDoc } from "./DraftWorkspace";
 import { ReviewTab, STATUS_TONE, statusLabel } from "./ReviewPanels";
-import { rt } from "./reviewText";
+import { rt, type RKey } from "./reviewText";
 import {
   CONTENT_ERRORS, CONTENT_TYPES, ERRORS, EXTRA_ERRORS, GATE_REASONS, GATE_STATES, Lang,
   QUALITY_CHECKS, QUALITY_STATES, TEXT, tr,
@@ -54,8 +54,12 @@ type ContentRow = {
   currentVersion?: number;
   updatedAt?: string;
   model?: string;
+  marker?: string;
   quality?: { state: string };
 };
+
+// Not approved yet, or live with a newer edit waiting: these get the yellow marker and count.
+const isPreview = (marker?: string) => marker === "unapproved" || marker === "pending_changes";
 
 type Block = { type: string; level: number; text: string; ordered: boolean; items: string[] };
 
@@ -481,6 +485,16 @@ export default function ContentPanels({ lang, providerId, api, getToken, archive
                           <TabIcon size={14} />
                           <span>{tr(CONTENT_TYPES[item.type], lang, item.type)}</span>
                           {item.type === "tutorial" && <span className="aip-pill blue"><span>{t("comingSoon")}</span></span>}
+                          {(() => {
+                            const ofType = docs.filter((d) => d.type === item.type);
+                            const preview = ofType.filter((d) => isPreview(d.marker)).length;
+                            return ofType.length > 0 ? (
+                              <>
+                                <span className="aip-pill gray" title={rt("mk_total", lang)}><span>{ofType.length}</span></span>
+                                {preview > 0 && <span className="aip-pill amber" title={rt("mk_preview", lang)}><span>{preview}</span></span>}
+                              </>
+                            ) : null;
+                          })()}
                           {item.contentId && <span className="aip-tab-dot green" title={t("hasDocument")} />}
                           {item.type !== "tutorial" && dirty(item.type) && <span className="aip-tab-dot amber" />}
                         </button>
@@ -539,6 +553,7 @@ export default function ContentPanels({ lang, providerId, api, getToken, archive
                     </span>
                   </div>
                   <div className="aip-item-side">
+                    {isPreview(doc.marker) && <span className="aip-pill amber"><span>{rt(`mk_${doc.marker}` as RKey, lang)}</span></span>}
                     <span className={`aip-pill ${STATUS_TONE[doc.status] || "gray"}`}><span>{statusLabel(doc.status, lang)}</span></span>
                     {doc.quality && (
                       <span className={`aip-pill ${doc.quality.state === "ok" ? "green" : doc.quality.state === "warnings" ? "amber" : "red"}`}>

@@ -102,4 +102,28 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
             return merged;
         }
     }
+    public static class ContentMarkers
+    {
+        public const string Live = "live";
+        public const string Unapproved = "unapproved";
+        public const string PendingChanges = "pending_changes";
+        public const string Inactive = "inactive";
+
+        /// <summary>
+        /// How a piece should be marked: live (nothing to flag), unapproved (never approved yet),
+        /// pending_changes (live, but a newer edit waits for approval) or inactive (unpublished/archived).
+        /// </summary>
+        public static string Of(IDictionary<string, object> data)
+        {
+            var status = FirestoreApi.GetString(data, "status");
+
+            if (VersionApproval.IsLive(status)) return VersionApproval.HasPendingChanges(data) ? PendingChanges : Live;
+            if (status == ContentStatus.Unpublished || status == ContentStatus.Archived) return Inactive;
+
+            return Unapproved;
+        }
+
+        /// <summary>A preview item is one that is not (fully) approved: it gets the yellow marker and counts in the yellow counter.</summary>
+        public static bool IsPreview(string? marker) => marker == Unapproved || marker == PendingChanges;
+    }
 }

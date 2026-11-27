@@ -183,7 +183,12 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
             var snapshot = await Docs.WhereEqualTo("providerId", providerId).GetSnapshotAsync();
 
             return snapshot.Documents
-                .Select(doc => FirestoreApi.ToApi(doc, "blocks", "bodyHtml", "data", "sources"))
+                .Select(doc =>
+                {
+                    var row = FirestoreApi.ToApi(doc, "blocks", "bodyHtml", "data", "sources");
+                    row["marker"] = Review.ContentMarkers.Of(doc.ToDictionary());
+                    return row;
+                })
                 .OrderByDescending(row => row.TryGetValue("updatedAt", out var v) ? v?.ToString() : "")
                 .ToList();
         }

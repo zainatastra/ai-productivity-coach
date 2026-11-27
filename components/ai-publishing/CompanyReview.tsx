@@ -10,7 +10,9 @@ import { RT, rt, type RKey } from "./reviewText";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-type Row = { id: string; type: string; title: string; status: string; wordCount?: number; currentVersion?: number; updatedAt?: string; coverUrl?: string; providerName?: string };
+type Row = { id: string; type: string; title: string; status: string; wordCount?: number; currentVersion?: number; updatedAt?: string; coverUrl?: string; providerName?: string; marker?: string };
+
+const isPreview = (marker?: string) => marker === "unapproved" || marker === "pending_changes";
 
 const ICONS: Record<string, any> = { article: FileText, whitepaper: BookOpen, webinar: Video };
 
@@ -59,6 +61,7 @@ export default function CompanyReview() {
 
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [rows, setRows] = useState<Row[] | null>(null);
+  const [listType, setListType] = useState("");
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -479,8 +482,24 @@ export default function CompanyReview() {
       ) : rows.length === 0 ? (
         <div className="cr-card"><p>{t("c_empty")}</p></div>
       ) : (
+        <>
+        <div className="cr-row" style={{ marginBottom: 12 }}>
+          {[{ key: "", label: t("mk_all") as string }, ...Array.from(new Set(rows.map((r) => r.type))).map((type) => ({ key: type, label: tr(CONTENT_TYPES[type], lang, type) }))].map((tab) => {
+            const inTab = rows.filter((r) => !tab.key || r.type === tab.key);
+            const preview = inTab.filter((r) => isPreview(r.marker)).length;
+            return (
+              <button key={tab.key || "all"} className="cr-chip" aria-pressed={listType === tab.key}
+                style={listType === tab.key ? { background: "#111827", color: "#fff", borderColor: "#111827" } : undefined}
+                onClick={() => setListType(tab.key)}>
+                <span>{tab.label}</span>{" "}
+                <span className="cr-pill" title={t("mk_total")}><span>{inTab.length}</span></span>
+                {preview > 0 && <>{" "}<span className="cr-pill amber" title={t("mk_preview")}><span>{preview}</span></span></>}
+              </button>
+            );
+          })}
+        </div>
         <div className="cr-list">
-          {rows.map((r) => {
+          {rows.filter((r) => !listType || r.type === listType).map((r) => {
             const Icon = ICONS[r.type] || FileText;
             return (
               <button key={r.id} className="cr-item" onClick={() => open(r.id)} disabled={loading}>
@@ -489,11 +508,13 @@ export default function CompanyReview() {
                   <strong>{r.title}</strong>
                   <span>{r.providerName} · {tr(CONTENT_TYPES[r.type], lang, r.type)} · {r.wordCount} {t("c_words")} · {t("c_version")} {r.currentVersion}</span>
                 </span>
+                {isPreview(r.marker) && <span className="cr-pill amber"><span>{t(`mk_${r.marker}` as RKey)}</span></span>}
                 <span className={`cr-pill ${TONE[r.status] || "gray"}`}><span>{statusText(r.status, lang)}</span></span>
               </button>
             );
           })}
         </div>
+        </>
       )}
     </>,
   );
