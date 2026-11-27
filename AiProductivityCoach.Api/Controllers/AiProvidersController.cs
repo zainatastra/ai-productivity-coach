@@ -26,14 +26,16 @@ namespace AiProductivityCoach.Api.Controllers
         private readonly AiJobService _jobs;
         private readonly KnowledgeStore _knowledge;
         private readonly ProviderPurgeService _purge;
+        private readonly ProviderCreationService _creation;
 
-        public AiProvidersController(FirestoreDb firestore, AiAuditService audit, AiJobService jobs, KnowledgeStore knowledge, ProviderPurgeService purge)
+        public AiProvidersController(FirestoreDb firestore, AiAuditService audit, AiJobService jobs, KnowledgeStore knowledge, ProviderPurgeService purge, ProviderCreationService creation)
         {
             _firestore = firestore;
             _audit = audit;
             _jobs = jobs;
             _knowledge = knowledge;
             _purge = purge;
+            _creation = creation;
         }
 
         public class CreateProviderDto
@@ -69,52 +71,20 @@ namespace AiProductivityCoach.Api.Controllers
             var actor = Actor;
             if (actor == null || !actor.IsAdmin) return Unauthorized();
 
-            var name = CleanName(request.Name);
+            var result = await _creation.CreateAsync(actor, request.Name, request.Website);
 
-            if (name.Length < 2)
-                return Error(400, "provider_name_required", "Provider name is required.");
-            if (name.Length > 160)
-                return Error(400, "provider_name_too_long", "Provider name must be 160 characters or fewer.");
-
-            var website = UrlSafety.Normalize(request.Website);
-            if (!website.Ok)
-                return Error(400, website.Error!, "The website URL is not valid.");
-
-            if (await WebsiteInUseAsync(website.Host!, null))
-                return Error(409, "provider_website_exists", "A provider with this website already exists.");
-
-            var slug = await UniqueSlugAsync(SlugHelper.Create(name));
-            var now = Timestamp.GetCurrentTimestamp();
-            var providerRef = Providers.Document();
-
-            await providerRef.SetAsync(new Dictionary<string, object>
+            if (!result.Ok)
             {
-                ["name"] = name,
-                ["slug"] = slug,
-                ["website"] = website.Normalized!,
-                ["websiteHost"] = website.Host!,
-                ["status"] = ProviderStatus.Created,
-                ["publisherType"] = "company",
-                ["defaultLanguage"] = "de",
-                ["createdBy"] = actor.UserId,
-                ["createdOnPlatform"] = actor.Platform,
-                ["sourceCount"] = 1,
-                ["sourceSummary"] = new Dictionary<string, object>
+                return result.Code switch
                 {
-                    ["total"] = 1, ["available"] = 0, ["unavailable"] = 0
-                },
-                ["createdAt"] = now,
-                ["updatedAt"] = now
-            });
+                    "provider_name_required" => Error(400, result.Code, "Provider name is required."),
+                    "provider_name_too_long" => Error(400, result.Code, "Provider name must be 160 characters or fewer."),
+                    "provider_website_exists" => Error(409, result.Code, "A provider with this website already exists."),
+                    _ => Error(400, result.Code!, "The website URL is not valid.")
+                };
+            }
 
-            // The website itself is the first (primary) source.
-            await providerRef.Collection(AiCollections.Sources).Document().SetAsync(
-                NewSource(website.Normalized!, SourceTypes.Homepage, actor.UserId, isPrimary: true));
-
-            await _audit.LogAsync(actor, AuditActions.ProviderCreated, providerRef.Id, null, null,
-                new Dictionary<string, object> { ["name"] = name, ["website"] = website.Normalized! });
-
-            var created = await providerRef.GetSnapshotAsync();
+            var created = await Providers.Document(result.ProviderId!).GetSnapshotAsync();
             return StatusCode(201, FirestoreApi.ToApi(created));
         }
 
@@ -437,42 +407,13 @@ namespace AiProductivityCoach.Api.Controllers
         private IActionResult ProviderNotFound() =>
             Error(404, "provider_not_found", "Provider not found.");
 
-        private static string CleanName(string? value) =>
-            Regex.Replace(value ?? string.Empty, @"\s+", " ").Trim();
+        private static string CleanName(string? value) => ProviderCreationService.CleanName(value);
 
-        private static Dictionary<string, object> NewSource(string url, string type, string userId, bool isPrimary)
-        {
-            var now = Timestamp.GetCurrentTimestamp();
+        private static Dictionary<string, object> NewSource(string url, string type, string userId, bool isPrimary) =>
+            ProviderCreationService.NewSource(url, type, userId, isPrimary);
 
-            return new Dictionary<string, object>
-            {
-                ["url"] = url,
-                ["normalizedUrl"] = url,
-                ["type"] = type,
-                ["isPrimary"] = isPrimary,
-                ["status"] = SourceStatus.Pending,
-                ["title"] = string.Empty,
-                ["httpStatus"] = 0,
-                ["errorCode"] = string.Empty,
-                ["language"] = string.Empty,
-                ["addedBy"] = userId,
-                ["createdAt"] = now,
-                ["updatedAt"] = now
-            };
-        }
-
-        private async Task<bool> WebsiteInUseAsync(string host, string? excludeProviderId)
-        {
-            // "www.example.com" and "example.com" are the same website.
-            var bare = host.StartsWith("www.", StringComparison.Ordinal) ? host[4..] : host;
-            var variants = new[] { bare, "www." + bare };
-
-            var snapshot = await Providers.WhereIn("websiteHost", variants).GetSnapshotAsync();
-
-            return snapshot.Documents.Any(doc =>
-                doc.Id != excludeProviderId &&
-                FirestoreApi.GetString(doc.ToDictionary(), "status") != ProviderStatus.Archived);
-        }
+        private Task<bool> WebsiteInUseAsync(string host, string? excludeProviderId) =>
+            _creation.WebsiteInUseAsync(host, excludeProviderId);
 
         private static async Task<bool> SourceExistsAsync(
             DocumentReference providerRef,
@@ -486,22 +427,7 @@ namespace AiProductivityCoach.Api.Controllers
             return snapshot.Documents.Any(doc => doc.Id != excludeSourceId);
         }
 
-        private async Task<string> UniqueSlugAsync(string baseSlug)
-        {
-            if (string.IsNullOrWhiteSpace(baseSlug))
-                baseSlug = "provider";
-
-            var candidate = baseSlug;
-            var suffix = 2;
-
-            while ((await Providers.WhereEqualTo("slug", candidate).Limit(1).GetSnapshotAsync()).Count > 0)
-            {
-                candidate = $"{baseSlug}-{suffix}";
-                suffix++;
-            }
-
-            return candidate;
-        }
+        private Task<string> UniqueSlugAsync(string baseSlug) => _creation.UniqueSlugAsync(baseSlug);
 
         private static async Task RecomputeSummaryAsync(DocumentReference providerRef)
         {

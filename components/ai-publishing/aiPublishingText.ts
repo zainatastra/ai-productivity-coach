@@ -518,6 +518,15 @@ export const GATE_REASONS: Record<string, Pair> = {
 };
 
 export const EXTRA_ERRORS: Record<string, Pair> = {
+  csv_empty: { de: "Die Datei ist leer.", en: "The file is empty." },
+  csv_no_rows: { de: "Die Datei enthält keine Datenzeilen.", en: "The file has no data rows." },
+  csv_too_large: { de: "Die Datei ist zu groß (höchstens 1 MB).", en: "The file is too large (1 MB at most)." },
+  csv_too_many_rows: { de: "Die Datei hat zu viele Zeilen (höchstens 200).", en: "The file has too many rows (200 at most)." },
+  csv_missing_columns: { de: "Es fehlen Spalten. Benötigt werden Firmenname (name) und Website (website).", en: "Columns are missing. A company name (name) and a website (website) are required." },
+  duplicate_in_file: { de: "Diese Website steht schon weiter oben in der Datei.", en: "This website already appears earlier in the file." },
+  no_rows: { de: "Es gibt nichts zu importieren.", en: "There is nothing to import." },
+  batch_too_large: { de: "Zu viele Zeilen auf einmal.", en: "Too many rows at once." },
+  import_failed: { de: "Diese Zeile konnte nicht angelegt werden.", en: "This row could not be created." },
   not_bookable: { de: "Dieses Stück kann nicht gebucht werden.", en: "This piece cannot be booked." },
   date_required: { de: "Bitte ein Datum wählen.", en: "Please choose a date." },
   invalid_date: { de: "Das Datum ist ungültig.", en: "The date is not valid." },

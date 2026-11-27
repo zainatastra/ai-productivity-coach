@@ -237,6 +237,7 @@ builder.Services.AddHttpClient(AiProductivityCoach.Api.AiPublishing.Acquisition.
 });
 builder.Services.AddSingleton<AiProductivityCoach.Api.AiPublishing.Acquisition.ICompanyPublishAdapter, AiProductivityCoach.Api.AiPublishing.Acquisition.MidrangeCompanyAdapter>();
 builder.Services.AddSingleton<ProviderPurgeService>();
+builder.Services.AddSingleton<ProviderCreationService>();
 builder.Services.AddSingleton<InvitationService>();
 builder.Services.AddSingleton<MembershipService>();
 builder.Services.AddSingleton<ReviewStore>();
