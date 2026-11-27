@@ -183,6 +183,48 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
             return await SendAsync(to, subject, html, new[] { new MailAttachment(fileName, pdfBytes) }, Domain.Platforms.EyEric);
         }
 
+        public sealed record BookingNotice(
+            string ProviderName, string ContentTitle, string ContentType, string BookedBy,
+            string Date, string TimePeriod, int Leads, string TargetGroup, long PriceCents);
+
+        /// <summary>
+        /// Tells the admin that a company booked a whitepaper or webinar campaign. Every value that came from a
+        /// user (title, target group, names) is HTML-encoded: none of it may become markup in the admin's inbox.
+        /// </summary>
+        public async Task<MailResult> SendBookingNotificationAsync(string to, BookingNotice n)
+        {
+            var en = false; // the admin team works in German
+            string E(string value) => WebUtility.HtmlEncode(value);
+
+            var typeLabel = n.ContentType == "webinar" ? "Webinar" : "Whitepaper";
+            var subject = $"Neue Buchung: {typeLabel} – {n.ProviderName}";
+            var period = n.TimePeriod switch { "morning" => "vormittags", "afternoon" => "nachmittags", "evening" => "abends", _ => n.TimePeriod };
+
+            var lines = new List<string>
+            {
+                $"Termin: {E(n.Date)}, {E(period)}",
+                $"Gewünschte Leads: {n.Leads}",
+                $"Zielgruppe: {E(n.TargetGroup)}",
+                $"Preis: {E(Booking.BookingPricing.FormatMoney(n.PriceCents, en))}",
+                $"Gebucht von: {E(n.BookedBy)}"
+            };
+
+            var html = Document(Frame(
+                "Neue Buchung eingegangen",
+                "Hallo,",
+                $"{E(n.ProviderName)} hat eine Buchung angefragt. Die Details stehen unten und sind im Admin-Bereich gespeichert.",
+                E(n.ContentTitle),
+                $"{typeLabel} · {E(n.ProviderName)}",
+                "Details",
+                lines.ToArray(),
+                $"{FrontendBaseUrl}/admin",
+                "Zum Admin-Bereich",
+                "Der Button funktioniert nicht? Kopieren Sie diesen Link in Ihren Browser:",
+                new[] { "Der Preis wurde serverseitig berechnet und mit der Buchung gespeichert." }));
+
+            return await SendAsync(to, subject, html);
+        }
+
         /// <summary>Sends the stored template with sample data to one address (the admin's own).</summary>
         public async Task<MailResult> SendTestAsync(string to, string kind, string language)
         {

@@ -18,6 +18,7 @@ import { AccessPanel, ReviewQueue } from "./ReviewPanels";
 import ProfileBuilderPanel from "./ProfileBuilderPanel";
 import { AIP_CSS } from "./aipStyles";
 import EmailSettingsPanel from "./EmailSettingsPanel";
+import { PricingPanel } from "./BookingPanels";
 
 /* ───────────── types ───────────── */
 
@@ -953,6 +954,7 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
 
           {/* Phase 1 improvement: editable email texts */}
           <EmailSettingsPanel lang={lang} api={api} />
+          <PricingPanel lang={lang} api={api} />
         </>
       )}
 

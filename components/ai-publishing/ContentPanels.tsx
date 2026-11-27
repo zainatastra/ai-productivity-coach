@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { EditPanel, RevisionPanel, ComparePanel, type DraftDoc } from "./DraftWorkspace";
 import { ReviewTab, STATUS_TONE, statusLabel } from "./ReviewPanels";
+import { PiecePricing } from "./BookingPanels";
 import { rt, type RKey } from "./reviewText";
 import {
   CONTENT_ERRORS, CONTENT_TYPES, ERRORS, EXTRA_ERRORS, GATE_REASONS, GATE_STATES, Lang,
@@ -882,8 +883,12 @@ function DocumentViewer(props: {
       )}
 
       {tab === "review" && (
-        <ReviewTab lang={lang} contentId={doc.id} status={doc.status} api={props.api} locked={props.locked}
-          onChanged={props.onSaved} />
+        <>
+          <ReviewTab lang={lang} contentId={doc.id} status={doc.status} api={props.api} locked={props.locked}
+            onChanged={props.onSaved} />
+          <PiecePricing lang={lang} api={props.api} contentId={doc.id} type={doc.type}
+            pricing={(doc as unknown as { pricing?: { baseCents?: number; perLeadCents?: number } }).pricing} />
+        </>
       )}
 
       {(tab === "read" || tab === "ai") && (

@@ -2,6 +2,7 @@ using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using AiProductivityCoach.Api.AiPublishing.Ai;
+using AiProductivityCoach.Api.AiPublishing.Booking;
 using AiProductivityCoach.Api.AiPublishing.Content;
 using AiProductivityCoach.Api.AiPublishing.Domain;
 using AiProductivityCoach.Api.AiPublishing.Jobs;
@@ -50,6 +51,9 @@ namespace AiProductivityCoach.Api.Controllers
         private readonly AiNotificationService _notifications;
         private readonly ILlmClient _llm;
         private readonly ContentRevisionService _revisions;
+        private readonly PricingStore _pricing;
+        private readonly BookingStore _bookings;
+        private readonly InvitationMailer _mailer;
 
         public AiCompanyController(
             FirestoreDb firestore,
@@ -62,9 +66,15 @@ namespace AiProductivityCoach.Api.Controllers
             AiAuditService audit,
             AiNotificationService notifications,
             ILlmClient llm,
-            ContentRevisionService revisions)
+            ContentRevisionService revisions,
+            PricingStore pricing,
+            BookingStore bookings,
+            InvitationMailer mailer)
         {
             _revisions = revisions;
+            _pricing = pricing;
+            _bookings = bookings;
+            _mailer = mailer;
             _firestore = firestore;
             _members = members;
             _invitations = invitations;
@@ -257,6 +267,109 @@ namespace AiProductivityCoach.Api.Controllers
                     _ => Error(400, ex.Code, "The request is not valid.")
                 };
             }
+        }
+
+        // ───────────── booking (commercial; separate from editorial approval) ─────────────
+
+        public class BookingDto
+        {
+            public string? Date { get; set; }
+            public string? TimePeriod { get; set; }
+            public int Leads { get; set; }
+            public string? TargetGroup { get; set; }
+        }
+
+        /// <summary>What booking this piece would cost, and the bookings already made for it.</summary>
+        [HttpGet("contents/{contentId}/booking")]
+        public async Task<IActionResult> GetBooking(string contentId)
+        {
+            var (doc, _, _, error) = await LoadAsync(contentId);
+            if (error != null) return error;
+
+            var data = doc!.ToDictionary();
+            var type = FirestoreApi.GetString(data, "type");
+            if (!BookingPricing.IsBookable(type)) return Error(404, "not_bookable", "This content cannot be booked.");
+
+            var rates = BookingPricing.Effective(type, await _pricing.LoadAsync(), PricingStore.PieceOverride(data).BaseCents, PricingStore.PieceOverride(data).PerLeadCents);
+
+            return Ok(new
+            {
+                type,
+                priced = BookingPricing.IsPriced(type, rates),
+                baseCents = rates.BaseCents,
+                perLeadCents = rates.PerLeadCents,
+                currency = "EUR",
+                timePeriods = BookingPricing.TimePeriods,
+                bookings = (await _bookings.ListForContentAsync(contentId)).Select(b => new
+                {
+                    id = b["id"], date = b.GetValueOrDefault("date"), timePeriod = b.GetValueOrDefault("timePeriod"),
+                    leads = b.GetValueOrDefault("leads"), priceCents = b.GetValueOrDefault("priceCents"),
+                    status = b.GetValueOrDefault("status"), createdAt = b.GetValueOrDefault("createdAt")
+                })
+            });
+        }
+
+        /// <summary>
+        /// Books a whitepaper or webinar campaign. The price is always calculated here from the stored
+        /// rates; nothing the browser shows or sends decides it.
+        /// </summary>
+        [HttpPost("contents/{contentId}/booking")]
+        public async Task<IActionResult> Book(string contentId, [FromBody] BookingDto? request)
+        {
+            var (doc, providerId, _, error) = await LoadAsync(contentId);
+            if (error != null) return error;
+
+            var actor = Actor!;
+            var data = doc!.ToDictionary();
+            var type = FirestoreApi.GetString(data, "type");
+
+            var input = new BookingRequest(type, request?.Date, request?.TimePeriod, request?.Leads ?? 0, request?.TargetGroup);
+            var check = BookingPricing.Validate(input, DateOnly.FromDateTime(DateTime.UtcNow));
+            if (!check.Ok) return Error(400, check.Code!, "The booking is not valid.");
+
+            var (pieceBase, piecePerLead) = PricingStore.PieceOverride(data);
+            var rates = BookingPricing.Effective(type, await _pricing.LoadAsync(), pieceBase, piecePerLead);
+            if (!BookingPricing.IsPriced(type, rates))
+                return Error(409, "pricing_not_configured", "Booking is not available yet because no price is set.");
+
+            long price;
+            try { price = BookingPricing.Calculate(type, rates, input.Leads); }
+            catch (OverflowException) { return Error(400, "invalid_leads", "The booking is not valid."); }
+            if (price > BookingPricing.MaxCents) return Error(400, "invalid_leads", "The booking is not valid.");
+
+            var providerName = await ProviderNameAsync(providerId);
+            var title = FirestoreApi.GetString(data, "title");
+            var targetGroup = DocumentParser.Clean(input.TargetGroup, BookingPricing.MaxTargetGroupLength);
+            var period = input.TimePeriod!.Trim().ToLowerInvariant();
+
+            var bookingId = await _bookings.CreateAsync(new Dictionary<string, object>
+            {
+                ["providerId"] = providerId, ["providerName"] = providerName,
+                ["contentId"] = contentId, ["contentType"] = type, ["contentTitle"] = title,
+                ["createdByUid"] = actor.UserId, ["createdByEmail"] = actor.Email ?? string.Empty,
+                ["date"] = input.Date!.Trim(), ["timePeriod"] = period, ["leads"] = input.Leads,
+                ["targetGroup"] = targetGroup,
+                ["priceCents"] = price, ["baseCents"] = rates.BaseCents, ["perLeadCents"] = rates.PerLeadCents,
+                ["currency"] = "EUR"
+            });
+
+            await _audit.LogAsync(actor, AuditActions.BookingCreated, providerId, contentId, null,
+                new Dictionary<string, object> { ["bookingId"] = bookingId, ["priceCents"] = price, ["leads"] = input.Leads });
+
+            await _notifications.NotifyAdminsAsync(actor.Platform, providerId, null, "booking", "info",
+                $"Neue Buchung: {title} ({providerName})", $"New booking: {title} ({providerName})");
+
+            // The booking is already saved; a failed email must never lose it.
+            var emailSent = false;
+            var notify = (await _pricing.LoadAsync()).AdminEmail;
+            if (!string.IsNullOrWhiteSpace(notify))
+            {
+                var mail = await _mailer.SendBookingNotificationAsync(notify, new InvitationMailer.BookingNotice(
+                    providerName, title, type, actor.Email ?? string.Empty, input.Date!.Trim(), period, input.Leads, targetGroup, price));
+                emailSent = mail.Sent;
+            }
+
+            return Ok(new { id = bookingId, priceCents = price, emailSent });
         }
 
         public class ApprovalRequestDto

@@ -8,6 +8,7 @@ import { API_BASE_URL } from "@/services/api";
 import { CONTENT_ERRORS, CONTENT_TYPES, ERRORS, EXTRA_ERRORS, Lang, TEXT, tr } from "./aiPublishingText";
 import { EditPanel } from "./DraftWorkspace";
 import { AIP_CSS } from "./aipStyles";
+import { BookingForm } from "./BookingPanels";
 import { RT, rt, type RKey } from "./reviewText";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -315,6 +316,10 @@ export default function CompanyReview() {
               <button className="cr-btn" onClick={() => setEditing(true)}><Pencil size={14} /> <span>{t("ce_open")}</span></button>
             )}
           </div>
+        )}
+
+        {(detail.type === "whitepaper" || detail.type === "webinar") && (
+          <BookingForm lang={lang} api={api} contentId={detail.id} type={detail.type} />
         )}
 
         <div className="cr-card">

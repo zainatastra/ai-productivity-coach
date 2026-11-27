@@ -518,6 +518,17 @@ export const GATE_REASONS: Record<string, Pair> = {
 };
 
 export const EXTRA_ERRORS: Record<string, Pair> = {
+  not_bookable: { de: "Dieses Stück kann nicht gebucht werden.", en: "This piece cannot be booked." },
+  date_required: { de: "Bitte ein Datum wählen.", en: "Please choose a date." },
+  invalid_date: { de: "Das Datum ist ungültig.", en: "The date is not valid." },
+  date_in_past: { de: "Das Datum darf nicht in der Vergangenheit liegen.", en: "The date cannot be in the past." },
+  invalid_time_period: { de: "Bitte einen Zeitraum wählen.", en: "Please choose a time period." },
+  invalid_leads: { de: "Bitte eine Anzahl Leads zwischen 1 und 100.000 angeben.", en: "Please enter a number of leads between 1 and 100,000." },
+  target_group_required: { de: "Bitte beschreiben Sie Ihre Zielgruppe.", en: "Please describe your target group." },
+  target_group_too_long: { de: "Die Beschreibung der Zielgruppe ist zu lang.", en: "The target group description is too long." },
+  pricing_not_configured: { de: "Die Buchung ist noch nicht freigeschaltet, weil noch kein Preis hinterlegt ist.", en: "Booking is not available yet because no price has been set." },
+  invalid_price: { de: "Bitte gültige Beträge eingeben, z. B. 49,90.", en: "Please enter valid amounts, e.g. 49.90." },
+  invalid_email: { de: "Bitte eine gültige E-Mail-Adresse eingeben.", en: "Please enter a valid email address." },
   publish_failed: { de: "Die Veröffentlichung auf der Plattform ist fehlgeschlagen. Bitte später erneut versuchen.", en: "Publishing to the platform failed. Please try again later." },
   no_pending_changes: { de: "Es gibt keine Änderungen, die auf Freigabe warten.", en: "There are no changes waiting for approval." },
   no_pending_approval: { de: "Es gibt keine wartenden Änderungen für diese Entscheidung.", en: "There are no pending changes for this decision." },
