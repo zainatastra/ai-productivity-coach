@@ -25,6 +25,13 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
 
         public static bool IsLive(string? status) => status == ContentStatus.Approved || status == ContentStatus.Published;
 
+        /// <summary>
+        /// A company may edit the text while the piece is with it for review, or once it is live (the edit
+        /// then becomes a pending version). Never while the admin is deciding, or after changes were sent back
+        /// until the admin hands it over again.
+        /// </summary>
+        public static bool CompanyMayEdit(string? status) => status == ContentStatus.CompanyReview || IsLive(status);
+
         public static long CurrentVersion(IDictionary<string, object> data) =>
             Math.Max(1, FirestoreApi.GetLong(data, "currentVersion", 1));
 

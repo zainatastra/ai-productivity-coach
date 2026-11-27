@@ -216,4 +216,20 @@ namespace AiProductivityCoach.Api.Tests
             Assert.False(ContentMarkers.IsPreview(null));
         }
     }
+
+    public class CompanyEditRuleTests
+    {
+        [Theory]
+        [InlineData("company_review", true)]
+        [InlineData("approved", true)]
+        [InlineData("published", true)]
+        [InlineData("draft", false)]
+        [InlineData("pending_admin_review", false)]
+        [InlineData("changes_requested", false)]
+        [InlineData("rejected", false)]
+        [InlineData("archived", false)]
+        [InlineData(null, false)]
+        public void CompanyMayEditOnlyInItsReviewRoundOrOnceLive(string? status, bool allowed) =>
+            Assert.Equal(allowed, VersionApproval.CompanyMayEdit(status));
+    }
 }

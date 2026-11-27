@@ -132,6 +132,8 @@ export function EditPanel(props: {
   locked: boolean;
   onSaved: () => void;
   onDirty: (dirty: boolean) => void;
+  /** Where the edit is saved; the admin default is the content endpoint. */
+  savePath?: string;
 }) {
   const { lang, doc, api, locked } = props;
   const t = (key: keyof typeof TEXT) => TEXT[key][lang];
@@ -172,7 +174,7 @@ export function EditPanel(props: {
     setSaving(true);
     setError("");
 
-    const res = await api(`/api/ai/content/${doc.id}`, { method: "PUT", body: JSON.stringify(payloadOf(state, doc.type)) });
+    const res = await api(props.savePath ?? `/api/ai/content/${doc.id}`, { method: "PUT", body: JSON.stringify(payloadOf(state, doc.type)) });
     setSaving(false);
 
     if (!res.ok) {

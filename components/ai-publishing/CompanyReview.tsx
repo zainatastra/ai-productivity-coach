@@ -2,10 +2,12 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { getAuth, onAuthStateChanged, signOut, type User } from "firebase/auth";
-import { ArrowLeft, Check, CheckCircle2, FileText, BookOpen, Video, Loader2, LogOut, MessageSquare, Send, Sparkles } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, FileText, BookOpen, Pencil, Video, Loader2, LogOut, MessageSquare, Send, Sparkles } from "lucide-react";
 import { publisherApp } from "@/services/firebase";
 import { API_BASE_URL } from "@/services/api";
-import { CONTENT_ERRORS, CONTENT_TYPES, ERRORS, EXTRA_ERRORS, Lang, tr } from "./aiPublishingText";
+import { CONTENT_ERRORS, CONTENT_TYPES, ERRORS, EXTRA_ERRORS, Lang, TEXT, tr } from "./aiPublishingText";
+import { EditPanel } from "./DraftWorkspace";
+import { AIP_CSS } from "./aipStyles";
 import { RT, rt, type RKey } from "./reviewText";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -62,6 +64,8 @@ export default function CompanyReview() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [rows, setRows] = useState<Row[] | null>(null);
   const [listType, setListType] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [editDirty, setEditDirty] = useState(false);
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -148,6 +152,9 @@ export default function CompanyReview() {
   }, [user]);
 
   const back = () => {
+    if (editDirty && !window.confirm(TEXT.editLeaveConfirm[lang])) return;
+    setEditing(false);
+    setEditDirty(false);
     openId.current = null;
     setDetail(null);
     setJobId(null);
@@ -287,6 +294,28 @@ export default function CompanyReview() {
           {message && <div className="cr-ok"><Check size={14} /> <span>{message}</span></div>}
           {error && <div className="cr-error">{error}</div>}
         </div>
+
+        {detail.canEdit && (
+          <div className="cr-card">
+            <h3 className="cr-h3"><Pencil size={15} /> <span>{t("ce_title")}</span></h3>
+            <p className="cr-help">{detail.status === "company_review" ? t("ce_helpReview") : t("ce_helpLive")}</p>
+            {editing ? (
+              <>
+                <style>{AIP_CSS}</style>
+                <EditPanel lang={lang} doc={detail} api={api} locked={false} savePath={`/api/ai/company/contents/${detail.id}`}
+                  onDirty={setEditDirty}
+                  onSaved={() => { setEditDirty(false); void loadDetail(detail.id); void loadList(); }} />
+                <button className="cr-btn ghost" style={{ marginTop: 12 }} onClick={() => {
+                  if (editDirty && !window.confirm(TEXT.editLeaveConfirm[lang])) return;
+                  setEditDirty(false);
+                  setEditing(false);
+                }}><span>{t("ce_close")}</span></button>
+              </>
+            ) : (
+              <button className="cr-btn" onClick={() => setEditing(true)}><Pencil size={14} /> <span>{t("ce_open")}</span></button>
+            )}
+          </div>
+        )}
 
         <div className="cr-card">
           {(detail.media || []).find((m: any) => m.url === detail.coverUrl) && (

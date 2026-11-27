@@ -49,6 +49,7 @@ namespace AiProductivityCoach.Api.Controllers
         private readonly AiAuditService _audit;
         private readonly AiNotificationService _notifications;
         private readonly ILlmClient _llm;
+        private readonly ContentRevisionService _revisions;
 
         public AiCompanyController(
             FirestoreDb firestore,
@@ -60,8 +61,10 @@ namespace AiProductivityCoach.Api.Controllers
             AiJobService jobs,
             AiAuditService audit,
             AiNotificationService notifications,
-            ILlmClient llm)
+            ILlmClient llm,
+            ContentRevisionService revisions)
         {
+            _revisions = revisions;
             _firestore = firestore;
             _members = members;
             _invitations = invitations;
@@ -197,6 +200,7 @@ namespace AiProductivityCoach.Api.Controllers
             row["canRevise"] = status == ContentStatus.CompanyReview && left > 0 && _llm.IsConfigured;
             row["canSubmit"] = status == ContentStatus.CompanyReview;
             row["canComment"] = CommentStatuses.Contains(status);
+            row["canEdit"] = VersionApproval.CompanyMayEdit(status);
 
             row["approvedVersion"] = VersionApproval.ApprovedVersion(data);
             row["hasPendingChanges"] = VersionApproval.HasPendingChanges(data);
@@ -204,6 +208,55 @@ namespace AiProductivityCoach.Api.Controllers
             row["canRequestApproval"] = VersionApproval.CanRequest(data);
 
             return Ok(row);
+        }
+
+        /// <summary>
+        /// The company edits the text itself. In its review round this changes the draft; once the piece is
+        /// live the edit becomes a pending version that still needs the admin's approval, and the live
+        /// version stays untouched.
+        /// </summary>
+        [HttpPut("contents/{contentId}")]
+        public async Task<IActionResult> EditContent(string contentId, [FromBody] EditDocumentDto? request)
+        {
+            var (doc, providerId, status, error) = await LoadAsync(contentId);
+            if (error != null) return error;
+
+            var actor = Actor!;
+
+            if (request == null) return Error(400, "invalid_document", "The document is missing.");
+            if (!VersionApproval.CompanyMayEdit(status))
+                return Error(409, "not_editable", "This content cannot be changed right now.");
+
+            var jobs = await _jobs.ListForProviderAsync(providerId, 100);
+            if (jobs.Any(job =>
+                {
+                    var jobStatus = job.GetValueOrDefault("status")?.ToString() ?? string.Empty;
+                    return JobStatus.IsActive(jobStatus) || jobStatus == JobStatus.Queued;
+                }))
+                return Error(409, "provider_busy", "Another change is still being processed. Please try again in a minute.");
+
+            try
+            {
+                // A live piece keeps its approved version; this edit becomes a pending version.
+                if (VersionApproval.IsLive(status)) await _store.EnsureApprovedVersionAsync(contentId);
+
+                var result = await _revisions.SaveEditAsync(contentId, request, actor.UserId);
+
+                await _audit.LogAsync(actor, AuditActions.ContentEdited, providerId, contentId, null,
+                    new Dictionary<string, object> { ["version"] = result.Version, ["byCompany"] = true });
+
+                return Ok(new { contentId, version = result.Version, words = result.Words });
+            }
+            catch (ContentGenerationException ex)
+            {
+                return ex.Code switch
+                {
+                    "content_not_found" => Error(404, ex.Code, "Content not found."),
+                    "missing_title" or "empty_body" or "too_many_blocks" or "invalid_block" or "invalid_document"
+                        => Error(400, ex.Code, "The document is not valid."),
+                    _ => Error(400, ex.Code, "The request is not valid.")
+                };
+            }
         }
 
         public class ApprovalRequestDto
