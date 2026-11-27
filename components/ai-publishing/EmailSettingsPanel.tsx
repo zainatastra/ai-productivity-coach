@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, Loader2, Mail, RotateCcw, Save, Send } from "lucide-react";
+import { Check, Copy, Globe, Loader2, Mail, RotateCcw, Save, Send } from "lucide-react";
 import { CONTENT_ERRORS, ERRORS, EXTRA_ERRORS, Lang, TEXT, tr } from "./aiPublishingText";
 import { rt, type RKey } from "./reviewText";
 import type { Api } from "./DraftWorkspace";
@@ -10,7 +10,15 @@ import type { Api } from "./DraftWorkspace";
 
 type Fields = { subject: string; heading: string; intro: string; bulletsTitle: string; bullets: string[]; button: string; notes: string[] };
 type KindInfo = { kind: string; placeholders: string[]; languages: Record<string, { defaults: Fields; effective: Fields; customized: boolean }> };
-type Settings = { senderName: string; defaultSenderName: string; fromAddress: string; emailConfigured: boolean; kinds: KindInfo[] };
+type PlatformSender = { name: string; address: string; effectiveName: string; effectiveAddress: string };
+type Settings = {
+  senderName: string; defaultSenderName: string; fromAddress: string; defaultFromAddress: string;
+  platformSenders: Record<string, PlatformSender>; emailConfigured: boolean; kinds: KindInfo[];
+};
+type DnsRec = { purpose?: string; type: string; name: string; value: string; status?: string; priority?: number | null };
+type Domain = { id: string; name: string; status: string; verified: boolean; records: DnsRec[] };
+
+const SENDER_SCOPES = ["", "eyeric", "midrange"] as const;
 
 type Form = { subject: string; heading: string; intro: string; bulletsTitle: string; bullets: string; button: string; notes: string };
 
@@ -39,7 +47,11 @@ export default function EmailSettingsPanel({ lang, api }: { lang: Lang; api: Api
   const [tplLang, setTplLang] = useState<"de" | "en">("de");
   const [form, setForm] = useState<Form | null>(null);
   const [base, setBase] = useState<Form | null>(null);
-  const [sender, setSender] = useState("");
+  const [senders, setSenders] = useState<Record<string, { name: string; address: string }>>({});
+  const [domains, setDomains] = useState<Domain[]>([]);
+  const [domainsAvailable, setDomainsAvailable] = useState(true);
+  const [newDomain, setNewDomain] = useState("");
+  const [shownRecords, setShownRecords] = useState<string>("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
@@ -50,10 +62,26 @@ export default function EmailSettingsPanel({ lang, api }: { lang: Lang; api: Api
   const load = useCallback(async () => {
     const res = await api("/api/ai/settings/email");
     if (res.ok) {
-      setSettings(res.data);
-      setSender(res.data.senderName);
+      const d: Settings = res.data;
+      setSettings(d);
+      setSenders({
+        "": { name: d.senderName, address: d.fromAddress === d.defaultFromAddress && d.senderName === d.defaultSenderName ? "" : d.fromAddress },
+        eyeric: { name: d.platformSenders?.eyeric?.name || "", address: d.platformSenders?.eyeric?.address || "" },
+        midrange: { name: d.platformSenders?.midrange?.name || "", address: d.platformSenders?.midrange?.address || "" },
+      });
     } else {
       setError(errorOf(res, lang));
+    }
+
+    const dom = await api("/api/ai/settings/email/domains");
+    if (dom.ok) {
+      setDomainsAvailable(!!dom.data.available);
+      // The list has no DNS records; each domain's own call does.
+      const detailed: Domain[] = await Promise.all((dom.data.domains || []).map(async (d: Domain) => {
+        const one = await api(`/api/ai/settings/email/domains/${d.id}`);
+        return one.ok ? (one.data as Domain) : d;
+      }));
+      setDomains(detailed);
     }
   }, [api, lang]);
 
@@ -128,9 +156,26 @@ export default function EmailSettingsPanel({ lang, api }: { lang: Lang; api: Api
     run("reset", () => api(`/api/ai/settings/email/templates/${kind}/${tplLang}`, { method: "DELETE" }),
       async () => { await load(); setInfo(t("es_resetDone")); });
 
-  const saveSender = () =>
-    run("sender", () => api("/api/ai/settings/email/sender", { method: "PUT", body: JSON.stringify({ name: sender }) }),
-      async () => { await load(); setInfo(t("es_saved")); });
+  const saveSender = (scope: string) =>
+    run(`sender-${scope || "shared"}`, () => api("/api/ai/settings/email/sender", {
+      method: "PUT",
+      body: JSON.stringify({ name: senders[scope]?.name ?? "", address: senders[scope]?.address ?? "", platform: scope || undefined }),
+    }), async () => { await load(); setInfo(t("es_saved")); });
+
+  const setSenderField = (scope: string, key: "name" | "address", value: string) => {
+    setInfo("");
+    setSenders((prev) => ({ ...prev, [scope]: { ...(prev[scope] || { name: "", address: "" }), [key]: value } }));
+  };
+
+  const addDomain = () =>
+    run("domain-add", () => api("/api/ai/settings/email/domains", { method: "POST", body: JSON.stringify({ name: newDomain.trim() }) }),
+      async (d: Domain) => { setNewDomain(""); setShownRecords(d.id); await load(); });
+
+  const verifyDomain = (id: string) =>
+    run(`domain-verify-${id}`, () => api(`/api/ai/settings/email/domains/${id}/verify`, { method: "POST" }),
+      async () => { await load(); });
+
+  const copy = (value: string) => { try { void navigator.clipboard?.writeText(value); } catch { /* ignore */ } };
 
   const sendTest = () =>
     run("test", () => api("/api/ai/settings/email/test", { method: "POST", body: JSON.stringify({ kind, lang: tplLang }) }),
@@ -170,19 +215,94 @@ export default function EmailSettingsPanel({ lang, api }: { lang: Lang; api: Api
 
       {open && settings && form && (
         <>
-          <div className="aip-two" style={{ marginBottom: 14 }}>
-            <div>
-              <label className="aip-label">{t("es_sender")}</label>
-              <div className="aip-row" style={{ margin: 0 }}>
-                <input className="aip-input" style={{ flex: 1 }} value={sender} maxLength={60} onChange={(e) => setSender(e.target.value)} disabled={!!busy} />
-                <button className="aip-btn ghost" onClick={saveSender} disabled={!!busy || sender.trim() === settings.senderName}>
-                  {busy === "sender" ? <Loader2 size={13} className="aip-spin" /> : <Save size={13} />}
-                  <span>{t("es_saveSender")}</span>
-                </button>
-              </div>
-              <div className="aip-meta">{t("es_senderHelp")} {settings.fromAddress}</div>
-            </div>
-            {!settings.emailConfigured && <div className="aip-banner warn"><span>{t("es_notConfigured")}</span></div>}
+          {!settings.emailConfigured && <div className="aip-banner warn" style={{ marginBottom: 12 }}><span>{t("es_notConfigured")}</span></div>}
+
+          <div style={{ marginBottom: 14 }}>
+            {SENDER_SCOPES.map((scope) => {
+              const key = scope || "shared";
+              const cur = senders[scope] || { name: "", address: "" };
+              const saved = scope ? settings.platformSenders?.[scope] : undefined;
+              const unchanged = scope
+                ? cur.name.trim() === (saved?.name || "") && cur.address.trim() === (saved?.address || "")
+                : cur.name.trim() === settings.senderName && cur.address.trim() === (settings.fromAddress === settings.defaultFromAddress ? "" : settings.fromAddress);
+              return (
+                <div key={key} style={{ marginBottom: 10 }}>
+                  <label className="aip-label">{scope ? t(`platform_${scope}` as RKey) : t("es_senderShared")}</label>
+                  <div className="aip-row wrap" style={{ margin: 0 }}>
+                    <input className="aip-input" style={{ flex: 1, minWidth: 160 }} value={cur.name} maxLength={60} placeholder={t("es_sender")}
+                      onChange={(e) => setSenderField(scope, "name", e.target.value)} disabled={!!busy} />
+                    <input className="aip-input" style={{ flex: 1.4, minWidth: 220 }} type="email" value={cur.address} maxLength={120}
+                      placeholder={scope ? (settings.platformSenders?.[scope]?.effectiveAddress || t("es_senderAddress")) : settings.defaultFromAddress}
+                      onChange={(e) => setSenderField(scope, "address", e.target.value)} disabled={!!busy} />
+                    <button className="aip-btn ghost" onClick={() => saveSender(scope)} disabled={!!busy || unchanged}>
+                      {busy === `sender-${key}` ? <Loader2 size={13} className="aip-spin" /> : <Save size={13} />}
+                      <span>{t("es_saveSender")}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            <div className="aip-meta">{t("es_senderHelp")} {settings.fromAddress}</div>
+            <div className="aip-meta">{t("es_senderPlatformHelp")}</div>
+          </div>
+
+          <div style={{ marginBottom: 18 }}>
+            <h4 className="aip-label" style={{ display: "flex", alignItems: "center", gap: 6 }}><Globe size={13} /> <span>{t("es_domains")}</span></h4>
+            <div className="aip-meta" style={{ marginBottom: 8 }}>{t("es_domainsHelp")}</div>
+            {!domainsAvailable ? (
+              <div className="aip-banner warn"><span>{t("es_domainsUnavailable")}</span></div>
+            ) : (
+              <>
+                {domains.length === 0 && <div className="aip-meta">{t("es_noDomains")}</div>}
+                {domains.map((d) => (
+                  <div key={d.id} style={{ margin: "6px 0 10px" }}>
+                    <div className="aip-row wrap" style={{ margin: 0 }}>
+                      <strong><span>{d.name}</span></strong>
+                      <span className={`aip-pill ${d.verified ? "green" : "amber"}`}><span>{d.verified ? t("es_domainVerified") : t("es_domainNotVerified")}</span></span>
+                      {!d.verified && (
+                        <button className="aip-btn ghost" onClick={() => verifyDomain(d.id)} disabled={!!busy}>
+                          {busy === `domain-verify-${d.id}` ? <Loader2 size={13} className="aip-spin" /> : <Check size={13} />}
+                          <span>{t("es_domainVerify")}</span>
+                        </button>
+                      )}
+                      <button className="aip-btn ghost" onClick={() => setShownRecords(shownRecords === d.id ? "" : d.id)}>
+                        <span>{shownRecords === d.id ? t("es_domainHideRecords") : t("es_domainShowRecords")}</span>
+                      </button>
+                    </div>
+                    {shownRecords === d.id && (
+                      <div style={{ overflowX: "auto", marginTop: 6 }}>
+                        <table className="aip-table" style={{ width: "100%", fontSize: 12 }}>
+                          <thead><tr>
+                            <th>{t("es_recType")}</th><th>{t("es_recName")}</th><th>{t("es_recValue")}</th><th>{t("es_recStatus")}</th>
+                          </tr></thead>
+                          <tbody>
+                            {d.records.map((r, i) => (
+                              <tr key={i}>
+                                <td style={{ whiteSpace: "nowrap", paddingRight: 8 }}>{r.type}</td>
+                                <td style={{ wordBreak: "break-all", paddingRight: 8 }}>{r.name}</td>
+                                <td style={{ wordBreak: "break-all" }}>
+                                  {r.priority != null ? `${r.priority} ` : ""}{r.value}{" "}
+                                  <button type="button" className="aip-btn ghost" style={{ padding: "0 6px" }} title={t("es_copyValue")} onClick={() => copy(r.value)}><Copy size={11} /></button>
+                                </td>
+                                <td style={{ whiteSpace: "nowrap" }}>{r.status || ""}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <div className="aip-row wrap" style={{ margin: 0 }}>
+                  <input className="aip-input" style={{ flex: 1, minWidth: 220 }} value={newDomain} maxLength={120} placeholder={t("es_domainPlaceholder")}
+                    onChange={(e) => setNewDomain(e.target.value)} disabled={!!busy} />
+                  <button className="aip-btn ghost" onClick={addDomain} disabled={!!busy || !newDomain.trim()}>
+                    {busy === "domain-add" ? <Loader2 size={13} className="aip-spin" /> : <Globe size={13} />}
+                    <span>{t("es_domainAdd")}</span>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="aip-row wrap" style={{ margin: "0 0 14px" }}>

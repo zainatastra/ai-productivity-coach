@@ -50,7 +50,7 @@ const errorOf = (res: { status: number; code?: string }, lang: Lang) => {
   return tr(res.code ? CONTENT_ERRORS[res.code] || ERRORS[res.code] || EXTRA_ERRORS[res.code] : undefined, lang, rt("c_err_generic", lang));
 };
 
-export default function ProfileBuilderPanel({ lang, providerId, api, archived }: { lang: Lang; providerId: string; api: Api; archived: boolean }) {
+export default function ProfileBuilderPanel({ lang, providerId, api, archived, onSent }: { lang: Lang; providerId: string; api: Api; archived: boolean; onSent?: () => void }) {
   const t = (key: RKey) => rt(key, lang);
 
   const [open, setOpen] = useState(false);
@@ -151,6 +151,7 @@ export default function ProfileBuilderPanel({ lang, providerId, api, archived }:
   const sendAndPreview = () => {
     setConfirmSend(false);
     void run("send", () => api(`/api/ai/providers/${providerId}/profile/send/eyeric`, { method: "POST" }), async () => {
+      onSent?.();
       await load();
       const linkRes = await api(`/api/ai/providers/${providerId}/profile/preview-link`, { method: "POST" });
       if (linkRes.ok) {
@@ -165,6 +166,7 @@ export default function ProfileBuilderPanel({ lang, providerId, api, archived }:
   const sendToMidrange = () => {
     setConfirmMidrangeSend(false);
     void run("send-midrange", () => api(`/api/ai/providers/${providerId}/profile/send/midrange`, { method: "POST" }), async () => {
+      onSent?.();
       await load();
     });
   };

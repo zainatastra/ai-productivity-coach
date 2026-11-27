@@ -24,7 +24,11 @@ namespace AiProductivityCoach.Api.AiPublishing.Media
             _logger = logger;
         }
 
-        public async Task<List<byte[]>> GetOrGenerateAsync(string contentId, CancellationToken ct)
+        /// <param name="generateIfMissing">
+        /// When false, only images that already exist are used - no AI image is ordered. Used where a PDF is
+        /// produced as a side effect (e.g. when content is handed to a company) so that never costs anything.
+        /// </param>
+        public async Task<List<byte[]>> GetOrGenerateAsync(string contentId, CancellationToken ct, bool generateIfMissing = true)
         {
             var images = new List<byte[]>();
             if (string.IsNullOrWhiteSpace(contentId)) return images;
@@ -33,7 +37,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Media
             {
                 var existing = await _media.ListAsync(contentId);
 
-                if (existing.Count == 0 && _generation.IsConfigured)
+                if (existing.Count == 0 && generateIfMissing && _generation.IsConfigured)
                 {
                     // Best-effort: a whitepaper with no illustrations yet gets exactly one, not two,
                     // to keep first-download latency reasonable; later downloads reuse it instantly.

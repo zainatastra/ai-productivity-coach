@@ -86,6 +86,7 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
 
   const [providers, setProviders] = useState<Provider[]>([]);
   const [listLoading, setListLoading] = useState(true);
+  const [accessKey, setAccessKey] = useState(0);
   const [filter, setFilter] = useState<"created" | "archived">("created");
   const [name, setName] = useState("");
   const [website, setWebsite] = useState("");
@@ -826,10 +827,10 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
               {knowledge?.readiness && <SearchCard lang={lang} providerId={provider.id} api={api} />}
 
               {/* Phase 2: profile builder (About fields, logo, AI header, preview link) */}
-              <ProfileBuilderPanel lang={lang} providerId={provider.id} api={api} archived={archived} />
+              <ProfileBuilderPanel lang={lang} providerId={provider.id} api={api} archived={archived} onSent={() => setAccessKey((k) => k + 1)} />
 
               {/* Phase 6: company access */}
-              <AccessPanel lang={lang} providerId={provider.id} api={api} archived={archived} />
+              <AccessPanel lang={lang} providerId={provider.id} api={api} archived={archived} refreshKey={accessKey} />
 
               {/* Phase 3: content plan, drafts and viewer */}
               {knowledge?.readiness && (

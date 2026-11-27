@@ -20,7 +20,9 @@ namespace AiProductivityCoach.Api.AiPublishing.Pdf
         /// carries this provider's own branding. Pass <see cref="BrandColorExtractor.ExtractAccentColor"/>
         /// on the same logo bytes, or omit to use the service's own neutral default.
         /// </summary>
-        string? AccentColor = null);
+        string? AccentColor = null,
+        /// <summary>The small label above the title on the cover ("WHITEPAPER" by default, "ARTICLE", "WEBINAR", ...).</summary>
+        string? DocumentLabel = null);
 
     /// <summary>
     /// Renders a whitepaper's already-generated HTML (from <see cref="AiPublishing.Content.HtmlRenderer"/>,
@@ -77,7 +79,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Pdf
 
                         column.Item().PaddingHorizontal(40).PaddingTop(60).Column(body =>
                         {
-                            body.Item().Text("WHITEPAPER").FontSize(11).Bold().FontColor(accent)
+                            body.Item().Text(string.IsNullOrWhiteSpace(request.DocumentLabel) ? "WHITEPAPER" : request.DocumentLabel).FontSize(11).Bold().FontColor(accent)
                                 .LetterSpacing(0.15f);
                             body.Item().PaddingTop(10)
                                 .Text(request.WhitepaperTitle).FontSize(27).Bold().FontColor(Colors.Black).LineHeight(1.25f);

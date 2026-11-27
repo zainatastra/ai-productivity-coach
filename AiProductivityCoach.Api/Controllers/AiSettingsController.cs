@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using AiProductivityCoach.Api.AiPublishing.Content;
+using AiProductivityCoach.Api.AiPublishing.Domain;
 using AiProductivityCoach.Api.AiPublishing.Review;
 
 namespace AiProductivityCoach.Api.Controllers
@@ -16,11 +17,13 @@ namespace AiProductivityCoach.Api.Controllers
 
         private readonly EmailTemplateStore _store;
         private readonly InvitationMailer _mailer;
+        private readonly ResendDomainService _domains;
 
-        public AiSettingsController(EmailTemplateStore store, InvitationMailer mailer)
+        public AiSettingsController(EmailTemplateStore store, InvitationMailer mailer, ResendDomainService domains)
         {
             _store = store;
             _mailer = mailer;
+            _domains = domains;
         }
 
         public class TemplateDto
@@ -34,7 +37,15 @@ namespace AiProductivityCoach.Api.Controllers
             public List<string>? Notes { get; set; }
         }
 
-        public class SenderDto { public string? Name { get; set; } }
+        public class SenderDto
+        {
+            public string? Name { get; set; }
+            public string? Address { get; set; }
+            /// <summary>Empty = the shared sender; "eyeric" / "midrange" = that platform's own sender.</summary>
+            public string? Platform { get; set; }
+        }
+
+        public class DomainDto { public string? Name { get; set; } }
 
         public class PreviewDto
         {
@@ -104,11 +115,20 @@ namespace AiProductivityCoach.Api.Controllers
                 })
             }).ToList();
 
+            var shared = EmailTemplateStore.ResolveSender(settings, null);
+
             return Ok(new
             {
-                senderName = settings.SenderName.Length > 0 ? settings.SenderName : EmailTemplateStore.DefaultSenderName,
+                senderName = shared.Name,
                 defaultSenderName = EmailTemplateStore.DefaultSenderName,
-                fromAddress = InvitationMailer.FromAddress,
+                fromAddress = shared.Address,
+                defaultFromAddress = EmailTemplateStore.DefaultSenderAddress,
+                platformSenders = Platforms.All.ToDictionary(platform => platform, platform =>
+                {
+                    settings.PlatformSenders.TryGetValue(platform, out var own);
+                    var effective = EmailTemplateStore.ResolveSender(settings, platform);
+                    return new { name = own?.Name ?? string.Empty, address = own?.Address ?? string.Empty, effectiveName = effective.Name, effectiveAddress = effective.Address };
+                }),
                 emailConfigured = _mailer.IsConfigured,
                 websiteUrl = _mailer.FrontendBaseUrl,
                 kinds
@@ -147,11 +167,97 @@ namespace AiProductivityCoach.Api.Controllers
             var actor = Actor;
             if (actor == null || !actor.IsAdmin) return Unauthorized();
 
+            var platform = request?.Platform?.Trim().ToLowerInvariant();
+            if (!string.IsNullOrEmpty(platform) && !Platforms.IsValid(platform))
+                return Error(400, "invalid_platform", "Unknown platform.");
+
             var name = EmailTemplateStore.Clean(request?.Name);
             if (name.Length > 60) return Error(400, "sender_too_long", "The sender name is too long.");
 
-            await _store.SetSenderNameAsync(name);
-            return Ok(new { senderName = name.Length > 0 ? name : EmailTemplateStore.DefaultSenderName });
+            // A blank address clears the setting (the shared or built-in sender is used again).
+            var address = string.Empty;
+            if (!string.IsNullOrWhiteSpace(request?.Address))
+            {
+                address = InvitationTokens.NormalizeEmail(request.Address) ?? string.Empty;
+                if (address.Length == 0 || address.Length > 120) return Error(400, "invalid_sender_address", "Please enter a valid sender address.");
+
+                // An email can only leave from an address on a domain verified at the email service.
+                var listed = await _domains.ListAsync();
+                if (!ResendDomainService.IsUsableSender(address, listed.Available ? listed.Value : null, EmailTemplateStore.DefaultSenderAddress))
+                    return Error(409, "sender_domain_not_verified", "This address's domain is not verified yet.");
+            }
+
+            await _store.SetSenderAsync(string.IsNullOrEmpty(platform) ? null : platform, name, address);
+
+            var settings = await _store.LoadAsync();
+            var effective = EmailTemplateStore.ResolveSender(settings, platform);
+            return Ok(new { senderName = effective.Name, fromAddress = effective.Address });
+        }
+
+        // ───────────── sender domains (DNS records, verification) ─────────────
+
+        private static object ToJson(SenderDomain d) => new
+        {
+            id = d.Id, name = d.Name, status = d.Status, verified = d.IsVerified,
+            records = d.Records.Select(r => new { purpose = r.Purpose, type = r.Type, name = r.Name, value = r.Value, status = r.Status, ttl = r.Ttl, priority = r.Priority })
+        };
+
+        private IActionResult DomainFailure(string? error) => error switch
+        {
+            "restricted_api_key" => Error(503, "domains_unavailable", "The email service key cannot manage domains."),
+            "domain_rejected" => Error(400, "domain_rejected", "The email service rejected this domain."),
+            "domain_not_found" => Error(404, "domain_not_found", "Domain not found."),
+            "too_many_requests" => Error(429, "too_many_attempts", "Too many requests. Please try again later."),
+            _ => Error(502, "domain_failed", "The email service could not be reached.")
+        };
+
+        [HttpGet("domains")]
+        public async Task<IActionResult> ListDomains()
+        {
+            var result = await _domains.ListAsync();
+
+            // Not an error for the page: it simply cannot manage domains with this key.
+            if (!result.Available) return Ok(new { available = false, domains = Array.Empty<object>() });
+            if (result.Value == null) return DomainFailure(result.Error);
+
+            return Ok(new { available = true, domains = result.Value.Select(ToJson) });
+        }
+
+        [HttpGet("domains/{id}")]
+        public async Task<IActionResult> GetDomain(string id)
+        {
+            var result = await _domains.GetAsync(id);
+            return result.Value == null ? DomainFailure(result.Error) : Ok(ToJson(result.Value));
+        }
+
+        [HttpPost("domains")]
+        public async Task<IActionResult> AddDomain([FromBody] DomainDto? request)
+        {
+            var actor = Actor;
+            if (actor == null || !actor.IsAdmin) return Unauthorized();
+
+            var name = ResendDomainService.NormalizeDomain(request?.Name);
+            if (name == null) return Error(400, "invalid_domain", "Please enter a valid domain such as mail.example.com.");
+
+            if (!AttemptLimiter.Allow($"domain-add:{actor.UserId}", 10, TimeSpan.FromHours(1)))
+                return Error(429, "too_many_attempts", "Too many attempts. Please try again later.");
+
+            var result = await _domains.CreateAsync(name);
+            return result.Value == null ? DomainFailure(result.Error) : StatusCode(201, ToJson(result.Value));
+        }
+
+        /// <summary>Asks the email service to re-check the DNS records now (they can take a while to spread).</summary>
+        [HttpPost("domains/{id}/verify")]
+        public async Task<IActionResult> VerifyDomain(string id)
+        {
+            var actor = Actor;
+            if (actor == null || !actor.IsAdmin) return Unauthorized();
+
+            if (!AttemptLimiter.Allow($"domain-verify:{actor.UserId}", 30, TimeSpan.FromHours(1)))
+                return Error(429, "too_many_attempts", "Too many attempts. Please try again later.");
+
+            var result = await _domains.VerifyAsync(id);
+            return result.Value == null ? DomainFailure(result.Error) : Ok(ToJson(result.Value));
         }
 
         /// <summary>Renders the email with sample data. Unsaved edits can be previewed.</summary>

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using AiProductivityCoach.Api.AiPublishing.Content;
 using AiProductivityCoach.Api.AiPublishing.Domain;
+using AiProductivityCoach.Api.AiPublishing.Pdf;
 using AiProductivityCoach.Api.AiPublishing.Review;
 using AiProductivityCoach.Api.AiPublishing.Services;
 
@@ -25,6 +26,8 @@ namespace AiProductivityCoach.Api.Controllers
         private readonly ReviewStore _review;
         private readonly ContentStore _store;
         private readonly AiAuditService _audit;
+        private readonly ContentPdfBuilder _pdfs;
+        private readonly ILogger<AiReviewController> _logger;
 
         public AiReviewController(
             FirestoreDb firestore,
@@ -33,7 +36,9 @@ namespace AiProductivityCoach.Api.Controllers
             InvitationMailer mailer,
             ReviewStore review,
             ContentStore store,
-            AiAuditService audit)
+            AiAuditService audit,
+            ContentPdfBuilder pdfs,
+            ILogger<AiReviewController> logger)
         {
             _firestore = firestore;
             _invitations = invitations;
@@ -42,11 +47,14 @@ namespace AiProductivityCoach.Api.Controllers
             _review = review;
             _store = store;
             _audit = audit;
+            _pdfs = pdfs;
+            _logger = logger;
         }
 
         public class InviteDto
         {
             public string? Email { get; set; }
+            public string? Platform { get; set; }
             public bool SendEmail { get; set; }
         }
 
@@ -80,13 +88,15 @@ namespace AiProductivityCoach.Api.Controllers
         [HttpGet("providers/{providerId}/access")]
         public async Task<IActionResult> GetAccess(string providerId)
         {
-            if (await ProviderAsync(providerId) == null) return Error(404, "provider_not_found", "Provider not found.");
+            var provider = await ProviderAsync(providerId);
+            if (provider == null) return Error(404, "provider_not_found", "Provider not found.");
 
             return Ok(new
             {
                 invitations = await _invitations.ListAsync(providerId),
                 members = await _members.ListAsync(providerId),
-                emailConfigured = _mailer.IsConfigured
+                emailConfigured = _mailer.IsConfigured,
+                sentTo = PlatformAccess.SentStates(provider.ToDictionary())
             });
         }
 
@@ -106,17 +116,25 @@ namespace AiProductivityCoach.Api.Controllers
             var email = InvitationTokens.NormalizeEmail(request?.Email);
             if (email == null) return Error(400, "invalid_email", "Please enter a valid email address.");
 
-            var (id, token) = await _invitations.CreateAsync(providerId, email, actor.Platform, actor.UserId);
+            // The company is invited to ONE platform, chosen here - not to whichever one the admin belongs to.
+            var platform = request?.Platform?.Trim().ToLowerInvariant();
+            if (!Platforms.IsValid(platform)) return Error(400, "invalid_platform", "Choose the platform to invite the company to.");
+
+            // Each platform has its own preview: nobody can be invited before the profile was sent there.
+            if (!PlatformAccess.IsSentTo(data, platform!))
+                return Error(409, "not_sent_to_platform", "Send the profile to this platform first.");
+
+            var (id, token) = await _invitations.CreateAsync(providerId, email, platform!, actor.UserId);
             var link = _mailer.InviteLink(token);
 
             await _audit.LogAsync(actor, AuditActions.InvitationCreated, providerId, null, null,
-                new Dictionary<string, object> { ["invitationId"] = id, ["email"] = email });
+                new Dictionary<string, object> { ["invitationId"] = id, ["email"] = email, ["platform"] = platform! });
 
             var emailed = new MailResult(false, null);
 
             if (request?.SendEmail == true)
             {
-                emailed = await _mailer.SendInvitationAsync(email, FirestoreApi.GetString(data, "name"), link, FirestoreApi.GetString(data, "defaultLanguage", "de"));
+                emailed = await _mailer.SendInvitationAsync(email, FirestoreApi.GetString(data, "name"), link, FirestoreApi.GetString(data, "defaultLanguage", "de"), platform);
 
                 if (emailed.Sent)
                     await _audit.LogAsync(actor, AuditActions.InvitationEmailSent, providerId, null, null,
@@ -124,7 +142,7 @@ namespace AiProductivityCoach.Api.Controllers
             }
 
             // The link is only ever shown here: afterwards just its hash exists.
-            return StatusCode(201, new { id, email, acceptUrl = link, emailSent = emailed.Sent, emailError = emailed.Error });
+            return StatusCode(201, new { id, email, platform, acceptUrl = link, emailSent = emailed.Sent, emailError = emailed.Error });
         }
 
         [HttpPost("providers/{providerId}/invitations/{invitationId}/revoke")]
@@ -189,13 +207,45 @@ namespace AiProductivityCoach.Api.Controllers
                 if (request?.Notify == true && _mailer.IsConfigured)
                 {
                     var provider = await ProviderAsync(providerId);
-                    var name = provider == null ? string.Empty : FirestoreApi.GetString(provider.ToDictionary(), "name");
-                    var language = provider == null ? "de" : FirestoreApi.GetString(provider.ToDictionary(), "defaultLanguage", "de");
+                    var providerData = provider?.ToDictionary() ?? new Dictionary<string, object>();
+                    var name = FirestoreApi.GetString(providerData, "name");
+                    var language = FirestoreApi.GetString(providerData, "defaultLanguage", "de");
+                    var title = FirestoreApi.GetString(data, "title");
+                    var type = FirestoreApi.GetString(data, "type");
+
+                    // Fetched once for everybody; a failure here only means the email goes out with the link alone.
+                    PreparedContentPdf? prepared = null;
+                    try
+                    {
+                        prepared = await _pdfs.PrepareAsync(providerData, contentId, data, language, HttpContext.RequestAborted);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        _logger.LogWarning(ex, "[Review] Could not prepare the PDF for {ContentId}; sending the link only.", contentId);
+                    }
+
+                    var link = $"{_mailer.ReviewLink}?content={Uri.EscapeDataString(contentId)}";
 
                     foreach (var member in members)
                     {
                         var email = member.GetValueOrDefault("email")?.ToString() ?? string.Empty;
-                        var result = await _mailer.SendReviewRequestAsync(email, name, FirestoreApi.GetString(data, "title"), FirestoreApi.GetString(data, "type"), language);
+                        var memberPlatform = member.GetValueOrDefault("platform")?.ToString();
+
+                        InvitationMailer.MailAttachment? attachment = null;
+                        if (prepared != null)
+                        {
+                            try
+                            {
+                                var watermark = $"{email} \u2022 {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC";
+                                attachment = new InvitationMailer.MailAttachment(ContentPdfBuilder.FileName(title), ContentPdfBuilder.Render(prepared, watermark, _logger));
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "[Review] Could not render the PDF for {ContentId}; sending the link only.", contentId);
+                            }
+                        }
+
+                        var result = await _mailer.SendReviewRequestAsync(email, name, title, type, language, link, attachment, memberPlatform);
                         if (result.Sent) emailed++; else failed++;
                     }
                 }

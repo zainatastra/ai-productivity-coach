@@ -521,6 +521,15 @@ export const EXTRA_ERRORS: Record<string, Pair> = {
   search_query_invalid: { de: "Bitte einen Suchtext mit 2 bis 300 Zeichen eingeben.", en: "Enter a search text of 2 to 300 characters." },
   ai_not_configured: { de: "Die KI ist auf dem Server nicht konfiguriert.", en: "The AI is not configured on the server." },
   ai_unavailable: { de: "Der KI-Dienst ist gerade nicht erreichbar. Bitte später erneut versuchen.", en: "The AI service is not reachable right now. Please try again later." },
+  invalid_platform: { de: "Bitte eine Plattform wählen.", en: "Please choose a platform." },
+  not_sent_to_platform: { de: "Das Profil wurde noch nicht an diese Plattform gesendet.", en: "The profile has not been sent to this platform yet." },
+  invalid_sender_address: { de: "Bitte eine gültige Absenderadresse eingeben.", en: "Please enter a valid sender address." },
+  sender_domain_not_verified: { de: "Die Domain dieser Adresse ist noch nicht geprüft.", en: "This address’s domain is not verified yet." },
+  invalid_domain: { de: "Bitte eine gültige Domain eingeben, z. B. mail.firma.de.", en: "Please enter a valid domain such as mail.company.com." },
+  domain_rejected: { de: "Der E-Mail-Dienst hat diese Domain abgelehnt.", en: "The email service rejected this domain." },
+  domain_not_found: { de: "Domain nicht gefunden.", en: "Domain not found." },
+  domain_failed: { de: "Der E-Mail-Dienst ist nicht erreichbar.", en: "The email service could not be reached." },
+  domains_unavailable: { de: "Der Schlüssel des E-Mail-Dienstes darf keine Domains verwalten.", en: "The email service key may not manage domains." },
 };
 
 export const EXTRA_SOURCE_ERRORS: Record<string, Pair> = {

@@ -39,21 +39,25 @@ export const statusLabel = (status: string | undefined, lang: Lang) => {
 
 /* ═══════════════════════════ company access (provider page) ═══════════════════════════ */
 
-type Invitation = { id: string; email: string; status: string; createdAt?: string; expiresAt?: string };
-type Member = { uid: string; email: string; createdAt?: string };
+type Invitation = { id: string; email: string; status: string; platform?: string; createdAt?: string; expiresAt?: string };
+type Member = { uid: string; email: string; platform?: string; createdAt?: string };
 
-export function AccessPanel(props: { lang: Lang; providerId: string; api: Api; archived: boolean }) {
-  const { lang, providerId, api, archived } = props;
+const PLATFORMS = ["eyeric", "midrange"] as const;
+type PlatformKey = (typeof PLATFORMS)[number];
+
+export function AccessPanel(props: { lang: Lang; providerId: string; api: Api; archived: boolean; refreshKey?: number }) {
+  const { lang, providerId, api, archived, refreshKey = 0 } = props;
   const t = (key: RKey) => rt(key, lang);
 
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [emailConfigured, setEmailConfigured] = useState(true);
+  const [sentTo, setSentTo] = useState<Record<string, boolean>>({});
   const [email, setEmail] = useState("");
   const [sendMail, setSendMail] = useState(true);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
-  const [created, setCreated] = useState<null | { email: string; url: string; emailSent: boolean; emailError?: string | null }>(null);
+  const [created, setCreated] = useState<null | { email: string; platform?: string; url: string; emailSent: boolean; emailError?: string | null }>(null);
   const [copied, setCopied] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
 
@@ -63,6 +67,7 @@ export function AccessPanel(props: { lang: Lang; providerId: string; api: Api; a
       setInvitations(res.data.invitations || []);
       setMembers(res.data.members || []);
       setEmailConfigured(!!res.data.emailConfigured);
+      setSentTo(res.data.sentTo || {});
     }
   }, [api, providerId]);
 
@@ -70,25 +75,28 @@ export function AccessPanel(props: { lang: Lang; providerId: string; api: Api; a
     // Deferred so the state updates inside load() never run synchronously in the effect body.
     const timer = setTimeout(() => { void load(); }, 0);
     return () => clearTimeout(timer);
-  }, [load]);
+  }, [load, refreshKey]);
 
-  const invite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (busy || !email.trim()) return;
+  const platformLabel = (platform?: string) => (platform ? t(`platform_${platform}` as RKey) : "");
+  const sentPlatforms = PLATFORMS.filter((p) => sentTo[p]);
+  const notSentPlatforms = PLATFORMS.filter((p) => !sentTo[p]);
 
-    setBusy("invite");
+  const invite = async (platform: PlatformKey) => {
+    if (busy || !email.trim() || !sentTo[platform]) return;
+
+    setBusy(`invite-${platform}`);
     setError("");
     setCreated(null);
 
     const res = await api(`/api/ai/providers/${providerId}/invitations`, {
       method: "POST",
-      body: JSON.stringify({ email: email.trim(), sendEmail: sendMail && emailConfigured }),
+      body: JSON.stringify({ email: email.trim(), platform, sendEmail: sendMail && emailConfigured }),
     });
     setBusy("");
 
     if (!res.ok) { setError(errorOf(res, lang)); return; }
 
-    setCreated({ email: res.data.email, url: res.data.acceptUrl, emailSent: !!res.data.emailSent, emailError: res.data.emailError });
+    setCreated({ email: res.data.email, platform: res.data.platform, url: res.data.acceptUrl, emailSent: !!res.data.emailSent, emailError: res.data.emailError });
     setEmail("");
     setCopied(false);
     await load();
@@ -128,16 +136,30 @@ export function AccessPanel(props: { lang: Lang; providerId: string; api: Api; a
       <p className="aip-help">{t("accessHelp")}</p>
 
       {!archived && (
-        <form onSubmit={invite}>
+        <form onSubmit={(e) => { e.preventDefault(); if (sentPlatforms.length === 1) void invite(sentPlatforms[0]); }}>
           <label className="aip-label">{t("inviteEmail")}</label>
           <div className="aip-row wrap" style={{ margin: 0 }}>
             <input className="aip-input" style={{ flex: 1, minWidth: 220 }} type="email" value={email} maxLength={200}
               onChange={(e) => setEmail(e.target.value)} disabled={!!busy} placeholder="name@firma.de" />
-            <button className="aip-btn" type="submit" disabled={!!busy || !email.trim()}>
-              {busy === "invite" ? <Loader2 size={13} className="aip-spin" /> : <UserPlus size={13} />}
-              <span>{t("inviteButton")}</span>
-            </button>
           </div>
+          <div className="aip-row wrap" style={{ margin: "10px 0 0" }}>
+            {PLATFORMS.map((platform) => {
+              const sent = !!sentTo[platform];
+              return (
+                <button key={platform} className="aip-btn" type="button" onClick={() => void invite(platform)}
+                  disabled={!!busy || !email.trim() || !sent} title={sent ? undefined : t("inviteSendFirst")}>
+                  {busy === `invite-${platform}` ? <Loader2 size={13} className="aip-spin" /> : <UserPlus size={13} />}
+                  <span>{t(`inviteTo_${platform}` as RKey)}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="aip-meta" style={{ marginTop: 6 }}>{t("invitePlatformHelp")}</div>
+          {notSentPlatforms.length > 0 && (
+            <div className="aip-meta" style={{ marginTop: 2 }}>
+              {t("inviteNotSentYet")} {notSentPlatforms.map((p) => platformLabel(p)).join(", ")}
+            </div>
+          )}
           <label className="aip-checkbox" style={{ marginTop: 10 }}>
             <input type="checkbox" checked={sendMail && emailConfigured} disabled={!emailConfigured || !!busy} onChange={(e) => setSendMail(e.target.checked)} />
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Mail size={13} /> {t("inviteSendMail")}</span>
@@ -151,7 +173,7 @@ export function AccessPanel(props: { lang: Lang; providerId: string; api: Api; a
       {created && (
         <div className="aip-invite-box">
           <strong>{t("inviteLinkTitle")}</strong>
-          <p className="aip-meta" style={{ margin: "4px 0 8px" }}>{created.email} · {t("inviteLinkHelp")}</p>
+          <p className="aip-meta" style={{ margin: "4px 0 8px" }}>{created.email}{created.platform ? ` · ${platformLabel(created.platform)}` : ""} · {t("inviteLinkHelp")}</p>
           <div className="aip-row wrap" style={{ margin: 0 }}>
             <input className="aip-input" readOnly value={created.url} style={{ flex: 1, minWidth: 220 }} onFocus={(e) => e.currentTarget.select()} />
             <button type="button" className="aip-btn ghost" onClick={copy}>
@@ -174,7 +196,8 @@ export function AccessPanel(props: { lang: Lang; providerId: string; api: Api; a
               {members.map((m) => (
                 <div key={m.uid} className="aip-job">
                   <div>
-                    <strong><span>{m.email}</span></strong>
+                    <strong><span>{m.email}</span></strong>{" "}
+                    {m.platform && <span className="aip-pill gray"><span>{platformLabel(m.platform)}</span></span>}
                     <div className="aip-meta">{t("accessSince")} {fmt(m.createdAt, lang)}</div>
                   </div>
                   {!archived && (
@@ -205,6 +228,7 @@ export function AccessPanel(props: { lang: Lang; providerId: string; api: Api; a
                   <div key={inv.id} className="aip-job">
                     <div>
                       <strong><span>{inv.email}</span></strong>{" "}
+                      {inv.platform && <><span className="aip-pill gray"><span>{platformLabel(inv.platform)}</span></span>{" "}</>}
                       <span className={`aip-pill ${state === "accepted" ? "green" : state === "pending" ? "blue" : "gray"}`}>
                         <span>{t(`inv_${state}` as RKey)}</span>
                       </span>

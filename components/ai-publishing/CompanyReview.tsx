@@ -132,6 +132,18 @@ export default function CompanyReview() {
     if (!res.ok) { openId.current = null; setError(errorText(res)); }
   };
 
+  // A link from the review email opens that exact piece: /publisher/ai-review?content={id}.
+  const deepLinked = useRef(false);
+  useEffect(() => {
+    if (!user || deepLinked.current) return;
+    let id = "";
+    try { id = new URLSearchParams(window.location.search).get("content") || ""; } catch { /* no window */ }
+    if (!id) return;
+    const timer = setTimeout(() => { deepLinked.current = true; void open(id); }, 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
   const back = () => {
     openId.current = null;
     setDetail(null);

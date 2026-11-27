@@ -14,7 +14,6 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
     /// </summary>
     public sealed class InvitationMailer
     {
-        public const string FromAddress = "auth@astrasoftdigital.com";
         public const string DefaultPublicUrl = "https://ai-productivity-coach-zeta.vercel.app";
         private const string LogoUrl = DefaultPublicUrl + "/logo.png";
 
@@ -68,19 +67,34 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
 
         // ───────────── sending ─────────────
 
-        public async Task<MailResult> SendInvitationAsync(string to, string providerName, string link, string language)
+        /// <summary>The platform's public name, as it appears in an email.</summary>
+        public static string PlatformLabel(string? platform) => platform?.Trim().ToLowerInvariant() switch
+        {
+            Domain.Platforms.EyEric => "EY ERIC",
+            Domain.Platforms.Midrange => "MIDRANGE",
+            _ => string.Empty
+        };
+
+        public async Task<MailResult> SendInvitationAsync(string to, string providerName, string link, string language, string? platform = null)
         {
             var content = await _templates.EffectiveAsync(EmailKinds.Invitation, language);
             var values = new Dictionary<string, string>
             {
-                ["company"] = providerName, ["email"] = to, ["days"] = EmailTemplates.InviteDays.ToString()
+                ["company"] = providerName, ["email"] = to, ["days"] = EmailTemplates.InviteDays.ToString(),
+                ["platform"] = PlatformLabel(platform)
             };
 
             var (subject, html) = Render(EmailKinds.Invitation, language, content, values, link);
-            return await SendAsync(to, subject, html);
+            return await SendAsync(to, subject, html, Array.Empty<MailAttachment>(), platform);
         }
 
-        public async Task<MailResult> SendReviewRequestAsync(string to, string providerName, string contentTitle, string contentType, string language)
+        /// <summary>
+        /// Tells a company contact that one piece is ready. The link opens exactly that piece (after the
+        /// normal login), and the optional PDF is attached so it can be read without signing in first.
+        /// </summary>
+        public async Task<MailResult> SendReviewRequestAsync(
+            string to, string providerName, string contentTitle, string contentType, string language,
+            string? link = null, MailAttachment? attachment = null, string? platform = null)
         {
             var content = await _templates.EffectiveAsync(EmailKinds.Review, language);
             var values = new Dictionary<string, string>
@@ -88,8 +102,15 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
                 ["company"] = providerName, ["email"] = to, ["title"] = contentTitle, ["type"] = TypeLabel(contentType, IsEnglish(language))
             };
 
-            var (subject, html) = Render(EmailKinds.Review, language, content, values, ReviewLink);
-            return await SendAsync(to, subject, html);
+            if (attachment != null)
+            {
+                // Said by the engine, not by the editable template, so it can never claim a PDF that is not there.
+                var note = IsEnglish(language) ? "The content is also attached to this email as a PDF." : "Der Inhalt ist dieser E-Mail außerdem als PDF angehängt.";
+                content = content with { Notes = content.Notes.Append(note).ToList() };
+            }
+
+            var (subject, html) = Render(EmailKinds.Review, language, content, values, link ?? ReviewLink);
+            return await SendAsync(to, subject, html, attachment == null ? Array.Empty<MailAttachment>() : new[] { attachment }, platform);
         }
 
         public async Task<MailResult> SendPasswordResetAsync(string to, string link, string language)
@@ -127,7 +148,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
                     ? "For your security the link is only valid for a short time and can be used once."
                     : "Aus Sicherheitsgründen ist der Link nur kurze Zeit gültig und einmal verwendbar." }));
 
-            return await SendAsync(to, subject, html);
+            return await SendAsync(to, subject, html, Array.Empty<MailAttachment>(), Domain.Platforms.Midrange);
         }
 
         /// <summary>
@@ -159,7 +180,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
                     ? "This copy is personalized to you and carries a visible usage restriction; please do not redistribute it."
                     : "Dieses Exemplar ist für Sie personalisiert und trägt eine sichtbare Nutzungsbeschränkung; bitte geben Sie es nicht weiter." }));
 
-            return await SendAsync(to, subject, html, new[] { new MailAttachment(fileName, pdfBytes) });
+            return await SendAsync(to, subject, html, new[] { new MailAttachment(fileName, pdfBytes) }, Domain.Platforms.EyEric);
         }
 
         /// <summary>Sends the stored template with sample data to one address (the admin's own).</summary>
@@ -190,9 +211,13 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
             OneLine(EmailTemplates.Fill(EmailTemplates.Default(EmailKinds.Review, language).Subject,
                 new Dictionary<string, string> { ["company"] = providerName }));
 
-        public static string BuildInvitationHtml(string providerName, string email, string link, string language) =>
+        public static string BuildInvitationHtml(string providerName, string email, string link, string language, string? platform = null) =>
             Body(EmailKinds.Invitation, language, EmailTemplates.Default(EmailKinds.Invitation, language),
-                new Dictionary<string, string> { ["company"] = providerName, ["email"] = email, ["days"] = EmailTemplates.InviteDays.ToString() }, link);
+                new Dictionary<string, string>
+                {
+                    ["company"] = providerName, ["email"] = email, ["days"] = EmailTemplates.InviteDays.ToString(),
+                    ["platform"] = PlatformLabel(platform)
+                }, link);
 
         public static string BuildReviewRequestHtml(string providerName, string contentTitle, string contentType, string link, string language) =>
             Body(EmailKinds.Review, language, EmailTemplates.Default(EmailKinds.Review, language),
@@ -235,7 +260,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
             {
                 case EmailKinds.Invitation:
                     cardTitle = Encoded("company");
-                    cardSub = (en ? "Access for " : "Zugang für ") + Encoded("email");
+                    cardSub = (en ? "Access for " : "Zugang für ") + Encoded("email")
+                        + (values.GetValueOrDefault("platform") is { Length: > 0 } ? " · " + Encoded("platform") : string.Empty);
                     break;
                 case EmailKinds.Review:
                     cardTitle = Encoded("title");
@@ -299,7 +325,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
     <div style='border-top:1px solid #f0f0f0;padding-top:14px'>{noteHtml}</div>
   </div>
 </div>
-<p style='text-align:center;color:#9ca3af;font-size:11px;margin:16px 0 0'>AI-Productivity Coach · {FromAddress}</p>
+<p style='text-align:center;color:#9ca3af;font-size:11px;margin:16px 0 0'>AI-Productivity Coach</p>
 </div>";
         }
 
@@ -307,9 +333,9 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
         public sealed record MailAttachment(string FileName, byte[] Content);
 
         private Task<MailResult> SendAsync(string to, string subject, string html) =>
-            SendAsync(to, subject, html, Array.Empty<MailAttachment>());
+            SendAsync(to, subject, html, Array.Empty<MailAttachment>(), null);
 
-        private async Task<MailResult> SendAsync(string to, string subject, string html, IReadOnlyList<MailAttachment> attachments)
+        private async Task<MailResult> SendAsync(string to, string subject, string html, IReadOnlyList<MailAttachment> attachments, string? platform)
         {
             var apiKey = _configuration["Resend:ApiKey"];
             if (string.IsNullOrWhiteSpace(apiKey))
@@ -317,17 +343,18 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
 
             try
             {
-                var senderName = await _templates.SenderNameAsync();
+                var sender = await _templates.SenderAsync(platform);
+                var from = $"{sender.Name} <{sender.Address}>";
 
                 var client = _http.CreateClient();
                 client.Timeout = TimeSpan.FromSeconds(30);
                 client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
 
                 var payload = attachments.Count == 0
-                    ? (object)new { from = $"{senderName} <{FromAddress}>", to = new[] { to }, subject, html }
+                    ? (object)new { from, to = new[] { to }, subject, html }
                     : new
                     {
-                        from = $"{senderName} <{FromAddress}>",
+                        from,
                         to = new[] { to },
                         subject,
                         html,

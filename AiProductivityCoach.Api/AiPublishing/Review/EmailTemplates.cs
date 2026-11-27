@@ -30,7 +30,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
         /// <summary>Placeholders an admin can use in the texts; the values are filled in when the email is sent.</summary>
         public static IReadOnlyList<string> Placeholders(string kind) => kind switch
         {
-            EmailKinds.Invitation => new[] { "company", "email", "days" },
+            EmailKinds.Invitation => new[] { "company", "email", "days", "platform" },
             EmailKinds.Review => new[] { "company", "title", "type" },
             _ => new[] { "email" }
         };
@@ -45,7 +45,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
                     ? new EmailContent(
                         "Invitation: review content for {company}",
                         "Invitation to review content",
-                        "the editorial team of AI-Productivity Coach has invited you to review AI-created expert content for **{company}**.",
+                        "the editorial team of AI-Productivity Coach has invited you to review AI-created expert content for **{company}** on {platform}.",
                         "What you can do",
                         new[] { "Read the drafts of articles, whitepapers and webinars", "Leave comments for the editorial team", "Ask the AI to improve a draft", "Submit the content for approval" },
                         "Accept invitation",
@@ -53,7 +53,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
                     : new EmailContent(
                         "Einladung: Inhalte für {company} prüfen",
                         "Einladung zur Inhaltsprüfung",
-                        "das Redaktionsteam von AI-Productivity Coach hat Sie eingeladen, KI-erstellte Fachinhalte für **{company}** zu prüfen.",
+                        "das Redaktionsteam von AI-Productivity Coach hat Sie eingeladen, KI-erstellte Fachinhalte für **{company}** auf {platform} zu prüfen.",
                         "Das können Sie tun",
                         new[] { "Entwürfe von Artikeln, Whitepapers und Webinaren lesen", "Kommentare für das Redaktionsteam hinterlassen", "Die KI um Verbesserungen eines Entwurfs bitten", "Den Inhalt zur Freigabe einreichen" },
                         "Einladung annehmen",
@@ -136,7 +136,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
                 ["email"] = "kontakt@muster-software.de",
                 ["title"] = en ? "Digital maintenance made modular" : "Instandhaltung digital und modular gestalten",
                 ["type"] = InvitationMailer.TypeLabel("article", en),
-                ["days"] = InviteDays.ToString()
+                ["days"] = InviteDays.ToString(),
+                ["platform"] = "EY ERIC"
             };
         }
     }
