@@ -72,7 +72,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Acquisition
             };
 
             var result = await PostAsync("/wp-json/aipc/v1/anbieter", payload, ct);
-            var synced = await SyncContentAsync(providerId, result.Id, name, FirestoreApi.GetString(data, "logoUrl"), ct);
+            var synced = await SyncContentAsync(providerId, result.Id, name, FirestoreApi.GetString(data, "logoUrl"), null, ct);
             var now = Timestamp.GetCurrentTimestamp();
 
             await providerRef.UpdateAsync(new Dictionary<string, object>
@@ -134,7 +134,19 @@ namespace AiProductivityCoach.Api.AiPublishing.Acquisition
         }
 
         /// <summary>Mirrors every admin-approved/published piece into the matching real post type, linked to its provider.</summary>
-        private async Task<int> SyncContentAsync(string providerId, int anbieterId, string companyName, string? logoUrl, CancellationToken ct)
+        public async Task<int> PublishContentAsync(string providerId, string? onlyContentId, CancellationToken ct)
+        {
+            var providerDoc = await _firestore.Collection(AiCollections.Providers).Document(providerId).GetSnapshotAsync(ct);
+            if (!providerDoc.Exists) throw new InvalidOperationException("Provider not found.");
+
+            var data = providerDoc.ToDictionary();
+            if (!int.TryParse(FirestoreApi.GetString(data, "midrangeCompanyId"), out var anbieterId) || anbieterId <= 0)
+                throw new InvalidOperationException("not_sent");
+
+            return await SyncContentAsync(providerId, anbieterId, FirestoreApi.GetString(data, "name"), FirestoreApi.GetString(data, "logoUrl"), onlyContentId, ct);
+        }
+
+        private async Task<int> SyncContentAsync(string providerId, int anbieterId, string companyName, string? logoUrl, string? onlyContentId, CancellationToken ct)
         {
             var pieces = await _firestore.Collection(AiCollections.Content)
                 .WhereEqualTo("providerId", providerId)
@@ -146,6 +158,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Acquisition
 
             foreach (var piece in pieces.Documents)
             {
+                if (onlyContentId != null && piece.Id != onlyContentId) continue;
+
                 // Only the live (approved) version goes out; a pending edit waits for approval.
                 var data = await Review.VersionApproval.LiveDataAsync(piece, ct);
                 var status = FirestoreApi.GetString(data, "status");
@@ -205,6 +219,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Acquisition
                 }
 
                 await PostAsync("/wp-json/aipc/v1/content", payload, ct);
+                await Review.VersionApproval.MarkPublishedAsync(piece.Reference, Platform, Review.VersionApproval.ApprovedVersion(data), ct);
                 synced++;
             }
 

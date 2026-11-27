@@ -21,6 +21,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
     {
         public const string RequestField = "approvalRequest";
         public const string ApprovedField = "approvedVersion";
+        public const string PublishedField = "publishedVersions";
 
         public static bool IsLive(string? status) => status == ContentStatus.Approved || status == ContentStatus.Published;
 
@@ -54,6 +55,20 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
         /// <summary>Admins may approve pending changes at any time; sending them back or rejecting needs a request.</summary>
         public static bool CanDecide(IDictionary<string, object> data, string decision) =>
             HasPendingChanges(data) && (decision == "approve" || State(data) == ApprovalStates.Requested);
+
+        /// <summary>The version a platform currently shows, or 0 if this piece was never published there.</summary>
+        public static long PublishedVersion(IDictionary<string, object> data, string platform) =>
+            data.TryGetValue(PublishedField, out var raw) && raw is IDictionary<string, object> map
+                ? FirestoreApi.GetLong(map, platform, 0)
+                : 0;
+
+        /// <summary>A platform is out of date when it shows an older version than the live one (or none).</summary>
+        public static bool IsOutOfDate(IDictionary<string, object> data, string platform) =>
+            IsLive(FirestoreApi.GetString(data, "status")) && PublishedVersion(data, platform) < ApprovedVersion(data);
+
+        /// <summary>Records which version a platform now shows.</summary>
+        public static Task MarkPublishedAsync(DocumentReference piece, string platform, long version, CancellationToken ct = default) =>
+            piece.UpdateAsync(new Dictionary<string, object> { [$"{PublishedField}.{platform}"] = version }, cancellationToken: ct);
 
         public static bool IsValidDecision(string? decision) =>
             decision is "approve" or "request_changes" or "reject";

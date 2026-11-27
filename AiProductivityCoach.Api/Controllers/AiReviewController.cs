@@ -1,6 +1,7 @@
 using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using AiProductivityCoach.Api.AiPublishing.Acquisition;
 using AiProductivityCoach.Api.AiPublishing.Content;
 using AiProductivityCoach.Api.AiPublishing.Domain;
 using AiProductivityCoach.Api.AiPublishing.Pdf;
@@ -28,6 +29,7 @@ namespace AiProductivityCoach.Api.Controllers
         private readonly AiAuditService _audit;
         private readonly ContentPdfBuilder _pdfs;
         private readonly ILogger<AiReviewController> _logger;
+        private readonly IReadOnlyDictionary<string, ICompanyPublishAdapter> _publishAdapters;
 
         public AiReviewController(
             FirestoreDb firestore,
@@ -38,8 +40,10 @@ namespace AiProductivityCoach.Api.Controllers
             ContentStore store,
             AiAuditService audit,
             ContentPdfBuilder pdfs,
-            ILogger<AiReviewController> logger)
+            ILogger<AiReviewController> logger,
+            IEnumerable<ICompanyPublishAdapter> publishAdapters)
         {
+            _publishAdapters = publishAdapters.ToDictionary(a => a.Platform);
             _firestore = firestore;
             _invitations = invitations;
             _members = members;
@@ -300,9 +304,15 @@ namespace AiProductivityCoach.Api.Controllers
             if (doc == null) return Error(404, "content_not_found", "Content not found.");
 
             var data = doc.ToDictionary();
+            var providerDoc = await ProviderAsync(FirestoreApi.GetString(data, "providerId"));
+            var sentTo = providerDoc == null
+                ? new Dictionary<string, bool>()
+                : PlatformAccess.SentStates(providerDoc.ToDictionary());
 
             return Ok(new
             {
+                sentTo,
+                publishedVersions = Platforms.All.ToDictionary(platform => platform, platform => VersionApproval.PublishedVersion(data, platform)),
                 status = FirestoreApi.GetString(data, "status"),
                 reviewRound = FirestoreApi.GetLong(data, "reviewRound"),
                 companyRevisions = FirestoreApi.GetLong(data, "companyRevisions"),
@@ -367,6 +377,69 @@ namespace AiProductivityCoach.Api.Controllers
 
                 return Ok(new { liveVersion = live, decision });
             });
+        }
+
+        public class PublishDto
+        {
+            public List<string>? Platforms { get; set; }
+        }
+
+        /// <summary>
+        /// Publishes the live version of this piece to platforms the provider was already sent to.
+        /// Only this piece goes out, and the profile is never touched. One platform failing does not
+        /// stop the others; each gets its own result.
+        /// </summary>
+        [HttpPost("content/{contentId}/publish")]
+        public async Task<IActionResult> Publish(string contentId, [FromBody] PublishDto? request, CancellationToken ct)
+        {
+            var actor = Actor;
+            if (actor == null || !actor.IsAdmin) return Unauthorized();
+
+            var platforms = (request?.Platforms ?? new List<string>())
+                .Select(p => p?.Trim().ToLowerInvariant() ?? string.Empty).Distinct().ToList();
+            if (platforms.Count == 0 || platforms.Any(p => !Platforms.IsValid(p) || !_publishAdapters.ContainsKey(p)))
+                return Error(400, "invalid_platform", "Unknown platform.");
+
+            var doc = await _store.GetAsync(contentId);
+            if (doc == null) return Error(404, "content_not_found", "Content not found.");
+
+            var data = doc.ToDictionary();
+            if (!VersionApproval.IsLive(FirestoreApi.GetString(data, "status")))
+                return Error(409, "content_not_live", "Only approved content can be published.");
+
+            var providerId = FirestoreApi.GetString(data, "providerId");
+            var providerDoc = await ProviderAsync(providerId);
+            if (providerDoc == null) return Error(404, "provider_not_found", "Provider not found.");
+
+            var provider = providerDoc.ToDictionary();
+            var live = VersionApproval.ApprovedVersion(data);
+            var results = new List<object>();
+
+            foreach (var platform in platforms)
+            {
+                if (!PlatformAccess.IsSentTo(provider, platform))
+                {
+                    results.Add(new { platform, ok = false, error = "not_sent_to_platform" });
+                    continue;
+                }
+
+                try
+                {
+                    var synced = await _publishAdapters[platform].PublishContentAsync(providerId, contentId, ct);
+
+                    await _audit.LogAsync(actor, AuditActions.ContentPublishedToPlatform, providerId, contentId, null,
+                        new Dictionary<string, object> { ["platform"] = platform, ["version"] = live, ["synced"] = synced });
+
+                    results.Add(new { platform, ok = true, version = live, synced });
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogWarning(ex, "[Review] Publishing {ContentId} to {Platform} failed.", contentId, platform);
+                    results.Add(new { platform, ok = false, error = "publish_failed" });
+                }
+            }
+
+            return Ok(new { liveVersion = live, results });
         }
 
         /// <summary>Live pieces whose changes wait for an admin decision.</summary>

@@ -518,6 +518,7 @@ export const GATE_REASONS: Record<string, Pair> = {
 };
 
 export const EXTRA_ERRORS: Record<string, Pair> = {
+  publish_failed: { de: "Die Veröffentlichung auf der Plattform ist fehlgeschlagen. Bitte später erneut versuchen.", en: "Publishing to the platform failed. Please try again later." },
   no_pending_changes: { de: "Es gibt keine Änderungen, die auf Freigabe warten.", en: "There are no changes waiting for approval." },
   no_pending_approval: { de: "Es gibt keine wartenden Änderungen für diese Entscheidung.", en: "There are no pending changes for this decision." },
   approval_already_requested: { de: "Die Freigabe wurde bereits angefragt.", en: "Approval has already been requested." },

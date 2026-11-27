@@ -258,6 +258,8 @@ type ReviewData = {
   currentVersion?: number;
   approvedVersion?: number;
   hasPendingChanges?: boolean;
+  sentTo?: Record<string, boolean>;
+  publishedVersions?: Record<string, number>;
   approvalRequest?: { state: string; version?: number; note?: string; decisionNote?: string; requestedAt?: string } | null;
   comments: { id: string; kind: string; authorRole: string; authorLabel?: string; text: string; createdAt?: string }[];
   statusLog: { id: string; from: string; to: string; byRole: string; note?: string; at?: string }[];
@@ -316,6 +318,26 @@ export function ReviewTab(props: {
 
   const decideChanges = (kind: "approve" | "request_changes" | "reject") =>
     act(`ap-${kind}`, `/api/ai/content/${contentId}/approval-decision`, { decision: kind, note }, () => { setNote(""); setDecision(null); setInfo(t("ap_done")); });
+
+  const [confirmPublish, setConfirmPublish] = useState("");
+
+  const publish = async (platform: string) => {
+    setConfirmPublish("");
+    setBusy(`pub-${platform}`);
+    setError("");
+    setInfo("");
+    const res = await api(`/api/ai/content/${contentId}/publish`, { method: "POST", body: JSON.stringify({ platforms: [platform] }) });
+    setBusy("");
+
+    if (!res.ok) { setError(errorOf(res, lang)); return; }
+
+    const result = (res.data.results || [])[0];
+    if (result?.ok) setInfo(t("ap_publishDone"));
+    else setError(result?.error ? tr(EXTRA_ERRORS[result.error], lang, t("ap_publishFailed")) : t("ap_publishFailed"));
+
+    await load();
+    props.onChanged();
+  };
 
   const sendComment = async () => {
     if (!comment.trim()) return;
@@ -405,6 +427,42 @@ export function ReviewTab(props: {
           </div>
 
           {!data?.hasPendingChanges && <div className="aip-meta">{t("ap_editHint")}</div>}
+
+          {/* what each platform currently shows */}
+          <div className="aip-label" style={{ marginTop: 14 }}>{t("ap_publishTitle")}</div>
+          <div className="aip-meta" style={{ marginBottom: 6 }}>{t("ap_publishHelp")}</div>
+          {(["eyeric", "midrange"] as const).map((platform) => {
+            const sent = !!data?.sentTo?.[platform];
+            const shown = data?.publishedVersions?.[platform] ?? 0;
+            const live = data?.approvedVersion ?? 0;
+            const outdated = shown < live;
+
+            return (
+              <div key={platform} className="aip-row wrap" style={{ margin: "4px 0" }}>
+                <strong style={{ minWidth: 90 }}><span>{t(`platform_${platform}` as RKey)}</span></strong>
+                {!sent ? (
+                  <span className="aip-meta">{t("ap_needsSend")}</span>
+                ) : (
+                  <>
+                    <span className={`aip-pill ${shown === 0 ? "gray" : outdated ? "amber" : "green"}`}>
+                      <span>{shown === 0 ? t("ap_notPublished") : `${t("ap_onPlatform")}: v${shown} · ${outdated ? t("ap_outdated") : t("ap_upToDate")}`}</span>
+                    </span>
+                    {confirmPublish === platform ? (
+                      <>
+                        <button className="aip-btn" disabled={!!busy || locked} onClick={() => publish(platform)}><span>{t("ap_publishBtn")} (v{live})</span></button>
+                        <button className="aip-btn ghost" aria-label="cancel" onClick={() => setConfirmPublish("")}><X size={14} /></button>
+                      </>
+                    ) : (
+                      <button className="aip-btn ghost" disabled={!!busy || locked || !outdated} onClick={() => setConfirmPublish(platform)}>
+                        {busy === `pub-${platform}` ? <Loader2 size={13} className="aip-spin" /> : <Send size={13} />}
+                        <span>{t("ap_publishBtn")}</span>
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })}
 
           {data?.hasPendingChanges && (
             <>

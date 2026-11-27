@@ -134,4 +134,41 @@ namespace AiProductivityCoach.Api.Tests
                 Assert.Contains(field, ContentStore.VersionedFields);
         }
     }
+
+    public class PlatformVersionTests
+    {
+        private static Dictionary<string, object> Piece(string status, long approved, params (string Platform, long Version)[] published)
+        {
+            var data = new Dictionary<string, object> { ["status"] = status, ["currentVersion"] = approved, ["approvedVersion"] = approved };
+
+            if (published.Length > 0)
+                data["publishedVersions"] = published.ToDictionary(p => p.Platform, p => (object)p.Version);
+
+            return data;
+        }
+
+        [Fact]
+        public void NeverPublished_IsVersionZero_AndOutOfDate()
+        {
+            var data = Piece("approved", 2);
+
+            Assert.Equal(0, VersionApproval.PublishedVersion(data, "midrange"));
+            Assert.True(VersionApproval.IsOutOfDate(data, "midrange"));
+        }
+
+        [Fact]
+        public void PublishedVersion_IsTrackedPerPlatform()
+        {
+            var data = Piece("published", 3, ("midrange", 3), ("eyeric", 1));
+
+            Assert.Equal(3, VersionApproval.PublishedVersion(data, "midrange"));
+            Assert.Equal(1, VersionApproval.PublishedVersion(data, "eyeric"));
+            Assert.False(VersionApproval.IsOutOfDate(data, "midrange"));
+            Assert.True(VersionApproval.IsOutOfDate(data, "eyeric"));
+        }
+
+        [Fact]
+        public void ADraftIsNeverOutOfDate() =>
+            Assert.False(VersionApproval.IsOutOfDate(Piece("draft", 2), "midrange"));
+    }
 }

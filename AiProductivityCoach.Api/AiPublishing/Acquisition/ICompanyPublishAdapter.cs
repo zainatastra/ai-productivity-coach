@@ -24,5 +24,13 @@ namespace AiProductivityCoach.Api.AiPublishing.Acquisition
         Task<CompanySendResult> SendAsync(string providerId, CancellationToken ct);
 
         Task<CompanySendStatus> GetStatusAsync(string providerId, CancellationToken ct);
+
+        /// <summary>
+        /// Publishes only the live (approved) version of the provider's content - one piece, or all when
+        /// <paramref name="onlyContentId"/> is null - and leaves the profile untouched, so edits the company
+        /// made to its own profile on the platform are never overwritten. The provider must already have
+        /// been sent to this platform.
+        /// </summary>
+        Task<int> PublishContentAsync(string providerId, string? onlyContentId, CancellationToken ct);
     }
 }

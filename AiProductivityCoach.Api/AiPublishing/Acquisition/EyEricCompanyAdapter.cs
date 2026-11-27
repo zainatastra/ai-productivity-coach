@@ -92,7 +92,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Acquisition
             }
 
             await SaveAboutAsync(companyRef, profile, now, ct);
-            var synced = await SyncContentAsync(companyRef, providerId, ct);
+            var synced = await SyncContentAsync(companyRef, providerId, null, ct);
 
             await providerRef.UpdateAsync(new Dictionary<string, object>
             {
@@ -148,7 +148,19 @@ namespace AiProductivityCoach.Api.AiPublishing.Acquisition
         }
 
         /// <summary>Mirrors every admin-approved/published piece into the matching company subcollection, by content type.</summary>
-        private async Task<int> SyncContentAsync(DocumentReference companyRef, string providerId, CancellationToken ct)
+        public async Task<int> PublishContentAsync(string providerId, string? onlyContentId, CancellationToken ct)
+        {
+            var providerDoc = await _firestore.Collection(AiCollections.Providers).Document(providerId).GetSnapshotAsync(ct);
+            if (!providerDoc.Exists) throw new InvalidOperationException("Provider not found.");
+
+            var companyId = FirestoreApi.GetString(providerDoc.ToDictionary(), "eyEricCompanyId");
+            var companyDoc = companyId.Length > 0 ? await Companies.Document(companyId).GetSnapshotAsync(ct) : null;
+            if (companyDoc is not { Exists: true }) throw new InvalidOperationException("not_sent");
+
+            return await SyncContentAsync(companyDoc.Reference, providerId, onlyContentId, ct);
+        }
+
+        private async Task<int> SyncContentAsync(DocumentReference companyRef, string providerId, string? onlyContentId, CancellationToken ct)
         {
             var pieces = await _firestore.Collection(AiCollections.Content)
                 .WhereEqualTo("providerId", providerId)
@@ -158,6 +170,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Acquisition
 
             foreach (var piece in pieces.Documents)
             {
+                if (onlyContentId != null && piece.Id != onlyContentId) continue;
+
                 // Only the live (approved) version goes out; a pending edit waits for approval.
                 var data = await Review.VersionApproval.LiveDataAsync(piece, ct);
                 var status = FirestoreApi.GetString(data, "status");
@@ -184,6 +198,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Acquisition
                 }
 
                 await targetRef.SetAsync(fields, SetOptions.MergeAll, ct);
+                await Review.VersionApproval.MarkPublishedAsync(piece.Reference, Platform, Review.VersionApproval.ApprovedVersion(data), ct);
                 synced++;
             }
 
