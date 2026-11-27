@@ -88,11 +88,32 @@ namespace AiProductivityCoach.Api.AiPublishing.Content
             });
         }
 
-        private static readonly string[] VersionedFields =
+        public static readonly string[] VersionedFields =
         {
             "language", "title", "subtitle", "excerpt", "seoTitle", "metaDescription", "blocks", "bodyHtml",
             "data", "notes", "wordCount", "sources", "quality", "model", "llmProvider", "lengthPreset"
         };
+
+        /// <summary>
+        /// Pins the live version of an approved/published piece before its first edit, so that the
+        /// edit becomes a pending version instead of silently replacing what is live.
+        /// </summary>
+        public async Task EnsureApprovedVersionAsync(string contentId)
+        {
+            var docRef = Docs.Document(contentId);
+
+            await _firestore.RunTransactionAsync(async tx =>
+            {
+                var snap = await tx.GetSnapshotAsync(docRef);
+                if (!snap.Exists) return;
+
+                var data = snap.ToDictionary();
+                if (!Review.VersionApproval.IsLive(FirestoreApi.GetString(data, "status"))) return;
+                if (FirestoreApi.GetLong(data, Review.VersionApproval.ApprovedField, 0) > 0) return;
+
+                tx.Update(docRef, new Dictionary<string, object> { [Review.VersionApproval.ApprovedField] = Review.VersionApproval.CurrentVersion(data) });
+            });
+        }
 
         /// <summary>One full version (text, SEO, quality), for compare and restore.</summary>
         public async Task<Dictionary<string, object?>?> GetVersionAsync(string contentId, int version)

@@ -139,6 +139,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Domain
         public const string ContentSubmittedByCompany = "CONTENT_SUBMITTED_BY_COMPANY";
         public const string ContentDecision = "CONTENT_DECISION";
         public const string ContentCommented = "CONTENT_COMMENTED";
+        public const string ApprovalRequested = "CONTENT_APPROVAL_REQUESTED";
+        public const string ApprovalDecided = "CONTENT_APPROVAL_DECIDED";
         public const string CompanyRevisionRequested = "COMPANY_REVISION_REQUESTED";
         public const string MediaGenerationStarted = "MEDIA_GENERATION_STARTED";
         public const string MediaGenerated = "MEDIA_GENERATED";

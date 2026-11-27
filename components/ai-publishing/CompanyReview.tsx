@@ -206,6 +206,12 @@ export default function CompanyReview() {
       await loadDetail(detail.id);
   };
 
+  const requestApproval = async () => {
+    if (!detail) return;
+    if (await run("approval", `/api/ai/company/contents/${detail.id}/approval-request`, { note }, () => { setNote(""); setMessage(rt("ap_done", lang)); }))
+      await loadDetail(detail.id);
+  };
+
   const logout = async () => {
     await signOut(auth);
     window.location.assign("/publisher/login");
@@ -415,6 +421,33 @@ export default function CompanyReview() {
               </div>
             ) : (
               <button className="cr-btn" style={{ marginTop: 10 }} disabled={!!jobId} onClick={() => setConfirmSubmit(true)}><span>{t("c_submit")}</span></button>
+            )}
+          </div>
+        )}
+
+        {/* pending changes of a live piece */}
+        {detail.hasPendingChanges && (
+          <div className="cr-card">
+            <h3 className="cr-h3"><CheckCircle2 size={15} /> <span>{t("ap_pending")}</span></h3>
+            <p className="cr-help">{t("ap_pendingHelp")} ({t("ap_live")}: {t("c_version")} {detail.approvedVersion} · {t("ap_pendingVersion")}: {t("c_version")} {detail.currentVersion})</p>
+
+            {detail.approvalState === "requested" && <div className="cr-banner gray"><span>{t("ap_waitingAdmin")}</span></div>}
+
+            {(detail.approvalState === "changes_requested" || detail.approvalState === "rejected") && detail.approvalRequest?.decisionNote && (
+              <div className="cr-note">
+                <p style={{ margin: "0 0 4px" }}>{detail.approvalState === "rejected" ? t("ap_declined") : t("ap_sentBack")}</p>
+                <strong>{detail.approvalRequest.decisionNote}</strong>
+              </div>
+            )}
+
+            {detail.canRequestApproval && (
+              <>
+                <label className="cr-label">{t("ap_requestNote")}</label>
+                <textarea className="cr-input" rows={2} maxLength={1500} value={note} onChange={(e) => setNote(e.target.value)} />
+                <button className="cr-btn" style={{ marginTop: 10 }} disabled={busy === "approval"} onClick={requestApproval}>
+                  {busy === "approval" ? <Loader2 size={14} className="cr-spin" /> : <Check size={14} />} <span>{t("ap_request")}</span>
+                </button>
+              </>
             )}
           </div>
         )}

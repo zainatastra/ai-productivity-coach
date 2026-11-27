@@ -307,6 +307,12 @@ namespace AiProductivityCoach.Api.Controllers
                 reviewRound = FirestoreApi.GetLong(data, "reviewRound"),
                 companyRevisions = FirestoreApi.GetLong(data, "companyRevisions"),
                 maxCompanyRevisions = ReviewStore.MaxCompanyRevisionsPerRound,
+                currentVersion = VersionApproval.CurrentVersion(data),
+                approvedVersion = VersionApproval.ApprovedVersion(data),
+                hasPendingChanges = VersionApproval.HasPendingChanges(data),
+                approvalRequest = data.TryGetValue(VersionApproval.RequestField, out var rawRequest) && rawRequest is Dictionary<string, object> requestMap
+                    ? FirestoreApi.Convert(requestMap)
+                    : null,
                 comments = await _review.ListCommentsAsync(contentId),
                 statusLog = await _review.ListStatusLogAsync(contentId)
             });
@@ -329,6 +335,79 @@ namespace AiProductivityCoach.Api.Controllers
 
                 return NoContent();
             });
+        }
+
+        public class ApprovalDecisionDto
+        {
+            public string? Decision { get; set; }
+            public string? Note { get; set; }
+        }
+
+        /// <summary>Approve, send back or reject the pending changes of a live piece.</summary>
+        [HttpPost("content/{contentId}/approval-decision")]
+        public async Task<IActionResult> DecideApproval(string contentId, [FromBody] ApprovalDecisionDto? request)
+        {
+            var actor = Actor;
+            if (actor == null || !actor.IsAdmin) return Unauthorized();
+
+            var decision = request?.Decision?.Trim().ToLowerInvariant();
+            if (!VersionApproval.IsValidDecision(decision)) return Error(400, "invalid_decision", "Unknown decision.");
+
+            var doc = await _store.GetAsync(contentId);
+            if (doc == null) return Error(404, "content_not_found", "Content not found.");
+
+            var providerId = FirestoreApi.GetString(doc.ToDictionary(), "providerId");
+
+            return await Guard(async () =>
+            {
+                var live = await _review.DecideApprovalAsync(contentId, decision!, actor, request?.Note);
+
+                await _audit.LogAsync(actor, AuditActions.ApprovalDecided, providerId, contentId, null,
+                    new Dictionary<string, object> { ["decision"] = decision!, ["liveVersion"] = live });
+
+                return Ok(new { liveVersion = live, decision });
+            });
+        }
+
+        /// <summary>Live pieces whose changes wait for an admin decision.</summary>
+        [HttpGet("approval-queue")]
+        public async Task<IActionResult> ApprovalQueue()
+        {
+            var snapshot = await _firestore.Collection(AiCollections.Content)
+                .WhereEqualTo($"{VersionApproval.RequestField}.state", ApprovalStates.Requested)
+                .Limit(50)
+                .GetSnapshotAsync();
+
+            var names = new Dictionary<string, string>();
+            var rows = new List<Dictionary<string, object?>>();
+
+            foreach (var doc in snapshot.Documents)
+            {
+                var data = doc.ToDictionary();
+                var providerId = FirestoreApi.GetString(data, "providerId");
+
+                if (!names.TryGetValue(providerId, out var name))
+                {
+                    var provider = await ProviderAsync(providerId);
+                    name = provider == null ? string.Empty : FirestoreApi.GetString(provider.ToDictionary(), "name");
+                    names[providerId] = name;
+                }
+
+                var request = data.TryGetValue(VersionApproval.RequestField, out var raw) && raw is IDictionary<string, object> map
+                    ? FirestoreApi.Convert(new Dictionary<string, object>(map))
+                    : null;
+
+                rows.Add(new Dictionary<string, object?>
+                {
+                    ["id"] = doc.Id, ["providerId"] = providerId, ["providerName"] = name,
+                    ["type"] = FirestoreApi.GetString(data, "type"), ["title"] = FirestoreApi.GetString(data, "title"),
+                    ["status"] = FirestoreApi.GetString(data, "status"),
+                    ["liveVersion"] = VersionApproval.ApprovedVersion(data), ["requestedVersion"] = VersionApproval.RequestedVersion(data),
+                    ["request"] = request
+                });
+            }
+
+            return Ok(rows.OrderByDescending(r => (r["request"] as Dictionary<string, object?>)?.GetValueOrDefault("requestedAt")?.ToString()).ToList());
         }
 
         [HttpGet("review-queue")]
@@ -374,6 +453,9 @@ namespace AiProductivityCoach.Api.Controllers
                     "content_not_found" => Error(404, ex.Code, "Content not found."),
                     "invalid_transition" => Error(409, ex.Code, "This step is not possible in the current status."),
                     "comment_required" => Error(400, ex.Code, "Please write a comment."),
+                    "no_pending_approval" => Error(409, ex.Code, "There are no pending changes to decide on."),
+                    "note_required" => Error(400, ex.Code, "Please add a short reason."),
+                    "invalid_decision" => Error(400, ex.Code, "Unknown decision."),
                     _ => Error(400, ex.Code, "The request is not valid.")
                 };
             }

@@ -518,6 +518,10 @@ export const GATE_REASONS: Record<string, Pair> = {
 };
 
 export const EXTRA_ERRORS: Record<string, Pair> = {
+  no_pending_changes: { de: "Es gibt keine Änderungen, die auf Freigabe warten.", en: "There are no changes waiting for approval." },
+  no_pending_approval: { de: "Es gibt keine wartenden Änderungen für diese Entscheidung.", en: "There are no pending changes for this decision." },
+  approval_already_requested: { de: "Die Freigabe wurde bereits angefragt.", en: "Approval has already been requested." },
+  content_not_live: { de: "Dieser Inhalt ist nicht live.", en: "This content is not live." },
   search_query_invalid: { de: "Bitte einen Suchtext mit 2 bis 300 Zeichen eingeben.", en: "Enter a search text of 2 to 300 characters." },
   ai_not_configured: { de: "Die KI ist auf dem Server nicht konfiguriert.", en: "The AI is not configured on the server." },
   ai_unavailable: { de: "Der KI-Dienst ist gerade nicht erreichbar. Bitte später erneut versuchen.", en: "The AI service is not reachable right now. Please try again later." },

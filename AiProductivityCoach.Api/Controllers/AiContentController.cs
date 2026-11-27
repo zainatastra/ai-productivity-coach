@@ -225,6 +225,10 @@ namespace AiProductivityCoach.Api.Controllers
             if (doc == null) return Error(404, "content_not_found", "Content not found.");
 
             var row = FirestoreApi.ToApi(doc);
+            var stored = doc.ToDictionary();
+            row["approvedVersion"] = VersionApproval.ApprovedVersion(stored);
+            row["hasPendingChanges"] = VersionApproval.HasPendingChanges(stored);
+            row["approvalState"] = VersionApproval.State(stored);
             row["versions"] = await _store.ListVersionsAsync(contentId);
             row["media"] = await _media.ListAsync(contentId);
 
@@ -289,11 +293,15 @@ namespace AiProductivityCoach.Api.Controllers
             var providerId = FirestoreApi.GetString(data, "providerId");
 
             var status = FirestoreApi.GetString(data, "status");
-            if (status != ContentStatus.Draft && status != ContentStatus.ChangesRequested)
+            var live = VersionApproval.IsLive(status);
+            if (status != ContentStatus.Draft && status != ContentStatus.ChangesRequested && !live)
                 return (null, providerId, Error(409, "content_not_draft", "Only drafts can be changed."));
 
             if (await ProviderBusyAsync(providerId))
                 return (null, providerId, Error(409, "provider_busy", "A job is still running for this provider."));
+
+            // A live piece keeps its approved version; the change becomes a pending version.
+            if (live) await _store.EnsureApprovedVersionAsync(contentId);
 
             return (doc, providerId, null);
         }

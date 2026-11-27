@@ -158,7 +158,8 @@ namespace AiProductivityCoach.Api.AiPublishing.Acquisition
 
             foreach (var piece in pieces.Documents)
             {
-                var data = piece.ToDictionary();
+                // Only the live (approved) version goes out; a pending edit waits for approval.
+                var data = await Review.VersionApproval.LiveDataAsync(piece, ct);
                 var status = FirestoreApi.GetString(data, "status");
                 if (!ContentStatusesSynced.Contains(status)) continue;
 

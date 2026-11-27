@@ -255,6 +255,10 @@ type ReviewData = {
   reviewRound: number;
   companyRevisions: number;
   maxCompanyRevisions: number;
+  currentVersion?: number;
+  approvedVersion?: number;
+  hasPendingChanges?: boolean;
+  approvalRequest?: { state: string; version?: number; note?: string; decisionNote?: string; requestedAt?: string } | null;
   comments: { id: string; kind: string; authorRole: string; authorLabel?: string; text: string; createdAt?: string }[];
   statusLog: { id: string; from: string; to: string; byRole: string; note?: string; at?: string }[];
 };
@@ -309,6 +313,9 @@ export function ReviewTab(props: {
 
   const decide = (kind: "approve" | "request_changes" | "reject" | "reopen") =>
     act(kind, `/api/ai/content/${contentId}/decision`, { decision: kind, note }, () => { setNote(""); setDecision(null); setInfo(t("statusChanged")); });
+
+  const decideChanges = (kind: "approve" | "request_changes" | "reject") =>
+    act(`ap-${kind}`, `/api/ai/content/${contentId}/approval-decision`, { decision: kind, note }, () => { setNote(""); setDecision(null); setInfo(t("ap_done")); });
 
   const sendComment = async () => {
     if (!comment.trim()) return;
@@ -387,7 +394,54 @@ export function ReviewTab(props: {
         </div>
       )}
 
-      {["approved", "published"].includes(status) && <div className="aip-meta">{t("readOnlyStatus")}</div>}
+      {["approved", "published"].includes(status) && (
+        <div className="aip-review-action">
+          <div className="aip-row wrap" style={{ margin: "0 0 8px" }}>
+            <span className="aip-pill green"><span>{t("ap_live")}: v{data?.approvedVersion ?? "–"}</span></span>
+            {data?.hasPendingChanges && <span className="aip-pill amber"><span>{t("ap_pendingVersion")}: v{data.currentVersion}</span></span>}
+            {data?.approvalRequest?.state === "requested" && <span className="aip-pill amber"><span>{t("ap_requested")}</span></span>}
+            {data?.approvalRequest?.state === "changes_requested" && <span className="aip-pill gray"><span>{t("ap_changesRequested")}</span></span>}
+            {data?.approvalRequest?.state === "rejected" && <span className="aip-pill red"><span>{t("ap_rejected")}</span></span>}
+          </div>
+
+          {!data?.hasPendingChanges && <div className="aip-meta">{t("ap_editHint")}</div>}
+
+          {data?.hasPendingChanges && (
+            <>
+              <div className="aip-banner warn"><span>{t("ap_pendingHelp")}</span></div>
+              {data.approvalRequest?.state === "requested" && data.approvalRequest.note && (
+                <div className="aip-meta" style={{ margin: "8px 0" }}>{data.approvalRequest.note}</div>
+              )}
+              {decision ? (
+                <>
+                  <label className="aip-label" style={{ marginTop: 10 }}>{t("ap_decisionLabel")}</label>
+                  <textarea className="aip-input aip-area" rows={3} maxLength={1500} value={note} onChange={(e) => setNote(e.target.value)} />
+                  <div className="aip-row wrap" style={{ marginTop: 10 }}>
+                    <button className={`aip-btn ${decision === "reject" ? "danger" : ""}`} disabled={!!busy || note.trim().length < 3} onClick={() => decideChanges(decision)}>
+                      {busy === `ap-${decision}` ? <Loader2 size={13} className="aip-spin" /> : null}
+                      <span>{decision === "reject" ? t("reject") : t("requestChanges")}</span>
+                    </button>
+                    <button className="aip-btn ghost" aria-label="cancel" onClick={() => setDecision(null)}><X size={14} /></button>
+                  </div>
+                </>
+              ) : (
+                <div className="aip-row wrap" style={{ marginTop: 10 }}>
+                  <button className="aip-btn" disabled={!!busy || locked} onClick={() => decideChanges("approve")}>
+                    {busy === "ap-approve" ? <Loader2 size={13} className="aip-spin" /> : <Check size={13} />}
+                    <span>{t("ap_approveChanges")}</span>
+                  </button>
+                  {data.approvalRequest?.state === "requested" && (
+                    <>
+                      <button className="aip-btn ghost" disabled={!!busy} onClick={() => { setNote(""); setDecision("request_changes"); }}><span>{t("requestChanges")}</span></button>
+                      <button className="aip-btn ghost danger-text" disabled={!!busy} onClick={() => { setNote(""); setDecision("reject"); }}><span>{t("reject")}</span></button>
+                    </>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {error && <div className="aip-error-text">{error}</div>}
       {info && <div className="aip-ok-text" style={{ marginTop: 10 }}><Check size={13} /> <span>{info}</span></div>}
@@ -435,20 +489,41 @@ export function ReviewQueue(props: { lang: Lang; api: Api; refreshKey: string; o
   const { lang, api } = props;
   const t = (key: RKey) => rt(key, lang);
   const [rows, setRows] = useState<{ id: string; providerId: string; providerName: string; title: string; type: string; updatedAt?: string }[]>([]);
+  const [changes, setChanges] = useState<{ id: string; providerId: string; providerName: string; title: string; liveVersion: number; requestedVersion: number; request?: { requestedAt?: string; note?: string } | null }[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     const timer = setTimeout(async () => {
-      const res = await api("/api/ai/review-queue");
-      if (!cancelled && res.ok) setRows(res.data || []);
+      const [res, approvals] = await Promise.all([api("/api/ai/review-queue"), api("/api/ai/approval-queue")]);
+      if (cancelled) return;
+      if (res.ok) setRows(res.data || []);
+      if (approvals.ok) setChanges(approvals.data || []);
     }, 0);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [api, props.refreshKey]);
 
-  if (rows.length === 0) return null;
+  if (rows.length === 0 && changes.length === 0) return null;
 
   return (
     <div className="aip-card aip-queue">
+      {changes.length > 0 && (
+        <>
+          <h3 className="aip-h3"><span>{t("ap_queueTitle")}</span> <span className="aip-pill amber"><span>{changes.length}</span></span></h3>
+          <p className="aip-help">{t("ap_queueHelp")}</p>
+          <div className="aip-jobs" style={{ marginBottom: rows.length > 0 ? 18 : 0 }}>
+            {changes.map((c) => (
+              <div key={c.id} className="aip-job">
+                <div>
+                  <strong><span>{c.title}</span></strong>
+                  <div className="aip-meta">{c.providerName} · v{c.liveVersion} → v{c.requestedVersion} · {fmt(c.request?.requestedAt, lang)}</div>
+                </div>
+                <button className="aip-btn ghost" onClick={() => props.onOpenProvider(c.providerId)}><span>{t("openProviderBtn")}</span></button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {rows.length > 0 && (<>
       <h3 className="aip-h3"><span>{t("reviewQueueTitle")}</span> <span className="aip-pill amber"><span>{rows.length}</span></span></h3>
       <p className="aip-help">{t("reviewQueueHelp")}</p>
       <div className="aip-jobs">
@@ -462,6 +537,7 @@ export function ReviewQueue(props: { lang: Lang; api: Api; refreshKey: string; o
           </div>
         ))}
       </div>
+      </>)}
     </div>
   );
 }

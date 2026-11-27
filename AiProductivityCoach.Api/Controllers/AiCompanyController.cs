@@ -146,7 +146,9 @@ namespace AiProductivityCoach.Api.Controllers
                         ["id"] = row["id"], ["type"] = row.GetValueOrDefault("type"), ["title"] = row.GetValueOrDefault("title"),
                         ["status"] = status, ["wordCount"] = row.GetValueOrDefault("wordCount"),
                         ["currentVersion"] = row.GetValueOrDefault("currentVersion"), ["updatedAt"] = row.GetValueOrDefault("updatedAt"),
-                        ["coverUrl"] = row.GetValueOrDefault("coverUrl"), ["providerName"] = providerName
+                        ["coverUrl"] = row.GetValueOrDefault("coverUrl"), ["providerName"] = providerName,
+                        ["hasPendingChanges"] = VersionApproval.HasPendingChanges(ToData(row)),
+                        ["approvalState"] = VersionApproval.State(ToData(row))
                     };
                     rows.Add(slim);
                 }
@@ -195,8 +197,51 @@ namespace AiProductivityCoach.Api.Controllers
             row["canSubmit"] = status == ContentStatus.CompanyReview;
             row["canComment"] = CommentStatuses.Contains(status);
 
+            row["approvedVersion"] = VersionApproval.ApprovedVersion(data);
+            row["hasPendingChanges"] = VersionApproval.HasPendingChanges(data);
+            row["approvalState"] = VersionApproval.State(data);
+            row["canRequestApproval"] = VersionApproval.CanRequest(data);
+
             return Ok(row);
         }
+
+        public class ApprovalRequestDto
+        {
+            public string? Note { get; set; }
+        }
+
+        /// <summary>The company asks for the pending changes of its live piece to be approved.</summary>
+        [HttpPost("contents/{contentId}/approval-request")]
+        public async Task<IActionResult> RequestApproval(string contentId, [FromBody] ApprovalRequestDto? request)
+        {
+            var (doc, providerId, _, error) = await LoadAsync(contentId);
+            if (error != null) return error;
+
+            var actor = Actor!;
+
+            try
+            {
+                var version = await _review.RequestApprovalAsync(contentId, actor, request?.Note);
+
+                await _audit.LogAsync(actor, AuditActions.ApprovalRequested, providerId, contentId, null,
+                    new Dictionary<string, object> { ["version"] = version });
+
+                return Ok(new { version });
+            }
+            catch (ContentGenerationException ex)
+            {
+                return ex.Code switch
+                {
+                    "content_not_live" => Error(409, ex.Code, "This content is not live."),
+                    "no_pending_changes" => Error(409, ex.Code, "There are no changes waiting for approval."),
+                    "approval_already_requested" => Error(409, ex.Code, "Approval has already been requested."),
+                    _ => Error(400, ex.Code, "The request is not valid.")
+                };
+            }
+        }
+
+        private static Dictionary<string, object> ToData(Dictionary<string, object?> row) =>
+            row.Where(pair => pair.Value != null).ToDictionary(pair => pair.Key, pair => pair.Value!);
 
         // ───────────── actions ─────────────
 

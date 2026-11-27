@@ -784,7 +784,7 @@ function DocumentViewer(props: {
   const images = doc.media || [];
 
   const [tab, setTab] = useState<"read" | "edit" | "ai" | "compare" | "review">("read");
-  const editable = doc.status === "draft" || doc.status === "changes_requested";
+  const editable = doc.status === "draft" || doc.status === "changes_requested" || doc.status === "approved" || doc.status === "published";
   const [dirty, setDirty] = useState(false);
 
   // Leaving a tab with typed-in changes asks first, so nothing is lost by accident.
