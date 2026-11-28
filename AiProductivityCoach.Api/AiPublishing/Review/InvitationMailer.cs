@@ -183,6 +183,70 @@ namespace AiProductivityCoach.Api.AiPublishing.Review
             return await SendAsync(to, subject, html, new[] { new MailAttachment(fileName, pdfBytes) }, Domain.Platforms.EyEric);
         }
 
+        public sealed record ClaimNotice(string CompanyName, string ClaimantName, string ClaimantEmail, string Position, string Phone, string Message);
+
+        /// <summary>Tells the admin that someone asked to claim a profile. Everything the visitor typed is HTML-encoded.</summary>
+        public async Task<MailResult> SendClaimNotificationAsync(string to, ClaimNotice n)
+        {
+            string E(string value) => WebUtility.HtmlEncode(value);
+
+            var lines = new List<string>
+            {
+                $"Name: {E(n.ClaimantName)}",
+                $"E-Mail: {E(n.ClaimantEmail)}",
+                $"Position: {E(n.Position)}"
+            };
+            if (n.Phone.Length > 0) lines.Add($"Telefon: {E(n.Phone)}");
+            if (n.Message.Length > 0) lines.Add($"Nachricht: {E(n.Message)}");
+
+            var subject = $"Neue Claim-Anfrage: {n.CompanyName}";
+
+            var html = Document(Frame(
+                "Neue Claim-Anfrage",
+                "Hallo,",
+                $"Jemand möchte das Profil von {E(n.CompanyName)} übernehmen. Es wurde noch kein Zugang vergeben: Bitte prüfen Sie die Angaben und entscheiden Sie im Admin-Bereich.",
+                E(n.CompanyName),
+                "Claim-Anfrage",
+                "Angaben",
+                lines.ToArray(),
+                $"{FrontendBaseUrl}/admin",
+                "Zum Admin-Bereich",
+                "Der Button funktioniert nicht? Kopieren Sie diesen Link in Ihren Browser:",
+                new[] { "Ohne Ihre Freigabe erhält niemand Zugriff auf das Profil." }));
+
+            return await SendAsync(to, subject, html, Array.Empty<MailAttachment>(), Domain.Platforms.EyEric);
+        }
+
+        /// <summary>Tells the claimant the outcome. Sent only after an admin decided, to the address on the request.</summary>
+        public async Task<MailResult> SendClaimDecisionAsync(string to, string companyName, bool approved, string? note)
+        {
+            string E(string value) => WebUtility.HtmlEncode(value);
+
+            var subject = approved
+                ? $"Ihr Claim für {companyName} wurde bestätigt"
+                : $"Ihre Claim-Anfrage für {companyName}";
+
+            var notes = new List<string>();
+            if (!approved && !string.IsNullOrWhiteSpace(note)) notes.Add(E(note));
+
+            var html = Document(Frame(
+                approved ? "Claim bestätigt" : "Claim nicht bestätigt",
+                "Guten Tag,",
+                approved
+                    ? $"Ihre Anfrage wurde geprüft und bestätigt. Sie können das Profil von {E(companyName)} jetzt mit Ihrem Firmen-Login verwalten."
+                    : $"wir konnten Ihre Anfrage für das Profil von {E(companyName)} leider nicht bestätigen.",
+                E(companyName),
+                approved ? "Zugang erteilt" : "Anfrage abgelehnt",
+                string.Empty,
+                Array.Empty<string>(),
+                LoginLink,
+                approved ? "Zum Firmen-Login" : "Zur Startseite",
+                "Der Button funktioniert nicht? Kopieren Sie diesen Link in Ihren Browser:",
+                notes.Count > 0 ? notes.ToArray() : new[] { "Bei Fragen antworten Sie bitte auf diese E-Mail." }));
+
+            return await SendAsync(to, subject, html, Array.Empty<MailAttachment>(), Domain.Platforms.EyEric);
+        }
+
         public sealed record BookingNotice(
             string ProviderName, string ContentTitle, string ContentType, string BookedBy,
             string Date, string TimePeriod, int Leads, string TargetGroup, long PriceCents);

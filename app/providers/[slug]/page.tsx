@@ -25,6 +25,7 @@ import {
   Video,
 } from "lucide-react";
 import ProviderEmbedBridge from "@/components/ProviderEmbedBridge";
+import ClaimProfile from "@/components/ClaimProfile";
 import { API_BASE_URL } from "@/services/api";
 import { useLanguage } from "@/services/LanguageContext";
 
@@ -32,6 +33,7 @@ type PublicProvider = {
   id: string;
   approvedVersion?: number;
   approvedAt?: string;
+  claimable?: boolean;
   company: any;
   about: any;
   posts: any[];
@@ -1270,6 +1272,10 @@ export default function ProviderProfilePage() {
                       {uiText.visitWebsite}
                       <ExternalLink size={10} />
                     </a>
+                  )}
+
+                  {profile.claimable && slug && (
+                    <ClaimProfile slug={slug} companyName={profile.company.name || ""} isGerman={isGerman} />
                   )}
                 </div>
 

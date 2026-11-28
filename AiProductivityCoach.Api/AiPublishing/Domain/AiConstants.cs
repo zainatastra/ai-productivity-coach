@@ -143,6 +143,7 @@ namespace AiProductivityCoach.Api.AiPublishing.Domain
         public const string ApprovalDecided = "CONTENT_APPROVAL_DECIDED";
         public const string ContentPublishedToPlatform = "CONTENT_PUBLISHED_TO_PLATFORM";
         public const string BookingCreated = "BOOKING_CREATED";
+        public const string ClaimDecided = "CLAIM_DECIDED";
         public const string PricingChanged = "PRICING_CHANGED";
         public const string CompanyRevisionRequested = "COMPANY_REVISION_REQUESTED";
         public const string MediaGenerationStarted = "MEDIA_GENERATION_STARTED";

@@ -1,3 +1,4 @@
+using AiProductivityCoach.Api.AiPublishing.Claims;
 using AiProductivityCoach.Api.AiPublishing.Import;
 using Xunit;
 
@@ -183,5 +184,85 @@ namespace AiProductivityCoach.Api.Tests
             Assert.Equal(2, checks.Count(c => c.Status == "ok"));
             Assert.Equal(1, checks.Count(c => c.Status == "invalid"));
         }
+    }
+
+    public class ClaimRulesTests
+    {
+        private static Dictionary<string, object> Company(string status = "published", long approved = 1, string? owner = null)
+        {
+            var data = new Dictionary<string, object> { ["status"] = status, ["approvedVersion"] = approved };
+            if (owner != null) data["ownerUid"] = owner;
+            return data;
+        }
+
+        [Fact]
+        public void APublishedProfileWithoutAnOwner_CanBeClaimed() => Assert.True(ClaimRules.IsClaimable(Company()));
+
+        [Fact]
+        public void AnEmptyOwner_CountsAsNoOwner() => Assert.True(ClaimRules.IsClaimable(Company(owner: "  ")));
+
+        [Theory]
+        [InlineData("draft", 1, null)]
+        [InlineData("published", 0, null)]
+        [InlineData("published", 1, "uid-123")]
+        [InlineData("unpublished", 1, null)]
+        public void OnlyALiveUnownedProfileCanBeClaimed(string status, long approved, string? owner) =>
+            Assert.False(ClaimRules.IsClaimable(Company(status, approved, owner)));
+
+        private static ClaimInput Valid() => new("Max Muster", "Max.Muster@Firma.de ", "Geschäftsführer", "+49 30 123456", "Das ist unser Profil.");
+
+        [Fact]
+        public void AValidClaim_IsAccepted_WithCleanedValues()
+        {
+            var result = ClaimRules.Validate(Valid() with { Name = "  Max   Muster " });
+
+            Assert.True(result.Ok);
+            Assert.Equal("Max Muster", result.Name);
+            Assert.Equal("max.muster@firma.de", result.Email);
+        }
+
+        [Theory]
+        [InlineData(null, "claim_name_required")]
+        [InlineData("M", "claim_name_required")]
+        public void TheNameIsRequired(string? name, string code) =>
+            Assert.Equal(code, ClaimRules.Validate(Valid() with { Name = name }).Code);
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("not-an-email")]
+        [InlineData("a@")]
+        public void ARealEmailIsRequired(string? email) =>
+            Assert.Equal("claim_email_invalid", ClaimRules.Validate(Valid() with { Email = email }).Code);
+
+        [Fact]
+        public void ThePositionIsRequired() =>
+            Assert.Equal("claim_position_required", ClaimRules.Validate(Valid() with { Position = " " }).Code);
+
+        [Fact]
+        public void PhoneAndMessageAreOptional_ButBounded()
+        {
+            Assert.True(ClaimRules.Validate(Valid() with { Phone = null, Message = null }).Ok);
+            Assert.Equal("claim_phone_too_long", ClaimRules.Validate(Valid() with { Phone = new string('1', 41) }).Code);
+            Assert.Equal("claim_message_too_long", ClaimRules.Validate(Valid() with { Message = new string('x', 1001) }).Code);
+            Assert.Equal("claim_name_too_long", ClaimRules.Validate(Valid() with { Name = new string('x', 121) }).Code);
+        }
+
+        [Theory]
+        [InlineData("approve", true)]
+        [InlineData("reject", true)]
+        [InlineData("grant", false)]
+        [InlineData("", false)]
+        [InlineData(null, false)]
+        public void OnlyApproveAndRejectAreDecisions(string? decision, bool valid) =>
+            Assert.Equal(valid, ClaimRules.IsValidDecision(decision));
+
+        [Theory]
+        [InlineData("pending", true)]
+        [InlineData("approved", false)]
+        [InlineData("rejected", false)]
+        [InlineData(null, false)]
+        public void OnlyAWaitingRequestCanBeDecided(string? state, bool can) =>
+            Assert.Equal(can, ClaimRules.CanDecide(state));
     }
 }

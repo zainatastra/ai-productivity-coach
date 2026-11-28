@@ -20,6 +20,7 @@ import { AIP_CSS } from "./aipStyles";
 import EmailSettingsPanel from "./EmailSettingsPanel";
 import { PricingPanel } from "./BookingPanels";
 import ImportPanel from "./ImportPanel";
+import ClaimsPanel from "./ClaimsPanel";
 
 /* ───────────── types ───────────── */
 
@@ -955,6 +956,7 @@ export default function AiPublishingWorkspace({ getToken, language, onLanguageCh
 
           {/* Phase 1 improvement: editable email texts */}
           <EmailSettingsPanel lang={lang} api={api} />
+          <ClaimsPanel lang={lang} api={api} />
           <PricingPanel lang={lang} api={api} />
           <ImportPanel lang={lang} api={api} onImported={() => { void loadProviders(); }} />
         </>

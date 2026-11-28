@@ -518,6 +518,11 @@ export const GATE_REASONS: Record<string, Pair> = {
 };
 
 export const EXTRA_ERRORS: Record<string, Pair> = {
+  no_publisher_account: { de: "Für diese E-Mail-Adresse gibt es noch kein Firmen-Konto.", en: "There is no company account for this email address yet." },
+  already_claimed: { de: "Dieses Profil hat bereits einen Eigentümer.", en: "This profile already has an owner." },
+  claim_already_decided: { de: "Diese Anfrage wurde bereits entschieden.", en: "This request was already decided." },
+  claim_not_found: { de: "Anfrage nicht gefunden.", en: "Request not found." },
+  company_not_found: { de: "Das Profil existiert nicht mehr.", en: "The profile no longer exists." },
   csv_empty: { de: "Die Datei ist leer.", en: "The file is empty." },
   csv_no_rows: { de: "Die Datei enthält keine Datenzeilen.", en: "The file has no data rows." },
   csv_too_large: { de: "Die Datei ist zu groß (höchstens 1 MB).", en: "The file is too large (1 MB at most)." },

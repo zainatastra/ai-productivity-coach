@@ -219,6 +219,7 @@ builder.Services.AddSingleton<AiProductivityCoach.Api.AiPublishing.Pdf.ContentPd
 builder.Services.AddSingleton<AiProductivityCoach.Api.AiPublishing.Review.ResendDomainService>();
 builder.Services.AddSingleton<AiProductivityCoach.Api.AiPublishing.Booking.PricingStore>();
 builder.Services.AddSingleton<AiProductivityCoach.Api.AiPublishing.Booking.BookingStore>();
+builder.Services.AddSingleton<AiProductivityCoach.Api.AiPublishing.Claims.ClaimStore>();
 builder.Services.AddSingleton<ProfileMediaService>();
 builder.Services.AddSingleton<AiProductivityCoach.Api.AiPublishing.Profile.ProfilePreviewService>();
 builder.Services.AddSingleton<AiProductivityCoach.Api.AiPublishing.Acquisition.ICompanyPublishAdapter, AiProductivityCoach.Api.AiPublishing.Acquisition.EyEricCompanyAdapter>();

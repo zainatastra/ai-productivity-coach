@@ -133,6 +133,8 @@ namespace AiProductivityCoach.Api.Controllers
                     ["id"] = doc.Id,
                     ["approvedVersion"] = GetLong(data, "approvedVersion"),
                     ["approvedAt"] = GetTimestampIso(data, "approvedAt"),
+                    // Only an admin-created profile with no owner can be claimed (the owner id itself is never exposed).
+                    ["claimable"] = AiProductivityCoach.Api.AiPublishing.Claims.ClaimRules.IsClaimable(data),
                     ["company"] = ConvertForApi(company),
                     ["about"] = TryGetMap(approvedSnapshot, "about", out var about)
                         ? ConvertForApi(about)
