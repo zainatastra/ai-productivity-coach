@@ -45,7 +45,7 @@ namespace AiProductivityCoach.Api.Controllers
             public string? FullName { get; set; }
         }
 
-        private string Caller => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        private string Caller => AiProductivityCoach.Api.AiPublishing.Security.ClientIp.Of(HttpContext);
 
         private async Task<string> ProviderNameAsync(string providerId)
         {

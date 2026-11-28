@@ -5,6 +5,7 @@ using System.Net.Mail;
 using System.Security.Claims;
 using AiProductivityCoach.Api.AiPublishing.Pdf;
 using AiProductivityCoach.Api.AiPublishing.Review;
+using AiProductivityCoach.Api.AiPublishing.Security;
 
 namespace AiProductivityCoach.Api.Controllers
 {
@@ -200,6 +201,11 @@ namespace AiProductivityCoach.Api.Controllers
             if (!string.IsNullOrWhiteSpace(request.Website))
                 return Ok(new { success = true });
 
+            // Every submit renders a PDF and emails it to the address typed in, so a visitor is limited here:
+            // otherwise the form could be used to flood someone's inbox or to burn the email and PDF capacity.
+            if (!AttemptLimiter.Allow($"wp-form-ip:{ClientIp.Of(HttpContext)}", 10, TimeSpan.FromHours(1)))
+                return StatusCode(429, new { message = "Too many attempts. Please try again later." });
+
             var firstName = Clean(request.FirstName);
             var lastName = Clean(request.LastName);
             var email = Clean(request.Email).ToLowerInvariant();
@@ -216,6 +222,10 @@ namespace AiProductivityCoach.Api.Controllers
 
             if (string.IsNullOrWhiteSpace(email) || email.Length > 254 || !IsValidEmail(email))
                 return BadRequest(new { message = "Enter a valid email address." });
+
+            // One recipient cannot be sent more than a few copies a day, whoever asks for them.
+            if (!AttemptLimiter.Allow($"wp-form-mail:{email}", 3, TimeSpan.FromDays(1)))
+                return StatusCode(429, new { message = "Too many attempts. Please try again later." });
 
             if (string.IsNullOrWhiteSpace(phone) || phone.Length > 60)
                 return BadRequest(new { message = "Phone number is required and must be 60 characters or fewer." });
@@ -306,6 +316,10 @@ namespace AiProductivityCoach.Api.Controllers
         public async Task<IActionResult> Download(
             string slug, string whitepaperId, string responseId, CancellationToken cancellationToken)
         {
+            // The PDF is rendered on every download, so repeated requests are limited per visitor.
+            if (!AttemptLimiter.Allow($"wp-download-ip:{ClientIp.Of(HttpContext)}", 30, TimeSpan.FromHours(1)))
+                return StatusCode(429, new { message = "Too many attempts. Please try again later." });
+
             var normalizedSlug = Clean(slug).ToLowerInvariant();
             var requestedWhitepaperId = Clean(whitepaperId);
 

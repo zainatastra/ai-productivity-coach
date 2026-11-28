@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using Google.Cloud.Firestore;
 using System.Net.Mail;
 using System.Security.Claims;
+using AiProductivityCoach.Api.AiPublishing.Review;
+using AiProductivityCoach.Api.AiPublishing.Security;
 
 namespace AiProductivityCoach.Api.Controllers
 {
@@ -169,6 +171,10 @@ namespace AiProductivityCoach.Api.Controllers
             // Quietly accept obvious bot submissions without persisting.
             if (!string.IsNullOrWhiteSpace(request.Website))
                 return Ok(new { success = true });
+
+            // A generous limit per visitor: it only stops somebody from filling a company's lead list with junk.
+            if (!AttemptLimiter.Allow($"webinar-form-ip:{ClientIp.Of(HttpContext)}", 20, TimeSpan.FromHours(1)))
+                return StatusCode(429, new { message = "Too many attempts. Please try again later." });
 
             var firstName = Clean(request.FirstName);
             var lastName = Clean(request.LastName);

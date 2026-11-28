@@ -52,7 +52,7 @@ namespace AiProductivityCoach.Api.Controllers
         [HttpPost]
         public async Task<IActionResult> Submit(string slug, [FromBody] ClaimDto? request)
         {
-            var caller = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var caller = AiProductivityCoach.Api.AiPublishing.Security.ClientIp.Of(HttpContext);
             if (!AttemptLimiter.Allow($"claim-ip:{caller}", 5, TimeSpan.FromHours(1)))
                 return Error(429, "too_many_attempts", "Too many attempts. Please try again later.");
 

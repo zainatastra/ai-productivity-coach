@@ -26,7 +26,7 @@ namespace AiProductivityCoach.Api.Controllers
             _preview = preview;
         }
 
-        private string Caller => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        private string Caller => AiProductivityCoach.Api.AiPublishing.Security.ClientIp.Of(HttpContext);
 
         [HttpGet("{token}")]
         public async Task<IActionResult> Get(string token)

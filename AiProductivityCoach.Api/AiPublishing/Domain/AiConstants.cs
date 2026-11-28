@@ -145,6 +145,11 @@ namespace AiProductivityCoach.Api.AiPublishing.Domain
         public const string BookingCreated = "BOOKING_CREATED";
         public const string ClaimDecided = "CLAIM_DECIDED";
         public const string PricingChanged = "PRICING_CHANGED";
+        public const string EmailTemplateSaved = "EMAIL_TEMPLATE_SAVED";
+        public const string EmailTemplateReset = "EMAIL_TEMPLATE_RESET";
+        public const string EmailSenderChanged = "EMAIL_SENDER_CHANGED";
+        public const string EmailDomainAdded = "EMAIL_DOMAIN_ADDED";
+        public const string EmailDomainVerifyRequested = "EMAIL_DOMAIN_VERIFY_REQUESTED";
         public const string CompanyRevisionRequested = "COMPANY_REVISION_REQUESTED";
         public const string MediaGenerationStarted = "MEDIA_GENERATION_STARTED";
         public const string MediaGenerated = "MEDIA_GENERATED";

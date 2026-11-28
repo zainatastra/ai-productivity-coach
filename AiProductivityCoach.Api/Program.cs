@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.HttpOverrides;
 using AiProductivityCoach.Api.AiPublishing.Review;
 using AiProductivityCoach.Api.AiPublishing.Media;
 using FirebaseAdmin;
@@ -276,11 +277,25 @@ builder.Services.AddAuthorization(options =>
 // 🚀 BUILD APP
 // ==========================================
 
+// The host (Render) puts a proxy in front of the API and appends the visitor's address to X-Forwarded-For.
+// Reading it makes the per-address rate limits (password reset, invitations, claims, whitepaper form) apply
+// per visitor instead of to the proxy as a whole. ForwardLimit 1 takes only the entry the proxy itself
+// appended, so a client cannot choose its own address by sending the header.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 var app = builder.Build();
 
 // ==========================================
 // 🔧 MIDDLEWARE PIPELINE
 // ==========================================
+
+app.UseForwardedHeaders();
 
 app.UseRouting();
 

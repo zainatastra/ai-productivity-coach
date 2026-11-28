@@ -32,7 +32,7 @@ namespace AiProductivityCoach.Api.Controllers
         [HttpPost("forgot-password")]
         public async Task<IActionResult> Forgot([FromBody] ForgotDto? request)
         {
-            var caller = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var caller = AiProductivityCoach.Api.AiPublishing.Security.ClientIp.Of(HttpContext);
             var email = InvitationTokens.NormalizeEmail(request?.Email);
 
             if (!AttemptLimiter.Allow($"pw-reset-ip:{caller}", 10, TimeSpan.FromHours(1)))

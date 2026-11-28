@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using AiProductivityCoach.Api.AiPublishing.Content;
 using AiProductivityCoach.Api.AiPublishing.Domain;
 using AiProductivityCoach.Api.AiPublishing.Review;
+using AiProductivityCoach.Api.AiPublishing.Services;
 
 namespace AiProductivityCoach.Api.Controllers
 {
@@ -18,12 +19,14 @@ namespace AiProductivityCoach.Api.Controllers
         private readonly EmailTemplateStore _store;
         private readonly InvitationMailer _mailer;
         private readonly ResendDomainService _domains;
+        private readonly AiAuditService _audit;
 
-        public AiSettingsController(EmailTemplateStore store, InvitationMailer mailer, ResendDomainService domains)
+        public AiSettingsController(EmailTemplateStore store, InvitationMailer mailer, ResendDomainService domains, AiAuditService audit)
         {
             _store = store;
             _mailer = mailer;
             _domains = domains;
+            _audit = audit;
         }
 
         public class TemplateDto
@@ -146,6 +149,8 @@ namespace AiProductivityCoach.Api.Controllers
             var content = Normalize(request, EmailTemplates.Default(kind, language));
 
             await _store.SaveTemplateAsync(kind, language, content);
+            await _audit.LogAsync(actor, AuditActions.EmailTemplateSaved, null, null, null,
+                new Dictionary<string, object> { ["kind"] = kind, ["language"] = language });
 
             return Ok(new { effective = ToJson(content), unknownPlaceholders = UnknownPlaceholders(content, kind) });
         }
@@ -158,6 +163,8 @@ namespace AiProductivityCoach.Api.Controllers
             if (!EmailKinds.IsValid(kind)) return Error(400, "invalid_template", "Unknown template.");
 
             await _store.ResetTemplateAsync(kind, Language(lang));
+            await _audit.LogAsync(actor, AuditActions.EmailTemplateReset, null, null, null,
+                new Dictionary<string, object> { ["kind"] = kind, ["language"] = Language(lang) });
             return NoContent();
         }
 
@@ -188,6 +195,8 @@ namespace AiProductivityCoach.Api.Controllers
             }
 
             await _store.SetSenderAsync(string.IsNullOrEmpty(platform) ? null : platform, name, address);
+            await _audit.LogAsync(actor, AuditActions.EmailSenderChanged, null, null, null,
+                new Dictionary<string, object> { ["platform"] = string.IsNullOrEmpty(platform) ? "shared" : platform, ["address"] = address });
 
             var settings = await _store.LoadAsync();
             var effective = EmailTemplateStore.ResolveSender(settings, platform);
@@ -243,6 +252,9 @@ namespace AiProductivityCoach.Api.Controllers
                 return Error(429, "too_many_attempts", "Too many attempts. Please try again later.");
 
             var result = await _domains.CreateAsync(name);
+            if (result.Value != null)
+                await _audit.LogAsync(actor, AuditActions.EmailDomainAdded, null, null, null, new Dictionary<string, object> { ["domain"] = name });
+
             return result.Value == null ? DomainFailure(result.Error) : StatusCode(201, ToJson(result.Value));
         }
 
@@ -257,6 +269,10 @@ namespace AiProductivityCoach.Api.Controllers
                 return Error(429, "too_many_attempts", "Too many attempts. Please try again later.");
 
             var result = await _domains.VerifyAsync(id);
+            if (result.Value != null)
+                await _audit.LogAsync(actor, AuditActions.EmailDomainVerifyRequested, null, null, null,
+                    new Dictionary<string, object> { ["domain"] = result.Value.Name, ["verified"] = result.Value.IsVerified });
+
             return result.Value == null ? DomainFailure(result.Error) : Ok(ToJson(result.Value));
         }
 
